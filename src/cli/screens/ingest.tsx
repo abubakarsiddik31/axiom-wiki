@@ -7,6 +7,8 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { INTERACTIVE_INGEST_PREFIX } from '../../agent/prompts.js'
 import { getSource } from '../../core/sources.js'
+import { loadIgnorePatterns } from '../../core/watcher.js'
+import ignore from 'ignore'
 
 const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
 
@@ -98,10 +100,16 @@ export function IngestScreen({ file, interactive = false }: Props) {
       filesToProcess = [abs]
     } else {
       const ingested = getIngestedFromLog(logPath)
+      const ignorePatterns = loadIgnorePatterns(rawDir)
+      const ig = ignore().add(ignorePatterns)
+
       const allRaw = fs.existsSync(rawDir)
         ? fs.readdirSync(rawDir).filter((f: string) => {
             const ext = path.extname(f).toLowerCase()
-            return SUPPORTED_EXTS.includes(ext) && fs.statSync(path.join(rawDir, f)).isFile()
+            if (!SUPPORTED_EXTS.includes(ext)) return false
+            if (!fs.statSync(path.join(rawDir, f)).isFile()) return false
+            if (ig.ignores(f)) return false
+            return true
           })
         : []
       filesToProcess = allRaw

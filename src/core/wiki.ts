@@ -82,6 +82,15 @@ const LOG_TEMPLATE = `# Wiki Log
 
 `
 
+const AXIOMIGNORE_DEFAULTS = `# axiomignore — patterns to skip during watch/ingest
+# Uses the same syntax as .gitignore
+
+# Temporary files
+*.tmp
+*.swp
+.DS_Store
+`
+
 export async function scaffoldWiki(wikiDir: string): Promise<void> {
   const dirs = [
     'raw/assets',
@@ -113,6 +122,13 @@ export async function scaffoldWiki(wikiDir: string): Promise<void> {
   const axiomConfigPath = path.join(wikiDir, '.axiom/config.json')
   if (!fs.existsSync(axiomConfigPath)) {
     fs.writeFileSync(axiomConfigPath, '{}')
+  }
+
+  const rawDir = path.join(wikiDir, 'raw')
+  fs.mkdirSync(rawDir, { recursive: true })
+  const axiomignorePath = path.join(rawDir, '.axiomignore')
+  if (!fs.existsSync(axiomignorePath)) {
+    fs.writeFileSync(axiomignorePath, AXIOMIGNORE_DEFAULTS)
   }
 }
 

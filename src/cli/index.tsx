@@ -6,6 +6,9 @@ import { QueryScreen } from './screens/query.js'
 import { HomeScreen } from './screens/home.js'
 import { StatusScreen } from './screens/status.js'
 import { ModelScreen } from './screens/model.js'
+import { WatchScreen } from './screens/watch.js'
+import { ClipScreen } from './screens/clip.js'
+import { SourcesScreen } from './screens/sources.js'
 
 export type AxiomCommand =
   | { name: 'init' }
@@ -14,6 +17,9 @@ export type AxiomCommand =
   | { name: 'home' }
   | { name: 'status' }
   | { name: 'model' }
+  | { name: 'watch' }
+  | { name: 'clip'; url?: string }
+  | { name: 'sources' }
 
 export function renderApp(command: AxiomCommand): void {
   switch (command.name) {
@@ -34,6 +40,15 @@ export function renderApp(command: AxiomCommand): void {
       break
     case 'model':
       render(<ModelScreen />)
+      break
+    case 'watch':
+      render(<WatchScreen />)
+      break
+    case 'clip':
+      render(<ClipScreen url={command.url} />)
+      break
+    case 'sources':
+      render(<SourcesScreen />)
       break
     default: {
       const _exhaustive: never = command

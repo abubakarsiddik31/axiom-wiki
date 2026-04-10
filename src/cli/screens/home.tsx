@@ -8,8 +8,11 @@ import { QueryScreen } from './query.js'
 import { IngestScreen } from './ingest.js'
 import { StatusScreen } from './status.js'
 import { ModelScreen } from './model.js'
+import { WatchScreen } from './watch.js'
+import { ClipScreen } from './clip.js'
+import { SourcesScreen } from './sources.js'
 
-type Screen = 'home' | 'query' | 'ingest' | 'status' | 'model'
+type Screen = 'home' | 'query' | 'ingest' | 'status' | 'model' | 'watch' | 'clip' | 'sources'
 
 interface WikiStats {
   totalPages: number
@@ -47,6 +50,9 @@ export function HomeScreen() {
   if (screen === 'ingest') return <IngestScreen />
   if (screen === 'status') return <StatusScreen />
   if (screen === 'model') return <ModelScreen />
+  if (screen === 'watch') return <WatchScreen />
+  if (screen === 'clip') return <ClipScreen />
+  if (screen === 'sources') return <SourcesScreen />
 
   const prov = PROVIDERS[config.provider]
   const modelLabel = prov.models.find((m) => m.id === config.model)?.label ?? config.model
@@ -54,6 +60,9 @@ export function HomeScreen() {
   const items = [
     { label: 'Query wiki', value: 'query' },
     { label: 'Ingest sources', value: 'ingest' },
+    { label: 'Watch mode (auto-ingest)', value: 'watch' },
+    { label: 'Clip URL', value: 'clip' },
+    { label: 'Manage sources', value: 'sources' },
     { label: 'Wiki status', value: 'status' },
     { label: 'Switch model', value: 'model' },
     { label: 'Exit', value: 'exit' },

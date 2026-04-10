@@ -73,6 +73,30 @@ program
   })
 
 program
+  .command('watch')
+  .description('Watch raw/ for new files and auto-ingest them')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'watch' })
+  })
+
+program
+  .command('clip [url]')
+  .description('Clip a URL and save it to raw/ for ingest')
+  .action((url?: string) => {
+    requireConfig()
+    renderApp({ name: 'clip', url })
+  })
+
+program
+  .command('sources')
+  .description('List and manage ingested sources')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'sources' })
+  })
+
+program
   .command('start')
   .description('Start MCP server and open home menu')
   .action(() => {

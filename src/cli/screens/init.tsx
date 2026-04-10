@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
 import SelectInput from 'ink-select-input'
 import os from 'os'
@@ -23,6 +23,7 @@ function expandTilde(p: string): string {
 }
 
 export function InitScreen() {
+  const { exit } = useApp()
   const [step, setStep] = useState<Step>(0)
   const [provider, setProvider] = useState<ProviderId | null>(null)
   const [apiKey, setApiKey] = useState('')
@@ -40,9 +41,10 @@ export function InitScreen() {
     if (step < 5) setRawDir(path.join(expandTilde(wikiDir), 'raw'))
   }, [wikiDir, step])
 
-  // Step 0: welcome — press Enter to proceed
+  // Step 0: welcome — press Enter to proceed; Step 7: done — press Enter to exit
   useInput((_, key) => {
     if (step === 0 && key.return) setStep(1)
+    if (step === 7 && key.return) exit()
   })
 
   // Step 6: scaffold + ingest
@@ -341,6 +343,9 @@ export function InitScreen() {
       </Box>
       <Box marginTop={1}>
         <Text color="gray">Run <Text color="cyan">axiom-wiki --help</Text> to see all commands.</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color="gray">Press <Text color="white">Enter</Text> to exit</Text>
       </Box>
     </Box>
   )

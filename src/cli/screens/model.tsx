@@ -26,6 +26,12 @@ export function ModelScreen({ onExit }: Props) {
   const [origProvider] = useState(existing?.provider ?? null)
   const [origModel] = useState(existing?.model ?? null)
 
+  // Must be called unconditionally before any early returns
+  useInput((_input, key) => {
+    if (key.escape) { doExit(); return }
+    if (step === 4 && key.return) { doExit() }
+  })
+
   if (!existing) {
     return (
       <Box padding={1}>
@@ -164,14 +170,6 @@ export function ModelScreen({ onExit }: Props) {
   const newModLabel = newCfg ? (PROVIDERS[newCfg.provider].models.find((m) => m.id === newCfg.model)?.label ?? newCfg.model) : '?'
   const origProvLabel = origProvider ? PROVIDERS[origProvider].label : '?'
   const origModLabel = origProvider && origModel ? (PROVIDERS[origProvider].models.find((m) => m.id === origModel)?.label ?? origModel) : '?'
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useInput((_input, key) => {
-    if (key.escape) { doExit(); return }
-    if (step === 4 && key.return) {
-      doExit()
-    }
-  })
 
   return (
     <Box flexDirection="column" padding={1}>

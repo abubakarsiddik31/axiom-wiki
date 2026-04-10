@@ -71,7 +71,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   const [results, setResults] = useState<FileResult[]>([])
   const [currentFile, setCurrentFile] = useState<string | null>(null)
-  const [streamLine, setStreamLine] = useState('')
+  const [liveLines, setLiveLines] = useState<Array<{ text: string; color?: string }>>([])
   const [currentPages, setCurrentPages] = useState<string[]>([])
   const [isReingest, setIsReingest] = useState(false)
 
@@ -126,7 +126,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     for (const filepath of filesToProcess) {
       const filename = path.basename(filepath)
       setCurrentFile(filename)
-      setStreamLine('')
+      setLiveLines([])
       setCurrentPages([])
 
       // Detect re-ingest
@@ -249,14 +249,21 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       for await (const chunk of stream.textStream) {
         buffer += chunk
         allOutput += chunk
-        setStreamLine(buffer.slice(-120))
 
         const newlineIdx = buffer.lastIndexOf('\n')
         if (newlineIdx > 0) {
           const completed = buffer.slice(0, newlineIdx).split('\n')
           buffer = buffer.slice(newlineIdx + 1)
+          const newEntries: Array<{ text: string; color?: string }> = []
           for (const l of completed) {
-            if (l.trim()) lines.push({ text: l.trim(), color: detectColor(l) })
+            if (l.trim()) {
+              const entry = { text: l.trim(), color: detectColor(l) }
+              lines.push(entry)
+              newEntries.push(entry)
+            }
+          }
+          if (newEntries.length > 0) {
+            setLiveLines((prev) => [...prev, ...newEntries].slice(-12))
           }
           const newPages = extractPages(allOutput)
           setCurrentPages(newPages)
@@ -264,7 +271,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         }
       }
 
-      if (buffer.trim()) lines.push({ text: buffer.trim(), color: detectColor(buffer) })
+      if (buffer.trim()) {
+        const entry = { text: buffer.trim(), color: detectColor(buffer) }
+        lines.push(entry)
+        setLiveLines((prev) => [...prev, entry].slice(-12))
+      }
       addResult(filename, lines, pagesFound, 'done')
     } catch (err: unknown) {
       lines.push({ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: 'red' })
@@ -362,9 +373,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
             </Box>
           )}
 
-          {step === 'running' && streamLine && (
-            <Box marginTop={1}>
-              <Text color="gray" dimColor>{streamLine.slice(-100)}</Text>
+          {step === 'running' && liveLines.length > 0 && (
+            <Box flexDirection="column" marginTop={1} marginLeft={2}>
+              {liveLines.map((line, i) => (
+                <Text key={i} color={(line.color as any) ?? 'gray'} dimColor={!line.color}>{line.text}</Text>
+              ))}
             </Box>
           )}
         </Box>

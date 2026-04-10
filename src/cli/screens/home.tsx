@@ -157,8 +157,12 @@ export function HomeScreen() {
     // If menu is open, Enter completes the command — user then adds args and presses Enter again
     if (showSlashMenu && menuMatches[safeMenuIndex]) {
       const cmd = menuMatches[safeMenuIndex]!
-      setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
-      return
+      const completion = `/${cmd.name}${cmd.args ? ' ' : ''}`
+      if (trimmed !== completion.trim()) {
+        setInput(completion)
+        return
+      }
+      // Input already matches the command exactly — fall through to run it
     }
 
     setInput('')

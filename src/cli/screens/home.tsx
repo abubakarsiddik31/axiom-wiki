@@ -122,13 +122,20 @@ export function HomeScreen() {
   // ── Not configured ────────────────────────────────────────────────────────
   if (!hasConfig() || !config) {
     return (
-      <Box padding={1} flexDirection="column">
-        <Box borderStyle="double" borderColor="cyan" paddingX={2} paddingY={1} flexDirection="column">
-          <Text bold color="cyan">axiom wiki</Text>
-          <Text color="gray">The wiki that maintains itself.</Text>
+      <Box paddingX={2} paddingY={1} flexDirection="column">
+        <Box flexDirection="column">
+          <Text color="cyan" bold>{'  █████╗ ██╗  ██╗██╗ ██████╗ ███╗   ███╗'}</Text>
+          <Text color="cyan" bold>{'  ██╔══██╗╚██╗██╔╝██║██╔═══██╗████╗ ████║'}</Text>
+          <Text color="cyan" bold>{'  ███████║ ╚███╔╝ ██║██║   ██║██╔████╔██║'}</Text>
+          <Text color="cyan" bold>{'  ██╔══██║ ██╔██╗ ██║██║   ██║██║╚██╔╝██║'}</Text>
+          <Text color="cyan" bold>{'  ██║  ██║██╔╝ ██╗██║╚██████╔╝██║ ╚═╝ ██║'}</Text>
+          <Text color="cyan" bold>{'  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝     ╚═╝'}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="yellow">Run <Text color="cyan">axiom-wiki init</Text> to get started.</Text>
+          <Text color="gray" dimColor>{'  '}The wiki that maintains itself.</Text>
+        </Box>
+        <Box marginTop={2}>
+          <Text color="yellow">  Run <Text color="cyan">axiom-wiki init</Text> to get started.</Text>
         </Box>
       </Box>
     )

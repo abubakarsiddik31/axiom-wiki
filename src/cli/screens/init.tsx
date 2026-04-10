@@ -111,16 +111,26 @@ export function InitScreen() {
 
   if (step === 0) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Box flexDirection="column" borderStyle="double" borderColor="cyan" paddingX={2} paddingY={1}>
-          <Text bold color="cyan">Axiom Wiki</Text>
-          <Text color="gray">The wiki that maintains itself.</Text>
+      <Box flexDirection="column" paddingX={2} paddingY={1}>
+        <Box flexDirection="column">
+          <Text color="cyan" bold>{'  █████╗ ██╗  ██╗██╗ ██████╗ ███╗   ███╗'}</Text>
+          <Text color="cyan" bold>{'  ██╔══██╗╚██╗██╔╝██║██╔═══██╗████╗ ████║'}</Text>
+          <Text color="cyan" bold>{'  ███████║ ╚███╔╝ ██║██║   ██║██╔████╔██║'}</Text>
+          <Text color="cyan" bold>{'  ██╔══██║ ██╔██╗ ██║██║   ██║██║╚██╔╝██║'}</Text>
+          <Text color="cyan" bold>{'  ██║  ██║██╔╝ ██╗██║╚██████╔╝██║ ╚═╝ ██║'}</Text>
+          <Text color="cyan" bold>{'  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝     ╚═╝'}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text>Let's set up your wiki. This takes about 2 minutes.</Text>
+          <Text color="gray" dimColor>{'  '}The wiki that maintains itself.</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">Press Enter to continue →</Text>
+          <Text color="gray">{'  '}v0.2.0</Text>
+        </Box>
+        <Box marginTop={2}>
+          <Text>  Let's set up your wiki. This takes about 2 minutes.</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray">  Press <Text color="white">Enter</Text> to continue →</Text>
         </Box>
       </Box>
     )

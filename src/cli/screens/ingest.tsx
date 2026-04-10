@@ -189,14 +189,21 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       for await (const chunk of stream.textStream) {
         buffer += chunk
         allOutput += chunk
-        setStreamLine(buffer.slice(-120))
 
         const newlineIdx = buffer.lastIndexOf('\n')
         if (newlineIdx > 0) {
           const completed = buffer.slice(0, newlineIdx).split('\n')
           buffer = buffer.slice(newlineIdx + 1)
+          const newEntries: Array<{ text: string; color?: string }> = []
           for (const l of completed) {
-            if (l.trim()) lines.push({ text: l.trim(), color: detectColor(l) })
+            if (l.trim()) {
+              const entry = { text: l.trim(), color: detectColor(l) }
+              lines.push(entry)
+              newEntries.push(entry)
+            }
+          }
+          if (newEntries.length > 0) {
+            setLiveLines((prev) => [...prev, ...newEntries].slice(-12))
           }
           const newPages = extractPages(allOutput)
           setCurrentPages(newPages)

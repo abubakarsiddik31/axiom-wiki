@@ -4,7 +4,7 @@
 
 **The wiki that maintains itself.**
 
-[![npm version](https://img.shields.io/npm/v/axiom-wiki)](https://www.npmjs.com/package/axiom-wiki)
+[![npm — coming soon](https://img.shields.io/badge/npm-coming%20soon-lightgrey)](https://www.npmjs.com/package/axiom-wiki)
 [![License: ELv2](https://img.shields.io/badge/License-Elastic%20v2-blue.svg)](https://www.elastic.co/licensing/elastic-license)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
@@ -18,12 +18,25 @@ The human curates sources and asks questions. The AI does everything else: summa
 
 ## Quick Start
 
+> **npm package coming soon.** In the meantime, run locally from source — it takes about a minute to set up.
+
 ```bash
-npm install -g axiom-wiki
+git clone https://github.com/abubakarsiddiq/axiom-wiki.git
+cd axiom-wiki
+pnpm install
+pnpm build
+pnpm setup          # configure pnpm global bin (first time only)
+source ~/.zshrc     # reload shell to pick up PATH
+pnpm link --global  # makes `axiom-wiki` available system-wide
+```
+
+Then:
+
+```bash
 axiom-wiki init
 ```
 
-The setup wizard will ask for your API key, wiki directory, and raw sources folder. It scaffolds the wiki structure and processes any existing files in your raw folder. When it's done, your wiki is live.
+The setup wizard asks for your API key, wiki directory, and raw sources folder. When it's done, your wiki is live.
 
 Drop a PDF or markdown file into your `raw/` folder, then:
 
@@ -37,14 +50,33 @@ The agent reads the file, extracts entities and concepts, creates wiki pages, an
 
 ## Installation
 
+> **npm release is coming soon.** Until then, use the local install guide above.
+
+### From source (current)
+
 ```bash
-# npm global install
-npm install -g axiom-wiki
+git clone https://github.com/abubakarsiddiq/axiom-wiki.git
+cd axiom-wiki
+pnpm install && pnpm build
+pnpm setup && source ~/.zshrc
+pnpm link --global
+axiom-wiki init
+```
 
-# npx (no install required)
-npx axiom-wiki init
+**Updating after a code change:**
+```bash
+pnpm build   # re-compile — the global link picks it up automatically
+```
 
-# Docker
+**Run without installing (no build step):**
+```bash
+npx tsx bin/axiom-wiki.ts init
+npx tsx bin/axiom-wiki.ts
+```
+
+### Docker
+
+```bash
 docker run -it -v $(pwd):/wiki axiomwiki/axiom-wiki init
 ```
 

@@ -82,7 +82,7 @@ export function HomeScreen() {
       // Tab or right arrow completes the selected command into the input
       if (key.tab || key.rightArrow) {
         const cmd = menuMatches[menuIndex]
-        if (cmd) setInput(`/${cmd.name} `)
+        if (cmd) setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
         return
       }
     }
@@ -145,18 +145,18 @@ export function HomeScreen() {
 
   const submit = useCallback((value: string) => {
     const trimmed = value.trim()
-    setInput('')
     if (!trimmed) return
 
-    // If menu is open and user presses Enter, select highlighted item
+    // If menu is open, Enter completes the command — user then adds args and presses Enter again
     if (showSlashMenu && menuMatches[menuIndex]) {
       const cmd = menuMatches[menuIndex]!
-      runCommand(`/${cmd.name}`)
+      setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
       return
     }
 
+    setInput('')
     runCommand(trimmed)
-  }, [addLog, showSlashMenu, menuMatches, menuIndex, runCommand])
+  }, [showSlashMenu, menuMatches, menuIndex, runCommand])
 
   const goHome = useCallback(() => setScreen({ name: 'shell' }), [])
 
@@ -224,7 +224,7 @@ export function HomeScreen() {
         />
       </Box>
       <Box marginTop={1}>
-        <Text color="gray" dimColor>Ctrl+C to exit  ·  Tab to complete  ·  ↑↓ to navigate</Text>
+        <Text color="gray" dimColor>Ctrl+C to exit  ·  ↑↓ navigate  ·  Enter/Tab complete  ·  Esc clear</Text>
       </Box>
     </Box>
   )

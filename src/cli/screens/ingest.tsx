@@ -19,7 +19,7 @@ interface Props {
 }
 
 type Status = 'running' | 'done' | 'error'
-type IngestStep = 'idle' | 'interactive-reply' | 'interactive-confirm' | 'running' | 'done' | 'no-files'
+type IngestStep = 'idle' | 'reingest-confirm' | 'interactive-reply' | 'interactive-confirm' | 'running' | 'done' | 'no-files'
 
 interface FileResult {
   filename: string
@@ -137,6 +137,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       } catch { /* no existing summary page — fresh ingest */ }
       setIsReingest(reingest)
 
+      // If a specific file was passed and it's already ingested, ask the user
+      if (file && reingest) {
+        setStep('reingest-confirm')
+        return  // wait for user input — continueAfterReingestConfirm will resume
+      }
+
       // Interactive mode: first pass — get topics
       if (interactive) {
         const firstGoal = `${INTERACTIVE_INGEST_PREFIX}\n\nRead this source file and present the key topics you found: ${filepath}`
@@ -150,6 +156,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       await runIngest(agent, filepath, filename, reingest, '')
     }
 
+    setCurrentFile(null)
+    setStep('done')
+  }
+
+  async function continueAfterReingestConfirm() {
+    if (!config || !currentFile) return
+    const agent = createAxiomAgent(config)
+    const filepath = file ? path.resolve(file) : path.join(config.rawDir, currentFile)
+    await runIngest(agent, filepath, currentFile, true, '')
     setCurrentFile(null)
     setStep('done')
   }
@@ -270,6 +285,10 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   useInput((input, key) => {
     if (key.escape) { doExit(); return }
+    if (step === 'reingest-confirm') {
+      if (input === 'y' || input === 'Y' || key.return) void continueAfterReingestConfirm()
+      if (input === 'n' || input === 'N') { setCurrentFile(null); setStep('done') }
+    }
     if (step === 'interactive-reply' && key.return && interactiveInput.trim() !== undefined) {
       // handled by TextInput onSubmit
     }
@@ -277,7 +296,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (input === 'y' || input === 'Y' || key.return) void finaliseInteractive()
       if (input === 'n' || input === 'N') { setCurrentFile(null); setStep('done') }
     }
-    if (step === 'done' && key.return) {
+    if ((step === 'done' || step === 'no-files') && key.return) {
       doExit()
     }
   })
@@ -295,9 +314,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   if (step === 'no-files') {
     return (
       <Box padding={1} flexDirection="column">
-        <Text color="gray">No new files found in <Text color="cyan">{config.rawDir}</Text></Text>
+        <Text color="gray">All files in <Text color="cyan">{config.rawDir}</Text> have already been ingested.</Text>
         <Box marginTop={1}>
-          <Text color="gray">Drop source files there, then run <Text color="cyan">axiom-wiki ingest</Text> again.</Text>
+          <Text color="gray">Drop new files there, or use <Text color="cyan">axiom-wiki sources</Text> to re-ingest existing ones.</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray" dimColor>Press Enter to go back</Text>
         </Box>
       </Box>
     )
@@ -345,6 +367,17 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
               <Text color="gray" dimColor>{streamLine.slice(-100)}</Text>
             </Box>
           )}
+        </Box>
+      )}
+
+      {/* Re-ingest confirmation */}
+      {step === 'reingest-confirm' && currentFile && (
+        <Box flexDirection="column" marginTop={1} borderStyle="single" borderColor="yellow" paddingX={1}>
+          <Text color="yellow">⚠ Already ingested: <Text color="white">{currentFile}</Text></Text>
+          <Box marginTop={1}>
+            <Text bold>Re-ingest and update existing pages? </Text>
+            <Text color="gray">(y/n)</Text>
+          </Box>
         </Box>
       )}
 

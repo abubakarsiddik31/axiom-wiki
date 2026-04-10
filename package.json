@@ -1,0 +1,43 @@
+{
+  "name": "axiom-wiki",
+  "version": "0.1.0",
+  "description": "The wiki that maintains itself.",
+  "type": "module",
+  "bin": {
+    "axiom-wiki": "./dist/bin/axiom-wiki.js",
+    "axwiki": "./dist/bin/axiom-wiki.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch bin/axiom-wiki.ts",
+    "start": "node dist/bin/axiom-wiki.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@mastra/core": "latest",
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "latest",
+    "@ai-sdk/anthropic": "latest",
+    "@modelcontextprotocol/sdk": "latest",
+    "ink": "^5.0.0",
+    "react": "^18.0.0",
+    "commander": "latest",
+    "conf": "latest",
+    "zod": "^3.23.8",
+    "chokidar": "latest",
+    "gray-matter": "latest",
+    "mammoth": "latest",
+    "node-html-markdown": "latest",
+    "chalk": "latest",
+    "ink-text-input": "latest",
+    "ink-select-input": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "tsx": "latest",
+    "@types/node": "latest",
+    "@types/react": "^18.0.0"
+  }
+}

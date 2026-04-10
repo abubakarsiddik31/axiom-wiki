@@ -10,6 +10,8 @@ Axiom Wiki turns a folder of raw documents into a persistent, AI-maintained pers
 
 The human curates sources and asks questions. The AI does everything else: summarising, cross-referencing, filing, updating, and maintaining consistency across all pages.
 
+> **Inspired by** Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — the idea that LLMs should maintain a persistent, compounding wiki rather than re-derive answers from raw sources on every query.
+
 ---
 
 ## Quick Start

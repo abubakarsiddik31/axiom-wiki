@@ -16,28 +16,33 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@mastra/core": "latest",
+    "@ai-sdk/anthropic": "latest",
     "@ai-sdk/google": "latest",
     "@ai-sdk/openai": "latest",
-    "@ai-sdk/anthropic": "latest",
+    "@mastra/core": "latest",
     "@modelcontextprotocol/sdk": "latest",
-    "ink": "^5.0.0",
-    "react": "^18.0.0",
+    "@mozilla/readability": "^0.6.0",
+    "chalk": "latest",
+    "chokidar": "latest",
     "commander": "latest",
     "conf": "latest",
-    "zod": "^3.23.8",
-    "chokidar": "latest",
     "gray-matter": "latest",
+    "ignore": "^7.0.5",
+    "ink": "^5.0.0",
+    "ink-select-input": "latest",
+    "ink-text-input": "latest",
+    "jsdom": "^29.0.2",
     "mammoth": "latest",
     "node-html-markdown": "latest",
-    "chalk": "latest",
-    "ink-text-input": "latest",
-    "ink-select-input": "latest"
+    "react": "^18.0.0",
+    "slugify": "^1.6.9",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "latest",
-    "tsx": "latest",
+    "@types/jsdom": "^28.0.1",
     "@types/node": "latest",
-    "@types/react": "^18.0.0"
+    "@types/react": "^18.0.0",
+    "tsx": "latest",
+    "typescript": "latest"
   }
 }

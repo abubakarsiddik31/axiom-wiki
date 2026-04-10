@@ -20,15 +20,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 ]
 
 interface Props {
-  input: string   // current text input (starts with '/')
+  selectedIndex: number      // controlled from parent
+  onSelect: (cmd: SlashCommand) => void
+  matches: SlashCommand[]
 }
 
-export function SlashMenu({ input }: Props) {
-  const query = input.slice(1).toLowerCase()
-  const matches = SLASH_COMMANDS.filter((c) =>
-    c.name.startsWith(query) || c.desc.toLowerCase().includes(query)
-  )
-
+export function SlashMenu({ selectedIndex, matches }: Props) {
   if (matches.length === 0) return null
 
   return (
@@ -40,18 +37,26 @@ export function SlashMenu({ input }: Props) {
       marginBottom={1}
     >
       {matches.map((cmd, i) => {
-        const isTop = i === 0
+        const active = i === selectedIndex
         const label = `/${cmd.name}${cmd.args ? ' ' + cmd.args : ''}`
         return (
           <Box key={cmd.name}>
-            <Text color={isTop ? 'cyan' : 'white'} bold={isTop}>
-              {label.padEnd(20)}
+            <Text color={active ? 'cyan' : 'white'} bold={active}>
+              {active ? '▶ ' : '  '}{label.padEnd(20)}
             </Text>
-            <Text color="gray" dimColor>{cmd.desc}</Text>
+            <Text color={active ? 'white' : 'gray'} dimColor={!active}>{cmd.desc}</Text>
           </Box>
         )
       })}
     </Box>
+  )
+}
+
+/** Filter commands by current input */
+export function filterCommands(input: string): SlashCommand[] {
+  const query = input.slice(1).toLowerCase()
+  return SLASH_COMMANDS.filter((c) =>
+    c.name.startsWith(query) || c.desc.toLowerCase().includes(query)
   )
 }
 

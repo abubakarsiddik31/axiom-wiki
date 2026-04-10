@@ -167,6 +167,7 @@ export function ModelScreen({ onExit }: Props) {
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useInput((_input, key) => {
+    if (key.escape) { doExit(); return }
     if (step === 4 && key.return) {
       doExit()
     }

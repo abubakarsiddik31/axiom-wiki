@@ -51,8 +51,9 @@ export function QueryScreen({ onExit, prefill }: Props) {
     })
   }, [])
 
-  // Handle y/n at filing prompt
+  // Handle y/n at filing prompt + global escape
   useInput((char, key) => {
+    if (key.escape && state === 'idle') { doExit(); return }
     if (state === 'filing_prompt') {
       if (char === 'y' || char === 'Y') {
         const suggested = slugify(currentQ)

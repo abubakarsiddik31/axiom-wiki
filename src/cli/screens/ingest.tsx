@@ -269,6 +269,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   }
 
   useInput((input, key) => {
+    if (key.escape) { doExit(); return }
     if (step === 'interactive-reply' && key.return && interactiveInput.trim() !== undefined) {
       // handled by TextInput onSubmit
     }

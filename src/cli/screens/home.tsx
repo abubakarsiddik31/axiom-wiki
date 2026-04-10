@@ -4,7 +4,7 @@ import TextInput from 'ink-text-input'
 import { getConfig, hasConfig } from '../../config/index.js'
 import { getStatus } from '../../core/wiki.js'
 import { Header } from '../components/Header.js'
-import { SlashMenu, SLASH_COMMANDS, parseSlash } from '../components/SlashMenu.js'
+import { SlashMenu, SLASH_COMMANDS, filterCommands, parseSlash } from '../components/SlashMenu.js'
 import { QueryScreen } from './query.js'
 import { IngestScreen } from './ingest.js'
 import { StatusScreen } from './status.js'
@@ -45,36 +45,64 @@ export function HomeScreen() {
 
   const [screen, setScreen] = useState<ActiveScreen>({ name: 'shell' })
   const [input, setInput] = useState('')
+  const [menuIndex, setMenuIndex] = useState(0)
   const [totalPages, setTotalPages] = useState<number | undefined>(undefined)
   const [log, setLog] = useState<LogLine[]>([
     { text: 'Type /help to see commands, or ask a question.', color: 'gray' },
   ])
+
+  const menuMatches = input.startsWith('/') ? filterCommands(input) : []
+  const showSlashMenu = menuMatches.length > 0
+
+  // Reset menu selection when input changes
+  useEffect(() => {
+    setMenuIndex(0)
+  }, [input])
 
   useEffect(() => {
     if (!config) return
     getStatus(config.wikiDir, config.rawDir)
       .then((s) => setTotalPages(s.totalPages))
       .catch(() => {})
-  }, [screen]) // refresh stats when returning to shell
+  }, [screen])
 
   useInput((char, key) => {
     if (screen.name !== 'shell') return
     if (key.ctrl && char === 'c') exit()
+
+    if (showSlashMenu) {
+      if (key.upArrow) {
+        setMenuIndex((i) => Math.max(0, i - 1))
+        return
+      }
+      if (key.downArrow) {
+        setMenuIndex((i) => Math.min(menuMatches.length - 1, i + 1))
+        return
+      }
+      // Tab or right arrow completes the selected command into the input
+      if (key.tab || key.rightArrow) {
+        const cmd = menuMatches[menuIndex]
+        if (cmd) setInput(`/${cmd.name} `)
+        return
+      }
+    }
+
+    if (key.escape) {
+      if (input.length > 0) {
+        setInput('')
+      }
+    }
   })
 
   const addLog = useCallback((...lines: LogLine[]) => {
     setLog((prev) => [...prev, ...lines].slice(-80))
   }, [])
 
-  const submit = useCallback((value: string) => {
-    const trimmed = value.trim()
-    setInput('')
-    if (!trimmed) return
-
+  const runCommand = useCallback((trimmed: string) => {
     addLog({ text: `> ${trimmed}`, color: 'cyan' })
 
-    // Slash command
     if (trimmed.startsWith('/')) {
+      // If user hits Enter while menu is open with a selection, use that command
       const parsed = parseSlash(trimmed)
 
       if (!parsed) {
@@ -83,16 +111,12 @@ export function HomeScreen() {
         return
       }
 
-      if (parsed.command === 'help') {
-        addLog(...HELP_LINES)
-        return
-      }
-
-      if (parsed.command === 'status') { setScreen({ name: 'status' }); return }
-      if (parsed.command === 'model')  { setScreen({ name: 'model' }); return }
-      if (parsed.command === 'watch')  { setScreen({ name: 'watch' }); return }
+      if (parsed.command === 'help') { addLog(...HELP_LINES); return }
+      if (parsed.command === 'status')  { setScreen({ name: 'status' }); return }
+      if (parsed.command === 'model')   { setScreen({ name: 'model' }); return }
+      if (parsed.command === 'watch')   { setScreen({ name: 'watch' }); return }
       if (parsed.command === 'sources') { setScreen({ name: 'sources' }); return }
-      if (parsed.command === 'review') { setScreen({ name: 'review' }); return }
+      if (parsed.command === 'review')  { setScreen({ name: 'review' }); return }
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
@@ -117,7 +141,24 @@ export function HomeScreen() {
 
     // Direct question → query mode
     setScreen({ name: 'query', prefill: trimmed })
-  }, [addLog, exit])
+  }, [addLog])
+
+  const submit = useCallback((value: string) => {
+    const trimmed = value.trim()
+    setInput('')
+    if (!trimmed) return
+
+    // If menu is open and user presses Enter, select highlighted item
+    if (showSlashMenu && menuMatches[menuIndex]) {
+      const cmd = menuMatches[menuIndex]!
+      runCommand(`/${cmd.name}`)
+      return
+    }
+
+    runCommand(trimmed)
+  }, [addLog, showSlashMenu, menuMatches, menuIndex, runCommand])
+
+  const goHome = useCallback(() => setScreen({ name: 'shell' }), [])
 
   // ── Not configured ────────────────────────────────────────────────────────
   if (!hasConfig() || !config) {
@@ -142,18 +183,16 @@ export function HomeScreen() {
   }
 
   // ── Sub-screens ───────────────────────────────────────────────────────────
-  if (screen.name === 'query')   return <QueryScreen prefill={screen.prefill} onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'ingest')  return <IngestScreen file={screen.file} interactive={screen.interactive} onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'status')  return <StatusScreen onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'model')   return <ModelScreen onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'watch')   return <WatchScreen onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'clip')    return <ClipScreen url={screen.url} onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'sources') return <SourcesScreen onExit={() => setScreen({ name: 'shell' })} />
-  if (screen.name === 'review')  return <ReviewScreen onExit={() => setScreen({ name: 'shell' })} />
+  if (screen.name === 'query')   return <QueryScreen prefill={screen.prefill} onExit={goHome} />
+  if (screen.name === 'ingest')  return <IngestScreen file={screen.file} interactive={screen.interactive} onExit={goHome} />
+  if (screen.name === 'status')  return <StatusScreen onExit={goHome} />
+  if (screen.name === 'model')   return <ModelScreen onExit={goHome} />
+  if (screen.name === 'watch')   return <WatchScreen onExit={goHome} />
+  if (screen.name === 'clip')    return <ClipScreen url={screen.url} onExit={goHome} />
+  if (screen.name === 'sources') return <SourcesScreen onExit={goHome} />
+  if (screen.name === 'review')  return <ReviewScreen onExit={goHome} />
 
   // ── Shell ─────────────────────────────────────────────────────────────────
-  const showSlashMenu = input.startsWith('/')
-
   return (
     <Box flexDirection="column" padding={1}>
       <Header config={config} totalPages={totalPages} />
@@ -166,7 +205,13 @@ export function HomeScreen() {
       </Box>
 
       {/* Slash command menu */}
-      {showSlashMenu && <SlashMenu input={input} />}
+      {showSlashMenu && (
+        <SlashMenu
+          selectedIndex={menuIndex}
+          matches={menuMatches}
+          onSelect={(cmd) => { setInput(`/${cmd.name} `); setMenuIndex(0) }}
+        />
+      )}
 
       {/* Input */}
       <Box>
@@ -179,7 +224,7 @@ export function HomeScreen() {
         />
       </Box>
       <Box marginTop={1}>
-        <Text color="gray" dimColor>Ctrl+C to exit</Text>
+        <Text color="gray" dimColor>Ctrl+C to exit  ·  Tab to complete  ·  ↑↓ to navigate</Text>
       </Box>
     </Box>
   )

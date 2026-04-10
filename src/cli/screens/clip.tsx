@@ -81,6 +81,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
   }, [step])
 
   useInput((input, key) => {
+    if (key.escape) { doExit(); return }
     if (step === 'confirm-ingest') {
       if (input === 'y' || input === 'Y' || key.return) {
         setStep('ingesting')

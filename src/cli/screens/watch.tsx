@@ -34,8 +34,8 @@ export function WatchScreen({ onExit }: Props) {
   const [log, setLog] = useState<WatchLogEntry[]>([])
   const watcherRef = useRef<FSWatcher | null>(null)
 
-  useInput((input) => {
-    if (input === 'q') {
+  useInput((input, key) => {
+    if (input === 'q' || key.escape) {
       watcherRef.current?.close()
       doExit()
     }

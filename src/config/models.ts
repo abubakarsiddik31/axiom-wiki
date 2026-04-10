@@ -1,4 +1,4 @@
-export type ProviderId = 'google' | 'openai' | 'anthropic'
+export type ProviderId = 'google' | 'openai' | 'anthropic' | 'ollama'
 
 export interface ModelDef {
   id: string
@@ -13,6 +13,8 @@ export interface ProviderDef {
   keyLabel: string
   keyEnv: string
   keyUrl: string
+  requiresApiKey: boolean
+  defaultBaseUrl?: string
   models: ModelDef[]
 }
 
@@ -23,6 +25,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyLabel: 'Gemini API Key',
     keyEnv: 'GOOGLE_GENERATIVE_AI_API_KEY',
     keyUrl: 'https://aistudio.google.com/app/apikey',
+    requiresApiKey: true,
     models: [
       { id: 'gemini-3.1-pro',      label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking' },
       { id: 'gemini-3-flash',      label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true },
@@ -37,6 +40,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyLabel: 'OpenAI API Key',
     keyEnv: 'OPENAI_API_KEY',
     keyUrl: 'https://platform.openai.com/api-keys',
+    requiresApiKey: true,
     models: [
       { id: 'gpt-5.4',      label: 'GPT-5.4',      desc: 'Flagship — complex reasoning and coding' },
       { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', desc: 'Fast and affordable', recommended: true },
@@ -49,10 +53,26 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyLabel: 'Anthropic API Key',
     keyEnv: 'ANTHROPIC_API_KEY',
     keyUrl: 'https://console.anthropic.com/settings/keys',
+    requiresApiKey: true,
     models: [
       { id: 'claude-opus-4-6',   label: 'Claude Opus 4.6',   desc: 'Most capable — best reasoning and coding' },
       { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: 'Balanced speed and quality', recommended: true },
       { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5',  desc: 'Fast and cost-efficient' },
+    ],
+  },
+  ollama: {
+    id: 'ollama',
+    label: 'Ollama (local)',
+    keyLabel: 'Ollama Base URL',
+    keyEnv: 'OLLAMA_BASE_URL',
+    keyUrl: 'https://ollama.com',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://localhost:11434/api',
+    models: [
+      { id: 'llama3.2',  label: 'Llama 3.2 (3B)',  desc: 'Fast and lightweight', recommended: true },
+      { id: 'llama3.1',  label: 'Llama 3.1 (8B)',  desc: 'Strong general-purpose model' },
+      { id: 'mistral',   label: 'Mistral 7B',       desc: 'Great instruction following' },
+      { id: 'qwen2.5',   label: 'Qwen 2.5 (7B)',    desc: 'Multilingual, strong reasoning' },
     ],
   },
 }

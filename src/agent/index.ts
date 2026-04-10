@@ -7,7 +7,7 @@ import { createAxiomTools } from './tools.js'
 import type { AxiomConfig } from '../config/index.js'
 
 export function createAxiomAgent(config: AxiomConfig) {
-  const model = resolveModel(config.provider, config.model, config.apiKey)
+  const model = resolveModel(config)
   const tools = createAxiomTools(config)
 
   return new Agent({
@@ -19,11 +19,8 @@ export function createAxiomAgent(config: AxiomConfig) {
   })
 }
 
-function resolveModel(
-  provider: AxiomConfig['provider'],
-  modelId: string,
-  apiKey: string,
-) {
+function resolveModel(config: AxiomConfig) {
+  const { provider, model: modelId, apiKey } = config
   switch (provider) {
     case 'google':
       return createGoogleGenerativeAI({ apiKey })(modelId)
@@ -31,6 +28,10 @@ function resolveModel(
       return createOpenAI({ apiKey })(modelId)
     case 'anthropic':
       return createAnthropic({ apiKey })(modelId)
+    case 'ollama': {
+      const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/api'
+      return createOpenAI({ baseURL, apiKey: 'ollama' })(modelId)
+    }
     default: {
       const _exhaustive: never = provider
       throw new Error(`Unknown provider: ${_exhaustive}`)

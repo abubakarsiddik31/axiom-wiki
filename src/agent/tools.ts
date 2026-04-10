@@ -4,6 +4,7 @@ import type { AxiomConfig } from '../config/index.js'
 import * as wiki from '../core/wiki.js'
 import * as search from '../core/search.js'
 import * as files from '../core/files.js'
+import * as sources from '../core/sources.js'
 
 export function createAxiomTools(config: AxiomConfig) {
   const { wikiDir, rawDir } = config
@@ -107,6 +108,63 @@ export function createAxiomTools(config: AxiomConfig) {
     },
   })
 
+  const list_sources = createTool({
+    id: 'list_sources',
+    description: 'List all ingested source files with dates and summary page paths.',
+    inputSchema: z.object({}),
+    execute: async () => sources.listSources(wikiDir),
+  })
+
+  const get_source = createTool({
+    id: 'get_source',
+    description: 'Get the wiki summary page for a specific source file.',
+    inputSchema: z.object({
+      filename: z.string().describe('Original source filename, e.g. "article.pdf"'),
+    }),
+    execute: async (input) => sources.getSource(wikiDir, input.filename),
+  })
+
+  const remove_source = createTool({
+    id: 'remove_source',
+    description: 'Remove the wiki summary page for a source. Returns list of pages that may be affected.',
+    inputSchema: z.object({
+      filename: z.string().describe('Original source filename to remove'),
+    }),
+    execute: async (input) => sources.removeSource(wikiDir, input.filename),
+  })
+
+  const get_contradictions = createTool({
+    id: 'get_contradictions',
+    description: 'Find all wiki pages containing unresolved contradiction blocks (⚠️ Contradiction:).',
+    inputSchema: z.object({}),
+    execute: async () => {
+      const pages = await wiki.listPages(wikiDir)
+      const results = []
+      for (const p of pages) {
+        const content = await wiki.readPage(wikiDir, p.path)
+        if (content.includes('⚠️ Contradiction:')) {
+          results.push({ path: p.path, title: p.title, content })
+        }
+      }
+      return results
+    },
+  })
+
+  const resolve_contradiction = createTool({
+    id: 'resolve_contradiction',
+    description: 'Update a wiki page to resolve or remove a contradiction block.',
+    inputSchema: z.object({
+      path: z.string().describe('Page path relative to wikiDir'),
+      resolution: z.string().describe('The resolved text to replace the ⚠️ block with, or empty string to remove it'),
+    }),
+    execute: async (input) => {
+      const content = await wiki.readPage(wikiDir, input.path)
+      const updated = content.replace(/> ⚠️ Contradiction:.*$/m, input.resolution || '')
+      await wiki.writePage(wikiDir, input.path, updated.trim())
+      return 'resolved'
+    },
+  })
+
   return {
     read_page,
     write_page,
@@ -117,6 +175,11 @@ export function createAxiomTools(config: AxiomConfig) {
     ingest_source,
     get_status,
     lint_wiki,
+    list_sources,
+    get_source,
+    remove_source,
+    get_contradictions,
+    resolve_contradiction,
   }
 }
 

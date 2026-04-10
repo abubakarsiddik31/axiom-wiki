@@ -23,12 +23,18 @@ function slugify(text: string): string {
     .slice(0, 60)
 }
 
-export function QueryScreen() {
+interface Props {
+  onExit?: () => void
+  prefill?: string
+}
+
+export function QueryScreen({ onExit, prefill }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
 
   const [state, setState] = useState<QueryState>('idle')
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(prefill ?? '')
   const [streamText, setStreamText] = useState('')
   const [history, setHistory] = useState<QAPair[]>([])
   const [currentQ, setCurrentQ] = useState('')
@@ -69,7 +75,7 @@ export function QueryScreen() {
   const submitQuestion = useCallback(async (question: string) => {
     if (!config) return
     const q = question.trim()
-    if (!q || q === 'exit') { exit(); return }
+    if (!q || q === 'exit') { doExit(); return }
 
     setInput('')
     setCurrentQ(q)
@@ -107,7 +113,7 @@ export function QueryScreen() {
       commitQA(q, `Error: ${msg}`)
       setState('idle')
     }
-  }, [config, history, exit])
+  }, [config, history, doExit])
 
   const submitFiling = useCallback(async (title: string) => {
     if (!config) return

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
 import path from 'path'
 import fs from 'fs'
@@ -15,6 +15,7 @@ const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp',
 interface Props {
   file?: string
   interactive?: boolean
+  onExit?: () => void
 }
 
 type Status = 'running' | 'done' | 'error'
@@ -57,7 +58,9 @@ function extractPages(text: string): string[] {
   return pages
 }
 
-export function IngestScreen({ file, interactive = false }: Props) {
+export function IngestScreen({ file, interactive = false, onExit }: Props) {
+  const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
 
   const [step, setStep] = useState<IngestStep>('idle')
@@ -273,6 +276,9 @@ export function IngestScreen({ file, interactive = false }: Props) {
       if (input === 'y' || input === 'Y' || key.return) void finaliseInteractive()
       if (input === 'n' || input === 'N') { setCurrentFile(null); setStep('done') }
     }
+    if (step === 'done' && key.return) {
+      doExit()
+    }
   })
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -379,11 +385,14 @@ export function IngestScreen({ file, interactive = false }: Props) {
       )}
 
       {step === 'done' && !currentFile && (
-        <Box marginTop={1}>
+        <Box marginTop={1} flexDirection="column">
           <Text color="green" bold>
             ✓ Ingest complete — {results.filter(r => r.status === 'done').length} succeeded,{' '}
             {results.filter(r => r.status === 'error').length} failed
           </Text>
+          <Box marginTop={1}>
+            <Text color="gray">Press Enter to continue</Text>
+          </Box>
         </Box>
       )}
 

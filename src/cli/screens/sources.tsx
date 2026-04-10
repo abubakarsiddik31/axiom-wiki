@@ -5,8 +5,13 @@ import { listSources, getSource, removeSource, markForReingest, type SourceRecor
 
 type View = 'list' | 'viewing' | 'confirm-delete' | 'confirm-reingest' | 'loading'
 
-export function SourcesScreen() {
+interface Props {
+  onExit?: () => void
+}
+
+export function SourcesScreen({ onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
 
   const [sources, setSources] = useState<SourceRecord[]>([])
@@ -31,7 +36,7 @@ export function SourcesScreen() {
       if (input === 'v' || input === 'V') handleView()
       if (input === 'd' || input === 'D') setView('confirm-delete')
       if (input === 'r' || input === 'R') setView('confirm-reingest')
-      if (input === 'q' || key.escape) exit()
+      if (input === 'q' || key.escape) doExit()
     }
 
     if (view === 'viewing') {

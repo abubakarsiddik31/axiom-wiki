@@ -23,8 +23,13 @@ function extractPageCount(output: string): number {
   return m ? parseInt(m[1]!, 10) : 0
 }
 
-export function WatchScreen() {
+interface Props {
+  onExit?: () => void
+}
+
+export function WatchScreen({ onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
   const [log, setLog] = useState<WatchLogEntry[]>([])
   const watcherRef = useRef<FSWatcher | null>(null)
@@ -32,7 +37,7 @@ export function WatchScreen() {
   useInput((input) => {
     if (input === 'q') {
       watcherRef.current?.close()
-      exit()
+      doExit()
     }
   })
 

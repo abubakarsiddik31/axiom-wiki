@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Box, Text, useApp } from 'ink'
+import { Box, Text, useApp, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import SelectInput from 'ink-select-input'
 import { getConfig, setConfig } from '../../config/index.js'
@@ -8,8 +8,13 @@ import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.j
 type Action = 'full' | 'model-only' | 'key-only' | 'cancel'
 type Step = 0 | 1 | 2 | 3 | 4
 
-export function ModelScreen() {
+interface Props {
+  onExit?: () => void
+}
+
+export function ModelScreen({ onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const existing = getConfig()
 
   const [step, setStep] = useState<Step>(0)
@@ -57,7 +62,7 @@ export function ModelScreen() {
               onSelect={(item) => {
                 const val = item.value as Action
                 setAction(val)
-                if (val === 'cancel') { exit(); return }
+                if (val === 'cancel') { doExit(); return }
                 if (val === 'full') { setProvider(existing.provider); setStep(1) }
                 if (val === 'model-only') { setProvider(existing.provider); setStep(3) }
                 if (val === 'key-only') { setProvider(existing.provider); setStep(2) }
@@ -160,6 +165,13 @@ export function ModelScreen() {
   const origProvLabel = origProvider ? PROVIDERS[origProvider].label : '?'
   const origModLabel = origProvider && origModel ? (PROVIDERS[origProvider].models.find((m) => m.id === origModel)?.label ?? origModel) : '?'
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useInput((_input, key) => {
+    if (step === 4 && key.return) {
+      doExit()
+    }
+  })
+
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold color="green">✓ Configuration updated:</Text>
@@ -176,6 +188,9 @@ export function ModelScreen() {
       </Box>
       <Box marginTop={1}>
         <Text color="gray">Changes saved. Run <Text color="cyan">axiom-wiki query</Text> to test.</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color="gray">Press Enter to continue</Text>
       </Box>
     </Box>
   )

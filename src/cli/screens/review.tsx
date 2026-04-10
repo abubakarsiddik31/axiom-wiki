@@ -18,8 +18,13 @@ function extractBlock(content: string): string {
   return m ? m[0].replace(/^> /, '').trim() : '⚠️ Contradiction detected'
 }
 
-export function ReviewScreen() {
+interface Props {
+  onExit?: () => void
+}
+
+export function ReviewScreen({ onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
 
   const [view, setView] = useState<View>('scanning')
@@ -53,7 +58,7 @@ export function ReviewScreen() {
       if (key.upArrow) setSelected((s) => Math.max(0, s - 1))
       if (key.downArrow) setSelected((s) => Math.min(pages.length - 1, s + 1))
       if (key.return) void startResolve()
-      if (input === 'q' || key.escape) exit()
+      if (input === 'q' || key.escape) doExit()
     }
     if (view === 'resolving') {
       if (input === 'y' || input === 'Y' || key.return) void applyResolution(recommendation)
@@ -61,7 +66,7 @@ export function ReviewScreen() {
       if (input === 'e' || input === 'E') { setEditText(recommendation); setView('edit') }
     }
     if (view === 'done' || view === 'empty') {
-      if (input === 'q' || key.return || key.escape) exit()
+      if (input === 'q' || key.return || key.escape) doExit()
     }
   })
 

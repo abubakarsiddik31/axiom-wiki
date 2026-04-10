@@ -21,8 +21,13 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function StatusScreen() {
+interface Props {
+  onExit?: () => void
+}
+
+export function StatusScreen({ onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
   const [status, setStatus] = useState<WikiStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,10 +35,10 @@ export function StatusScreen() {
   useEffect(() => {
     if (!config) return
     getStatus(config.wikiDir, config.rawDir)
-      .then((s) => { setStatus(s); setTimeout(exit, 100) })
+      .then((s) => { setStatus(s); setTimeout(doExit, 100) })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : String(e))
-        setTimeout(exit, 100)
+        setTimeout(doExit, 100)
       })
   }, [])
 

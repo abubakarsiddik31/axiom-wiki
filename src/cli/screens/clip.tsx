@@ -7,12 +7,14 @@ import { clipUrl, type ClipResult } from '../../core/clip.js'
 
 interface Props {
   url?: string
+  onExit?: () => void
 }
 
 type Step = 'input' | 'clipping' | 'confirm-ingest' | 'ingesting' | 'done' | 'error'
 
-export function ClipScreen({ url: initialUrl }: Props) {
+export function ClipScreen({ url: initialUrl, onExit }: Props) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const config = getConfig()
 
   const [step, setStep] = useState<Step>(initialUrl ? 'clipping' : 'input')
@@ -87,10 +89,10 @@ export function ClipScreen({ url: initialUrl }: Props) {
       }
     }
     if ((step === 'done' || step === 'error') && (key.return || input === 'q')) {
-      exit()
+      doExit()
     }
     if (ingestDone && (key.return || input === 'q')) {
-      exit()
+      doExit()
     }
   })
 

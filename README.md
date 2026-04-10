@@ -1,5 +1,7 @@
 # Axiom Wiki
 
+![Axiom Wiki init screen](images/init.png)
+
 **The wiki that maintains itself.**
 
 [![npm version](https://img.shields.io/npm/v/axiom-wiki)](https://www.npmjs.com/package/axiom-wiki)

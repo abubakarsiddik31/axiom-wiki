@@ -1,0 +1,75 @@
+export type ProviderId = 'google' | 'openai' | 'anthropic'
+
+export interface ModelDef {
+  id: string
+  label: string
+  desc: string
+  recommended?: boolean
+}
+
+export interface ProviderDef {
+  id: ProviderId
+  label: string
+  keyLabel: string
+  keyEnv: string
+  keyUrl: string
+  models: ModelDef[]
+}
+
+export const PROVIDERS: Record<ProviderId, ProviderDef> = {
+  google: {
+    id: 'google',
+    label: 'Google Gemini',
+    keyLabel: 'Gemini API Key',
+    keyEnv: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+    models: [
+      { id: 'gemini-3.1-pro',      label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking' },
+      { id: 'gemini-3-flash',      label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true },
+      { id: 'gemini-3.1-pro-lite', label: 'Gemini 3.1 Pro Lite', desc: 'Lightweight Pro variant — lower cost, still capable' },
+      { id: 'gemini-2.5-pro',      label: 'Gemini 2.5 Pro',      desc: 'Stable Pro — multimodal, 1M context' },
+      { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash',    desc: 'Affordable stable option, wide availability' },
+    ],
+  },
+  openai: {
+    id: 'openai',
+    label: 'OpenAI',
+    keyLabel: 'OpenAI API Key',
+    keyEnv: 'OPENAI_API_KEY',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    models: [
+      { id: 'gpt-5.4',      label: 'GPT-5.4',      desc: 'Flagship — complex reasoning and coding' },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', desc: 'Fast and affordable', recommended: true },
+      { id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', desc: 'Ultra-fast, lightweight' },
+    ],
+  },
+  anthropic: {
+    id: 'anthropic',
+    label: 'Anthropic',
+    keyLabel: 'Anthropic API Key',
+    keyEnv: 'ANTHROPIC_API_KEY',
+    keyUrl: 'https://console.anthropic.com/settings/keys',
+    models: [
+      { id: 'claude-opus-4-6',   label: 'Claude Opus 4.6',   desc: 'Most capable — best reasoning and coding' },
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: 'Balanced speed and quality', recommended: true },
+      { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5',  desc: 'Fast and cost-efficient' },
+    ],
+  },
+}
+
+export function getProvider(id: ProviderId): ProviderDef {
+  return PROVIDERS[id]
+}
+
+export function getModel(providerId: ProviderId, modelId: string): ModelDef | undefined {
+  return PROVIDERS[providerId].models.find((m) => m.id === modelId)
+}
+
+export function getDefaultModel(providerId: ProviderId): ModelDef {
+  const models = PROVIDERS[providerId].models
+  return models.find((m) => m.recommended) ?? models[0]
+}
+
+export function listProviders(): ProviderDef[] {
+  return Object.values(PROVIDERS)
+}

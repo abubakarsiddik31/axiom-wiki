@@ -9,10 +9,11 @@ import { ModelScreen } from './screens/model.js'
 import { WatchScreen } from './screens/watch.js'
 import { ClipScreen } from './screens/clip.js'
 import { SourcesScreen } from './screens/sources.js'
+import { ReviewScreen } from './screens/review.js'
 
 export type AxiomCommand =
   | { name: 'init' }
-  | { name: 'ingest'; file?: string }
+  | { name: 'ingest'; file?: string; interactive?: boolean }
   | { name: 'query' }
   | { name: 'home' }
   | { name: 'status' }
@@ -20,6 +21,7 @@ export type AxiomCommand =
   | { name: 'watch' }
   | { name: 'clip'; url?: string }
   | { name: 'sources' }
+  | { name: 'review' }
 
 export function renderApp(command: AxiomCommand): void {
   switch (command.name) {
@@ -27,7 +29,7 @@ export function renderApp(command: AxiomCommand): void {
       render(<InitScreen />)
       break
     case 'ingest':
-      render(<IngestScreen file={command.file} />)
+      render(<IngestScreen file={command.file} interactive={command.interactive} />)
       break
     case 'query':
       render(<QueryScreen />)
@@ -49,6 +51,9 @@ export function renderApp(command: AxiomCommand): void {
       break
     case 'sources':
       render(<SourcesScreen />)
+      break
+    case 'review':
+      render(<ReviewScreen />)
       break
     default: {
       const _exhaustive: never = command

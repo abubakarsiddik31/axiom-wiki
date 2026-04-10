@@ -11,8 +11,9 @@ import { ModelScreen } from './model.js'
 import { WatchScreen } from './watch.js'
 import { ClipScreen } from './clip.js'
 import { SourcesScreen } from './sources.js'
+import { ReviewScreen } from './review.js'
 
-type Screen = 'home' | 'query' | 'ingest' | 'status' | 'model' | 'watch' | 'clip' | 'sources'
+type Screen = 'home' | 'query' | 'ingest' | 'status' | 'model' | 'watch' | 'clip' | 'sources' | 'review'
 
 interface WikiStats {
   totalPages: number
@@ -53,6 +54,7 @@ export function HomeScreen() {
   if (screen === 'watch') return <WatchScreen />
   if (screen === 'clip') return <ClipScreen />
   if (screen === 'sources') return <SourcesScreen />
+  if (screen === 'review') return <ReviewScreen />
 
   const prov = PROVIDERS[config.provider]
   const modelLabel = prov.models.find((m) => m.id === config.model)?.label ?? config.model
@@ -63,6 +65,7 @@ export function HomeScreen() {
     { label: 'Watch mode (auto-ingest)', value: 'watch' },
     { label: 'Clip URL', value: 'clip' },
     { label: 'Manage sources', value: 'sources' },
+    { label: 'Review contradictions', value: 'review' },
     { label: 'Wiki status', value: 'status' },
     { label: 'Switch model', value: 'model' },
     { label: 'Exit', value: 'exit' },

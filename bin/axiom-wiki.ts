@@ -26,9 +26,10 @@ program
 program
   .command('ingest [file]')
   .description('Ingest a source file, or scan raw/ for new files')
-  .action((file?: string) => {
+  .option('--interactive', 'Enable interactive ingest mode')
+  .action((file: string | undefined, opts: { interactive?: boolean }) => {
     requireConfig()
-    renderApp({ name: 'ingest', file })
+    renderApp({ name: 'ingest', file, interactive: opts.interactive })
   })
 
 program
@@ -94,6 +95,14 @@ program
   .action(() => {
     requireConfig()
     renderApp({ name: 'sources' })
+  })
+
+program
+  .command('review')
+  .description('Review and resolve wiki contradictions')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'review' })
   })
 
 program

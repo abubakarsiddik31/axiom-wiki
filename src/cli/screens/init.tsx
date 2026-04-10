@@ -11,6 +11,7 @@ import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { readSourceFile } from '../../core/files.js'
 
+// Steps: 0=welcome 1=provider 2=apiKey(or ollamaUrl) 3=model 4=wikiDir 5=rawDir 6=scaffold 7=done
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
@@ -25,7 +26,10 @@ export function InitScreen() {
   const [step, setStep] = useState<Step>(0)
   const [provider, setProvider] = useState<ProviderId | null>(null)
   const [apiKey, setApiKey] = useState('')
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
+  const [ollamaError, setOllamaError] = useState('')
   const [model, setModel] = useState('')
+  const [customModel, setCustomModel] = useState('')
   const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'my-wiki'))
   const [rawDir, setRawDir] = useState('')
   const [log, setLog] = useState<string[]>([])
@@ -51,7 +55,11 @@ export function InitScreen() {
         const expandedRaw = expandTilde(rawDir)
 
         clearConfig()
-        setConfig({ provider: provider!, apiKey, model, wikiDir: expandedWiki, rawDir: expandedRaw })
+        const finalModel = model === '__custom__' ? customModel.trim() : model
+        const configToSave = provider === 'ollama'
+          ? { provider: provider!, apiKey: '', model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw, ollamaBaseUrl: ollamaUrl.trim() + '/api' }
+          : { provider: provider!, apiKey, model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw }
+        setConfig(configToSave)
         addLog('✓ Config saved')
 
         await scaffoldWiki(expandedWiki)
@@ -142,6 +150,42 @@ export function InitScreen() {
 
   if (step === 2) {
     const prov = PROVIDERS[provider!]
+
+    // Ollama: show base URL input + connectivity check
+    if (provider === 'ollama') {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Ollama base URL:</Text>
+          <Text color="gray">(Press Enter for default: http://localhost:11434)</Text>
+          <Box marginTop={1}>
+            <Text>{'> '}</Text>
+            <TextInput
+              value={ollamaUrl}
+              onChange={(v) => { setOllamaUrl(v); setOllamaError('') }}
+              onSubmit={async (val) => {
+                const url = (val.trim() || 'http://localhost:11434').replace(/\/+$/, '')
+                setOllamaUrl(url)
+                setOllamaError('')
+                try {
+                  const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(4000) })
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                  setStep(3)
+                } catch {
+                  setOllamaError(`Could not connect to Ollama at ${url}\nIs Ollama running? Try: ollama serve`)
+                }
+              }}
+            />
+          </Box>
+          {ollamaError && (
+            <Box marginTop={1} flexDirection="column">
+              <Text color="red">✗ {ollamaError}</Text>
+              <Text color="gray">Press Enter to retry, or go back with Ctrl+C.</Text>
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>{prov.keyLabel}</Text>
@@ -165,10 +209,30 @@ export function InitScreen() {
   }
 
   if (step === 3) {
-    const models = PROVIDERS[provider!].models.map((m) => ({
-      label: `${m.label}  ${m.desc}`,
-      value: m.id,
-    }))
+    const models = [
+      ...PROVIDERS[provider!].models.map((m) => ({
+        label: `${m.label}  ${m.desc}`,
+        value: m.id,
+      })),
+      { label: '[ Enter custom model name ]', value: '__custom__' },
+    ]
+
+    if (model === '__custom__') {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Enter model name:</Text>
+          <Box marginTop={1}>
+            <Text>{'> '}</Text>
+            <TextInput
+              value={customModel}
+              onChange={setCustomModel}
+              onSubmit={(val) => { if (val.trim()) setStep(4) }}
+            />
+          </Box>
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Choose a model:</Text>
@@ -177,7 +241,7 @@ export function InitScreen() {
             items={models}
             onSelect={(item) => {
               setModel(item.value)
-              setStep(4)
+              if (item.value !== '__custom__') setStep(4)
             }}
           />
         </Box>

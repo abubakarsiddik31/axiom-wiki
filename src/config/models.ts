@@ -28,7 +28,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     requiresApiKey: true,
     models: [
       { id: 'gemini-3.1-pro',      label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking' },
-      { id: 'gemini-3-flash',      label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true },
+      { id: 'gemini-3-flash-preview',      label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true },
       { id: 'gemini-3.1-pro-lite', label: 'Gemini 3.1 Pro Lite', desc: 'Lightweight Pro variant — lower cost, still capable' },
       { id: 'gemini-2.5-pro',      label: 'Gemini 2.5 Pro',      desc: 'Stable Pro — multimodal, 1M context' },
       { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash',    desc: 'Affordable stable option, wide availability' },

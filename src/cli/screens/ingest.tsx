@@ -75,11 +75,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   const [currentPages, setCurrentPages] = useState<string[]>([])
   const [isReingest, setIsReingest] = useState(false)
 
-  // Kick off once config is available
+  // Kick off once on mount
   useEffect(() => {
     if (!config || step !== 'idle') return
     void startIngest()
-  }, [config])
+  }, [])
 
   async function startIngest() {
     if (!config) return

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import { getConfig, hasConfig } from '../../config/index.js'
@@ -51,22 +51,27 @@ export function HomeScreen() {
     { text: 'Type /help to see commands, or ask a question.', color: 'gray' },
   ])
 
-  const menuMatches = input.startsWith('/') ? filterCommands(input) : []
+  const menuMatches = useMemo(
+    () => input.startsWith('/') ? filterCommands(input) : [],
+    [input]
+  )
   const showSlashMenu = menuMatches.length > 0
+  // Clamp menuIndex whenever matches list shrinks (avoids out-of-bounds without an extra effect)
+  const safeMenuIndex = menuMatches.length > 0 ? Math.min(menuIndex, menuMatches.length - 1) : 0
 
-  // Reset menu selection when input changes
   useEffect(() => {
     setMenuIndex(0)
   }, [input])
 
+  const screenName = screen.name
   useEffect(() => {
     if (!config) return
     getStatus(config.wikiDir, config.rawDir)
       .then((s) => setTotalPages(s.totalPages))
       .catch(() => {})
-  }, [screen])
+  }, [screenName])
 
-  useInput((char, key) => {
+  const handleInput = useCallback((char: string, key: any) => {
     if (screen.name !== 'shell') return
     if (key.ctrl && char === 'c') exit()
 
@@ -81,7 +86,7 @@ export function HomeScreen() {
       }
       // Tab or right arrow completes the selected command into the input
       if (key.tab || key.rightArrow) {
-        const cmd = menuMatches[menuIndex]
+        const cmd = menuMatches[safeMenuIndex]
         if (cmd) setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
         return
       }
@@ -92,7 +97,9 @@ export function HomeScreen() {
         setInput('')
       }
     }
-  })
+  }, [screen.name, showSlashMenu, menuMatches, safeMenuIndex, input, exit])
+
+  useInput(handleInput)
 
   const addLog = useCallback((...lines: LogLine[]) => {
     setLog((prev) => [...prev, ...lines].slice(-80))
@@ -148,15 +155,15 @@ export function HomeScreen() {
     if (!trimmed) return
 
     // If menu is open, Enter completes the command — user then adds args and presses Enter again
-    if (showSlashMenu && menuMatches[menuIndex]) {
-      const cmd = menuMatches[menuIndex]!
+    if (showSlashMenu && menuMatches[safeMenuIndex]) {
+      const cmd = menuMatches[safeMenuIndex]!
       setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
       return
     }
 
     setInput('')
     runCommand(trimmed)
-  }, [showSlashMenu, menuMatches, menuIndex, runCommand])
+  }, [showSlashMenu, menuMatches, safeMenuIndex, runCommand])
 
   const goHome = useCallback(() => setScreen({ name: 'shell' }), [])
 
@@ -207,9 +214,9 @@ export function HomeScreen() {
       {/* Slash command menu */}
       {showSlashMenu && (
         <SlashMenu
-          selectedIndex={menuIndex}
+          selectedIndex={safeMenuIndex}
           matches={menuMatches}
-          onSelect={(cmd) => { setInput(`/${cmd.name} `); setMenuIndex(0) }}
+          onSelect={(cmd) => { setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`); setMenuIndex(0) }}
         />
       )}
 

@@ -5,14 +5,14 @@ import SelectInput from 'ink-select-input'
 import os from 'os'
 import path from 'path'
 import fs from 'fs'
-import { setConfig, clearConfig } from '../../config/index.js'
+import { execSync } from 'child_process'
+import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
-import { readSourceFile } from '../../core/files.js'
 
-// Steps: 0=welcome 1=provider 2=apiKey(or ollamaUrl) 3=model 4=wikiDir 5=rawDir 6=scaffold 7=done
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
+// Steps: 0=welcome 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
 
@@ -22,9 +22,28 @@ function expandTilde(p: string): string {
   return p
 }
 
+function detectContext() {
+  let gitRoot: string | null = null
+  try {
+    gitRoot = execSync('git rev-parse --show-toplevel', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf-8',
+    }).trim()
+  } catch {
+    // not a git repo
+  }
+
+  const isHomedir = process.cwd() === os.homedir()
+  const existingLocalConfig = findLocalConfig()
+
+  return { gitRoot, isHomedir, existingLocalConfig }
+}
+
 export function InitScreen() {
   const { exit } = useApp()
   const [step, setStep] = useState<Step>(0)
+  const [scope, setScope] = useState<ConfigScope | null>(null)
+  const [context] = useState(detectContext)
   const [provider, setProvider] = useState<ProviderId | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
@@ -34,40 +53,53 @@ export function InitScreen() {
   const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'my-wiki'))
   const [rawDir, setRawDir] = useState('')
   const [log, setLog] = useState<string[]>([])
-  const [done, setDone] = useState(false)
 
-  // Set rawDir default whenever wikiDir changes
   useEffect(() => {
-    if (step < 5) setRawDir(path.join(expandTilde(wikiDir), 'raw'))
+    if (scope === 'local') {
+      setWikiDir(path.join(process.cwd(), 'wiki'))
+      setRawDir(path.join(process.cwd(), 'raw'))
+    } else if (scope === 'global') {
+      setWikiDir(path.join(os.homedir(), 'my-wiki'))
+      setRawDir(path.join(os.homedir(), 'my-wiki', 'raw'))
+    }
+  }, [scope])
+
+  // Keep rawDir in sync with wikiDir while user edits it
+  useEffect(() => {
+    if (step < 6) setRawDir(path.join(expandTilde(wikiDir), 'raw'))
   }, [wikiDir, step])
 
-  // Step 0: welcome — press Enter to proceed; Step 7: done — press Enter to exit
   useInput((_, key) => {
     if (step === 0 && key.return) setStep(1)
-    if (step === 7 && key.return) exit()
+    if (step === 8 && key.return) exit()
   })
 
-  // Step 6: scaffold + ingest
   useEffect(() => {
-    if (step !== 6) return
+    if (step !== 7) return
 
     const run = async () => {
       try {
         const expandedWiki = expandTilde(wikiDir)
         const expandedRaw = expandTilde(rawDir)
-
-        clearConfig()
         const finalModel = model === '__custom__' ? customModel.trim() : model
+
         const configToSave = provider === 'ollama'
           ? { provider: provider!, apiKey: '', model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw, ollamaBaseUrl: ollamaUrl.trim() + '/api' }
           : { provider: provider!, apiKey, model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw }
-        setConfig(configToSave)
+
+        clearConfig(scope ?? 'global')
+
+        if (scope === 'local') {
+          const localConfigPath = path.join(process.cwd(), '.axiom/config.json')
+          setLocalConfig(configToSave, localConfigPath)
+        } else {
+          setConfig(configToSave)
+        }
         addLog('✓ Config saved')
 
         await scaffoldWiki(expandedWiki)
         addLog('✓ Wiki structure created')
 
-        // Ingest existing raw files
         const rawFiles = fs.existsSync(expandedRaw)
           ? fs.readdirSync(expandedRaw).filter((f: string) => {
               const ext = path.extname(f).toLowerCase()
@@ -77,17 +109,14 @@ export function InitScreen() {
 
         if (rawFiles.length > 0) {
           addLog(`⠸ Processing ${rawFiles.length} existing file(s) in raw/...`)
-          const config = { provider: provider!, apiKey, model, wikiDir: expandedWiki, rawDir: expandedRaw }
+          const config = { provider: provider!, apiKey, model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw }
           const agent = createAxiomAgent(config)
 
           for (const file of rawFiles) {
             const filepath = path.join(expandedRaw, file)
             addLog(`  → ingesting ${file}`)
             try {
-              await agent.generate([{
-                role: 'user',
-                content: `Ingest this source file into the wiki: ${filepath}`,
-              }])
+              await agent.generate([{ role: 'user', content: `Ingest this source file into the wiki: ${filepath}` }])
             } catch {
               addLog(`  ⚠ Failed to ingest ${file}`)
             }
@@ -95,8 +124,7 @@ export function InitScreen() {
         }
 
         addLog('✓ Done')
-        setDone(true)
-        setStep(7)
+        setStep(8)
       } catch (err: unknown) {
         addLog(`✗ Error: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -139,10 +167,48 @@ export function InitScreen() {
   }
 
   if (step === 1) {
-    const items = listProviders().map((p) => ({
-      label: `${p.label}`,
-      value: p.id,
-    }))
+    const { gitRoot, isHomedir, existingLocalConfig } = context
+
+    let contextMessage: string
+    if (gitRoot) {
+      contextMessage = `I see you're in a git repo at ${gitRoot}.`
+    } else if (isHomedir) {
+      contextMessage = `You're in your home directory.`
+    } else {
+      contextMessage = `You're in ${process.cwd()}.`
+    }
+
+    const items = [
+      { label: `Local  — project wiki in ${process.cwd()}/.axiom/`, value: 'local' },
+      { label: `Global — personal wiki in ${os.homedir()}/my-wiki/`, value: 'global' },
+    ]
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Where should this wiki live?</Text>
+        <Box marginTop={1}>
+          <Text color="gray">{contextMessage}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <SelectInput
+            items={items}
+            onSelect={(item) => {
+              setScope(item.value as ConfigScope)
+              setStep(2)
+            }}
+          />
+        </Box>
+        {existingLocalConfig && (
+          <Box marginTop={1}>
+            <Text color="yellow">⚠ Existing local config found at {existingLocalConfig} — selecting Local will overwrite it.</Text>
+          </Box>
+        )}
+      </Box>
+    )
+  }
+
+  if (step === 2) {
+    const items = listProviders().map((p) => ({ label: p.label, value: p.id }))
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Choose your LLM provider:</Text>
@@ -152,7 +218,7 @@ export function InitScreen() {
             onSelect={(item) => {
               setProvider(item.value as ProviderId)
               setModel(PROVIDERS[item.value as ProviderId].models.find((m) => m.recommended)?.id ?? PROVIDERS[item.value as ProviderId].models[0]!.id)
-              setStep(2)
+              setStep(3)
             }}
           />
         </Box>
@@ -160,10 +226,9 @@ export function InitScreen() {
     )
   }
 
-  if (step === 2) {
+  if (step === 3) {
     const prov = PROVIDERS[provider!]
 
-    // Ollama: show base URL input + connectivity check
     if (provider === 'ollama') {
       return (
         <Box flexDirection="column" padding={1}>
@@ -181,7 +246,7 @@ export function InitScreen() {
                 try {
                   const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(4000) })
                   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                  setStep(3)
+                  setStep(4)
                 } catch {
                   setOllamaError(`Could not connect to Ollama at ${url}\nIs Ollama running? Try: ollama serve`)
                 }
@@ -208,9 +273,7 @@ export function InitScreen() {
             value={apiKey}
             onChange={setApiKey}
             mask="•"
-            onSubmit={(val) => {
-              if (val.trim()) setStep(3)
-            }}
+            onSubmit={(val) => { if (val.trim()) setStep(4) }}
           />
         </Box>
         <Box marginTop={1}>
@@ -220,12 +283,9 @@ export function InitScreen() {
     )
   }
 
-  if (step === 3) {
+  if (step === 4) {
     const models = [
-      ...PROVIDERS[provider!].models.map((m) => ({
-        label: `${m.label}  ${m.desc}`,
-        value: m.id,
-      })),
+      ...PROVIDERS[provider!].models.map((m) => ({ label: `${m.label}  ${m.desc}`, value: m.id })),
       { label: '[ Enter custom model name ]', value: '__custom__' },
     ]
 
@@ -238,7 +298,7 @@ export function InitScreen() {
             <TextInput
               value={customModel}
               onChange={setCustomModel}
-              onSubmit={(val) => { if (val.trim()) setStep(4) }}
+              onSubmit={(val) => { if (val.trim()) setStep(5) }}
             />
           </Box>
         </Box>
@@ -253,7 +313,7 @@ export function InitScreen() {
             items={models}
             onSelect={(item) => {
               setModel(item.value)
-              if (item.value !== '__custom__') setStep(4)
+              if (item.value !== '__custom__') setStep(5)
             }}
           />
         </Box>
@@ -261,7 +321,7 @@ export function InitScreen() {
     )
   }
 
-  if (step === 4) {
+  if (step === 5) {
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Wiki directory:</Text>
@@ -273,7 +333,7 @@ export function InitScreen() {
             onSubmit={(val) => {
               if (val.trim()) {
                 setWikiDir(val.trim())
-                setStep(5)
+                setStep(6)
               }
             }}
           />
@@ -285,7 +345,7 @@ export function InitScreen() {
     )
   }
 
-  if (step === 5) {
+  if (step === 6) {
     const defaultRaw = path.join(expandTilde(wikiDir), 'raw')
     return (
       <Box flexDirection="column" padding={1}>
@@ -297,7 +357,7 @@ export function InitScreen() {
             onChange={setRawDir}
             onSubmit={(val) => {
               setRawDir(val.trim() || defaultRaw)
-              setStep(6)
+              setStep(7)
             }}
           />
         </Box>
@@ -308,7 +368,7 @@ export function InitScreen() {
     )
   }
 
-  if (step === 6) {
+  if (step === 7) {
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Setting up your wiki...</Text>
@@ -323,17 +383,22 @@ export function InitScreen() {
     )
   }
 
-  // step === 7: success
+  // step === 8: success
   const expandedWiki = expandTilde(wikiDir)
   const expandedRaw = expandTilde(rawDir)
   const mcpConfig = JSON.stringify({ 'axiom-wiki': { command: 'axiom-wiki', args: ['mcp'] } }, null, 2)
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Text bold color="green">✓ Axiom Wiki is ready!</Text>
+      <Text bold color="green">
+        {scope === 'local' ? '✓ Local project wiki is ready!' : '✓ Axiom Wiki is ready!'}
+      </Text>
       <Box marginTop={1} flexDirection="column">
         <Text>Your wiki:    <Text color="cyan">{expandedWiki}/wiki/</Text></Text>
         <Text>Raw sources:  <Text color="cyan">{expandedRaw}/</Text></Text>
+        {scope === 'local' && (
+          <Text color="gray">Config: <Text color="cyan">{process.cwd()}/.axiom/config.json</Text></Text>
+        )}
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text bold>Add to Claude Code MCP config (.claude/mcp_settings.json):</Text>
@@ -344,6 +409,11 @@ export function InitScreen() {
       <Box marginTop={1}>
         <Text color="gray">Run <Text color="cyan">axiom-wiki --help</Text> to see all commands.</Text>
       </Box>
+      {scope === 'local' && (
+        <Box marginTop={1}>
+          <Text color="gray">Run <Text color="cyan">axiom-wiki</Text> from this directory to use this wiki.</Text>
+        </Box>
+      )}
       <Box marginTop={1}>
         <Text color="gray">Press <Text color="white">Enter</Text> to exit</Text>
       </Box>

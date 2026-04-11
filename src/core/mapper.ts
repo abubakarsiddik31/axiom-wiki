@@ -183,11 +183,9 @@ export async function walkProject(
 
       const isRoot = path.dirname(relPath) === '.'
       const baseLower = entry.name.toLowerCase()
-      if (!isBinary && (KEY_FILE_NAMES.has(baseLower)) && sizeBytes <= MAX_KEY_FILE_BYTES) {
-        try {
-          keyFiles.push({ path: relPath, content: fs.readFileSync(fullPath, 'utf-8'), sizeBytes })
-        } catch { /* skip */ }
-      } else if (!isBinary && isRoot && /^[a-z]+\.config\.(js|ts|json|cjs|mjs)$/i.test(entry.name) && sizeBytes <= MAX_KEY_FILE_BYTES) {
+      const isKeyByName = !isBinary && KEY_FILE_NAMES.has(baseLower) && sizeBytes <= MAX_KEY_FILE_BYTES
+      const isKeyByPattern = !isBinary && isRoot && /^[a-z]+\.config\.(js|ts|json|cjs|mjs)$/i.test(entry.name) && sizeBytes <= MAX_KEY_FILE_BYTES
+      if (isKeyByName || isKeyByPattern) {
         try {
           keyFiles.push({ path: relPath, content: fs.readFileSync(fullPath, 'utf-8'), sizeBytes })
         } catch { /* skip */ }
@@ -197,6 +195,26 @@ export async function walkProject(
 
   walk(rootDir)
   onProgress?.(files.length)
+
+  // Deduplicate key files (e.g. multiple package.json in monorepos)
+  // and prioritize root-level files
+  const seenKeyNames = new Set<string>()
+  const rootKeyFiles: KeyFile[] = []
+  const nestedKeyFiles: KeyFile[] = []
+  for (const kf of keyFiles) {
+    const isRoot = !kf.path.includes('/')
+    if (isRoot) {
+      rootKeyFiles.push(kf)
+      seenKeyNames.add(path.basename(kf.path).toLowerCase())
+    } else {
+      nestedKeyFiles.push(kf)
+    }
+  }
+  // Only keep nested key files if we don't already have the same filename at root
+  const dedupedKeyFiles = [
+    ...rootKeyFiles,
+    ...nestedKeyFiles.filter((kf) => !seenKeyNames.has(path.basename(kf.path).toLowerCase())),
+  ]
 
   const textFiles = files.filter((f) => !f.isBinary)
   const totalSizeBytes = files.reduce((s, f) => s + f.sizeBytes, 0)
@@ -223,7 +241,7 @@ export async function walkProject(
     totalWords,
     languages,
     tree: treeLines.join('\n'),
-    keyFiles,
+    keyFiles: dedupedKeyFiles,
     files,
   }
 }
@@ -237,14 +255,14 @@ export function gatherFilesForPaths(
   const result: Array<{ path: string; content: string }> = []
   let totalBytes = 0
 
-  const matching = paths.length === 0
-    ? snapshot.files.filter((f) => !f.isBinary)
-    : snapshot.files.filter((f) => {
-        if (f.isBinary) return false
-        return paths.some((p) =>
-          p.endsWith('/') ? f.relPath.startsWith(p) : f.relPath === p
-        )
-      })
+  if (paths.length === 0) return result
+
+  const matching = snapshot.files.filter((f) => {
+    if (f.isBinary) return false
+    return paths.some((p) =>
+      p.endsWith('/') ? f.relPath.startsWith(p) : f.relPath === p
+    )
+  })
 
   for (const file of matching) {
     if (totalBytes >= maxTotalBytes) break

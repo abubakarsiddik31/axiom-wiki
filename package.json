@@ -33,13 +33,13 @@
   ],
   "author": "Abubakar Siddik",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://github.com/abubakarsiddiq/axiom-wiki#readme",
+  "homepage": "https://github.com/abubakarsiddik31/axiom-wiki#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abubakarsiddiq/axiom-wiki.git"
+    "url": "git+https://github.com/abubakarsiddik31/axiom-wiki.git"
   },
   "bugs": {
-    "url": "https://github.com/abubakarsiddiq/axiom-wiki/issues"
+    "url": "https://github.com/abubakarsiddik31/axiom-wiki/issues"
   },
   "engines": {
     "node": ">=18"

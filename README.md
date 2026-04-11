@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/v/axiom-wiki" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/dm/axiom-wiki" alt="npm downloads" /></a>
-  <a href="https://github.com/abubakarsiddik/axiom-wiki/actions/workflows/ci.yml"><img src="https://github.com/abubakarsiddik/axiom-wiki/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml"><img src="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://www.elastic.co/licensing/elastic-license"><img src="https://img.shields.io/badge/License-Elastic%20v2-blue.svg" alt="License: ELv2" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18" /></a>
 </p>
@@ -22,7 +22,7 @@
   <a href="#supported-llm-providers">Providers</a> ·
   <a href="#commands">Commands</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="https://github.com/abubakarsiddik/axiom-wiki/issues">Issues</a>
+  <a href="https://github.com/abubakarsiddik31/axiom-wiki/issues">Issues</a>
 </p>
 
 <br/>
@@ -90,7 +90,7 @@ Both `axiom-wiki` and the shorthand `axwiki` are available after install.
 ### From source
 
 ```bash
-git clone https://github.com/abubakarsiddik/axiom-wiki.git
+git clone https://github.com/abubakarsiddik31/axiom-wiki.git
 cd axiom-wiki
 pnpm install && pnpm build
 pnpm link --global
@@ -547,9 +547,9 @@ You can also help by starring the repo, sharing it, or contributing code.
 PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, project structure, conventions, and where to start.
 
 Quick links:
-- [Report a bug](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=bug_report.md)
-- [Request a feature](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=feature_request.md)
-- [Good first issues](https://github.com/abubakarsiddik/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+- [Report a bug](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=feature_request.md)
+- [Good first issues](https://github.com/abubakarsiddik31/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 - [Security policy](SECURITY.md)
 
 ---

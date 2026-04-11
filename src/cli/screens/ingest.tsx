@@ -9,6 +9,7 @@ import { createAxiomAgent } from '../../agent/index.js'
 import { INTERACTIVE_INGEST_PREFIX } from '../../agent/prompts.js'
 import { readSourceFile } from '../../core/files.js'
 import { updateIndex, appendLog } from '../../core/wiki.js'
+import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { getSource } from '../../core/sources.js'
 import { loadIgnorePatterns } from '../../core/watcher.js'
 import ignore from 'ignore'
@@ -29,6 +30,7 @@ interface FileResult {
   lines: Array<{ text: string; color?: string }>
   pagesCreated: string[]
   changes: Array<{ path: string; type: 'created' | 'modified' }>
+  usage: { inputTokens: number; outputTokens: number; costUsd: number | null } | null
   status: Status
 }
 
@@ -139,12 +141,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         .replace(/\\(.)/g, '$1')        // unescape \<char> → <char>
       const abs = path.resolve(cleaned)
       if (!fs.existsSync(abs)) {
-        addResult(cleaned, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], [], 'error')
+        addResult(cleaned, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], [], null, 'error')
         setStep('done'); return
       }
       const ext = path.extname(abs).toLowerCase()
       if (!SUPPORTED_EXTS.includes(ext)) {
-        addResult(cleaned, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], [], 'error')
+        addResult(cleaned, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], [], null, 'error')
         setStep('done'); return
       }
       filesToProcess = [abs]
@@ -208,7 +210,8 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
       setReceivedFirstChunk(false)
       setStep('running')
-      await runIngest(agent, filepath, filename, reingest, '')
+      const ok = await runIngest(agent, filepath, filename, reingest, '')
+      if (!ok) break
     }
 
     setCurrentFile(null)
@@ -221,7 +224,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     const filepath = file ? path.resolve(file) : path.join(config.rawDir, currentFile)
     setReceivedFirstChunk(false)
     setStep('running')
-    await runIngest(agent, filepath, currentFile, true, '')
+    await runIngest(agent, filepath, currentFile, true, '')  // single file — no loop, stop regardless
     setCurrentFile(null)
     setStep('done')
   }
@@ -276,7 +279,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       setStep('interactive-confirm')
     } catch (err: unknown) {
       lines.push({ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: 'red' })
-      addResult(currentFile!, lines, pagesFound, [], 'error')
+      addResult(currentFile!, lines, pagesFound, [], null, 'error')
       setCurrentFile(null)
       setStep('done')
     }
@@ -291,7 +294,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       await agent.generate([{ role: 'user', content: 'Please update the wiki index and append the log entry now.' }])
     } catch { /* best effort */ }
 
-    addResult(currentFile, [], currentPages, [], 'done')
+    addResult(currentFile, [], currentPages, [], null, 'done')
     setCurrentFile(null)
     setStep('done')
   }
@@ -302,75 +305,68 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     filename: string,
     reingest: boolean,
     userContext: string,
-  ) {
-    if (!config) return
+  ): Promise<boolean> {
+    if (!config) return false
     const lines: Array<{ text: string; color?: string }> = []
-    const pagesFound: string[] = []
     const before = snapshotWiki(config.wikiDir)
 
     try {
       const message = await buildMessage(filepath, reingest, userContext)
-      const stream = await agent.stream([message], {
+      const result = await agent.generate([message], {
         onStepFinish: (step: any) => {
-          for (const call of step.toolCalls ?? []) {
-            const entry = { text: `  ⚙ ${call.toolName}(${JSON.stringify(call.args).slice(0, 80)})`, color: 'yellow' as string | undefined }
-            lines.push(entry)
-            setLiveLines((prev) => [...prev, entry].slice(-20))
-          }
-          for (const result of step.toolResults ?? []) {
-            if (result.result && typeof result.result === 'string' && result.result.length < 120) {
-              const entry = { text: `    → ${result.result}`, color: 'gray' as string | undefined }
+          try {
+            for (const call of step.toolCalls ?? []) {
+              const args = JSON.stringify(call.args ?? {})
+              const entry = { text: `⚙ ${call.toolName}(${args.slice(0, 80)}${args.length > 80 ? '…' : ''})`, color: 'yellow' as string | undefined }
               lines.push(entry)
               setLiveLines((prev) => [...prev, entry].slice(-20))
             }
-          }
+            for (const res of step.toolResults ?? []) {
+              const r = res.result
+              if (r && typeof r === 'string' && r.length < 120) {
+                const entry = { text: `  → ${r}`, color: 'gray' as string | undefined }
+                lines.push(entry)
+                setLiveLines((prev) => [...prev, entry].slice(-20))
+              }
+            }
+          } catch { /* never crash the agent loop */ }
         },
       })
-      let buffer = ''
-      let allOutput = ''
 
-      for await (const chunk of stream.textStream) {
-        setReceivedFirstChunk(true)
-        buffer += chunk
-        allOutput += chunk
+      setReceivedFirstChunk(true)
 
-        const newlineIdx = buffer.lastIndexOf('\n')
-        if (newlineIdx > 0) {
-          const completed = buffer.slice(0, newlineIdx).split('\n')
-          buffer = buffer.slice(newlineIdx + 1)
-          const newEntries: Array<{ text: string; color?: string }> = []
-          for (const l of completed) {
-            if (l.trim()) {
-              const entry = { text: l.trim(), color: detectColor(l) }
-              lines.push(entry)
-              newEntries.push(entry)
-            }
-          }
-          if (newEntries.length > 0) {
-            setLiveLines((prev) => [...prev, ...newEntries].slice(-20))
-          }
-          const newPages = extractPages(allOutput)
-          setCurrentPages(newPages)
-          pagesFound.splice(0, pagesFound.length, ...newPages)
-        }
-      }
+      // Extract pages from agent's final text
+      const pagesFound = extractPages(result.text ?? '')
+      setCurrentPages(pagesFound)
 
-      if (buffer.trim()) {
-        const entry = { text: buffer.trim(), color: detectColor(buffer) }
-        lines.push(entry)
-        setLiveLines((prev) => [...prev, entry].slice(-20))
-      }
-
-      // Guarantee index + log are always updated
+      // Always write index + log ourselves — don't rely on the agent
       await updateIndex(config.wikiDir)
-      await appendLog(config.wikiDir, filename, reingest ? 'ingest' : 'ingest')
+      await appendLog(config.wikiDir, filename, 'ingest')
+
+      // Usage + cost
+      const usage = (result as any).usage ?? null
+      const inputTokens: number = usage?.inputTokens ?? usage?.promptTokens ?? 0
+      const outputTokens: number = usage?.outputTokens ?? usage?.completionTokens ?? 0
+      const costUsd = calcCost(config.provider, config.model, inputTokens, outputTokens)
+      appendUsageLog(config.wikiDir, {
+        timestamp: new Date().toISOString(),
+        operation: reingest ? 'reingest' : 'ingest',
+        source: filename,
+        provider: config.provider,
+        model: config.model,
+        inputTokens,
+        outputTokens,
+        costUsd,
+      })
 
       const changes = diffWiki(before, config.wikiDir)
-      addResult(filename, lines, pagesFound, changes, 'done')
+      addResult(filename, lines, pagesFound, changes, { inputTokens, outputTokens, costUsd }, 'done')
+      return true
     } catch (err: unknown) {
       const changes = diffWiki(before, config.wikiDir)
       lines.push({ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: 'red' })
-      addResult(filename, lines, pagesFound, changes, 'error')
+      addResult(filename, lines, [], changes, null, 'error')
+      return false
     }
   }
 
@@ -408,8 +404,8 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     }
   }
 
-  function addResult(filename: string, lines: FileResult['lines'], pagesCreated: string[], changes: FileResult['changes'], status: Status) {
-    setResults((prev) => [...prev, { filename, lines, pagesCreated, changes, status }])
+  function addResult(filename: string, lines: FileResult['lines'], pagesCreated: string[], changes: FileResult['changes'], usage: FileResult['usage'], status: Status) {
+    setResults((prev) => [...prev, { filename, lines, pagesCreated, changes, usage, status }])
   }
 
   useInput((input, key) => {
@@ -470,6 +466,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
               <Text color="gray"> ({result.pagesCreated.length} pages)</Text>
             )}
           </Text>
+          {result.usage && (
+            <Text color="gray" dimColor>
+              {' '}in={result.usage.inputTokens} out={result.usage.outputTokens}
+              {result.usage.costUsd !== null ? `  $${result.usage.costUsd.toFixed(4)}` : ''}
+            </Text>
+          )}
           {result.status === 'error' && result.lines.map((line, j) => (
             <Text key={j} color="red" dimColor> {line.text}</Text>
           ))}
@@ -493,20 +495,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
             <Text bold color="cyan">{currentFile}</Text>
           </Box>
 
-          {/* Waiting for first API response */}
-          {step === 'running' && !receivedFirstChunk && (
-            <Box marginTop={1} marginLeft={2}>
-              <Text color="yellow">{spinnerFrames[spinnerTick % spinnerFrames.length]} Calling LLM…</Text>
-            </Box>
-          )}
-
-          {/* Live streaming output */}
-          {step === 'running' && receivedFirstChunk && liveLines.length > 0 && (
+          {/* Spinner + tool call log */}
+          {step === 'running' && (
             <Box flexDirection="column" marginTop={1} marginLeft={2}>
-              <Text color="gray" dimColor>
-                {spinnerFrames[spinnerTick % spinnerFrames.length]} streaming
-                {currentPages.length > 0 ? ` · ${currentPages.length} pages written` : ''}
-              </Text>
+              {liveLines.length === 0 && (
+                <Text color="yellow">{spinnerFrames[spinnerTick % spinnerFrames.length]} Calling LLM…</Text>
+              )}
+              {liveLines.length > 0 && (
+                <Text color="gray" dimColor>{spinnerFrames[spinnerTick % spinnerFrames.length]} working…</Text>
+              )}
               {liveLines.slice(-16).map((line, i) => (
                 <Text key={i} color={(line.color as any) ?? 'gray'} dimColor={!line.color}>{line.text}</Text>
               ))}

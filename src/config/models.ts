@@ -5,6 +5,8 @@ export interface ModelDef {
   label: string
   desc: string
   recommended?: boolean
+  /** USD per 1M tokens */
+  pricing?: { input: number; output: number }
 }
 
 export interface ProviderDef {
@@ -27,11 +29,11 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyUrl: 'https://aistudio.google.com/app/apikey',
     requiresApiKey: true,
     models: [
-      { id: 'gemini-3.1-pro',      label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking' },
-      { id: 'gemini-3-flash-preview',      label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true },
-      { id: 'gemini-3.1-pro-lite', label: 'Gemini 3.1 Pro Lite', desc: 'Lightweight Pro variant — lower cost, still capable' },
-      { id: 'gemini-2.5-pro',      label: 'Gemini 2.5 Pro',      desc: 'Stable Pro — multimodal, 1M context' },
-      { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash',    desc: 'Affordable stable option, wide availability' },
+      { id: 'gemini-3.1-pro',         label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking', pricing: { input: 1.25, output: 5.00 } },
+      { id: 'gemini-3-flash-preview',  label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true, pricing: { input: 0.075, output: 0.30 } },
+      { id: 'gemini-3.1-pro-lite',    label: 'Gemini 3.1 Pro Lite', desc: 'Lightweight Pro variant — lower cost, still capable', pricing: { input: 0.10, output: 0.40 } },
+      { id: 'gemini-2.5-pro',         label: 'Gemini 2.5 Pro',      desc: 'Stable Pro — multimodal, 1M context', pricing: { input: 1.25, output: 10.00 } },
+      { id: 'gemini-2.0-flash',       label: 'Gemini 2.0 Flash',    desc: 'Affordable stable option, wide availability', pricing: { input: 0.075, output: 0.30 } },
     ],
   },
   openai: {
@@ -42,9 +44,9 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyUrl: 'https://platform.openai.com/api-keys',
     requiresApiKey: true,
     models: [
-      { id: 'gpt-5.4',      label: 'GPT-5.4',      desc: 'Flagship — complex reasoning and coding' },
-      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', desc: 'Fast and affordable', recommended: true },
-      { id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', desc: 'Ultra-fast, lightweight' },
+      { id: 'gpt-5.4',      label: 'GPT-5.4',      desc: 'Flagship — complex reasoning and coding', pricing: { input: 15.00, output: 60.00 } },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', desc: 'Fast and affordable', recommended: true, pricing: { input: 0.40, output: 1.60 } },
+      { id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', desc: 'Ultra-fast, lightweight', pricing: { input: 0.10, output: 0.40 } },
     ],
   },
   anthropic: {
@@ -55,9 +57,9 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyUrl: 'https://console.anthropic.com/settings/keys',
     requiresApiKey: true,
     models: [
-      { id: 'claude-opus-4-6',   label: 'Claude Opus 4.6',   desc: 'Most capable — best reasoning and coding' },
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: 'Balanced speed and quality', recommended: true },
-      { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5',  desc: 'Fast and cost-efficient' },
+      { id: 'claude-opus-4-6',   label: 'Claude Opus 4.6',   desc: 'Most capable — best reasoning and coding', pricing: { input: 15.00, output: 75.00 } },
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: 'Balanced speed and quality', recommended: true, pricing: { input: 3.00, output: 15.00 } },
+      { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5',  desc: 'Fast and cost-efficient', pricing: { input: 0.80, output: 4.00 } },
     ],
   },
   ollama: {

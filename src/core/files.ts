@@ -12,7 +12,7 @@ export interface SourceFile {
   sizeBytes: number
 }
 
-const SUPPORTED = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
+export const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
 
 export async function readSourceFile(filepath: string): Promise<SourceFile> {
   if (!fs.existsSync(filepath)) {
@@ -23,7 +23,7 @@ export async function readSourceFile(filepath: string): Promise<SourceFile> {
   const filename = path.basename(filepath)
   const sizeBytes = fs.statSync(filepath).size
 
-  if (!SUPPORTED.includes(ext)) {
+  if (!SUPPORTED_EXTS.includes(ext)) {
     throw new Error(
       `Unsupported file type: ${ext}. Supported: .md .txt .pdf .png .jpg .jpeg .webp .html .docx`,
     )

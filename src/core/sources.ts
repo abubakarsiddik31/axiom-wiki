@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
-import { readPage, writePage } from './wiki.js'
+import { readPage } from './wiki.js'
 
 export interface SourceRecord {
   filename: string
@@ -47,19 +47,23 @@ function findSummaryPage(wikiDir: string, filename: string): string {
     const { data } = matter(raw)
 
     const sources: unknown = data['sources']
-    if (Array.isArray(sources) && sources.some((s) => String(s).includes(filename))) {
-      return path.relative(wikiDir, abs)
-    }
-
-    // Also check if title matches the filename (slug match)
-    const titleMatch = String(data['title'] ?? '').toLowerCase().replace(/\s+/g, '-')
-    const fileSlug = filename.replace(/\.[^.]+$/, '').toLowerCase().replace(/\s+/g, '-')
-    if (titleMatch.includes(fileSlug) || fileSlug.includes(titleMatch)) {
+    if (Array.isArray(sources) && sources.some((s) => String(s) === filename)) {
       return path.relative(wikiDir, abs)
     }
   }
 
   return ''
+}
+
+export function getIngestedFromLog(logPath: string): Set<string> {
+  const ingested = new Set<string>()
+  if (!fs.existsSync(logPath)) return ingested
+  const log = fs.readFileSync(logPath, 'utf-8')
+  for (const line of log.split('\n')) {
+    const m = line.match(/^## \[\d{4}-\d{2}-\d{2}\] (?:ingest|reingest) \| (.+?)(?:\s+\(|$)/)
+    if (m?.[1]) ingested.add(m[1].trim())
+  }
+  return ingested
 }
 
 export async function listSources(wikiDir: string): Promise<SourceRecord[]> {

@@ -322,6 +322,38 @@ export async function getStatus(wikiDir: string, rawDir: string): Promise<WikiSt
   }
 }
 
+export function snapshotWiki(wikiDir: string): Map<string, number> {
+  const snap = new Map<string, number>()
+  const pagesDir = path.join(wikiDir, 'wiki/pages')
+  const extras = [path.join(wikiDir, 'wiki/index.md'), path.join(wikiDir, 'wiki/log.md')]
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else snap.set(full, fs.statSync(full).mtimeMs)
+    }
+  }
+  walk(pagesDir)
+  for (const f of extras) if (fs.existsSync(f)) snap.set(f, fs.statSync(f).mtimeMs)
+  return snap
+}
+
+export function diffWiki(
+  before: Map<string, number>,
+  wikiDir: string,
+): Array<{ path: string; type: 'created' | 'modified' }> {
+  const after = snapshotWiki(wikiDir)
+  const changes: Array<{ path: string; type: 'created' | 'modified' }> = []
+  for (const [file, mtime] of after) {
+    const rel = path.relative(wikiDir, file)
+    const prev = before.get(file)
+    if (prev === undefined) changes.push({ path: rel, type: 'created' })
+    else if (mtime > prev) changes.push({ path: rel, type: 'modified' })
+  }
+  return changes.sort((a, b) => a.path.localeCompare(b.path))
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function today(): string {

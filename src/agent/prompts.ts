@@ -34,7 +34,7 @@ title: "Entity or Concept Name"
 summary: "One-sentence description of this page"
 tags: [tag1, tag2]
 category: entities | concepts | sources | analyses
-sources: [raw-filename.md, another-source.pdf]
+sources: ["raw-filename.md", "another-source.pdf"]
 updatedAt: "YYYY-MM-DD"
 ---
 \`\`\`
@@ -46,7 +46,7 @@ title: "Alan Turing"
 summary: "British mathematician and pioneer of computer science and artificial intelligence"
 tags: [mathematics, computing, ai, cryptography]
 category: entities
-sources: [intelligence-trap.md, turing-biography.pdf]
+sources: ["intelligence-trap.md", "turing-biography.pdf"]
 updatedAt: "2026-04-10"
 ---
 \`\`\`

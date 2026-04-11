@@ -316,13 +316,14 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         onStepFinish: (step: any) => {
           try {
             for (const call of step.toolCalls ?? []) {
-              const args = JSON.stringify(call.args ?? {})
-              const entry = { text: `⚙ ${call.toolName}(${args.slice(0, 80)}${args.length > 80 ? '…' : ''})`, color: 'yellow' as string | undefined }
+              const toolName = call.toolName ?? call.payload?.toolName ?? 'tool'
+              const args = JSON.stringify(call.args ?? call.payload?.args ?? {})
+              const entry = { text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? '…' : ''})`, color: 'yellow' as string | undefined }
               lines.push(entry)
               setLiveLines((prev) => [...prev, entry].slice(-20))
             }
             for (const res of step.toolResults ?? []) {
-              const r = res.result
+              const r = res.result ?? res.payload?.result
               if (r && typeof r === 'string' && r.length < 120) {
                 const entry = { text: `  → ${r}`, color: 'gray' as string | undefined }
                 lines.push(entry)

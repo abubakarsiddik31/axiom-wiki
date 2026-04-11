@@ -162,7 +162,8 @@ export async function listPages(
   for (const abs of files) {
     const rel = path.relative(wikiDir, abs)
     const raw = fs.readFileSync(abs, 'utf-8')
-    const { data } = matter(raw)
+    let data: Record<string, unknown> = {}
+    try { data = matter(raw).data } catch { /* skip pages with invalid frontmatter YAML */ }
     const stat = fs.statSync(abs)
 
     const cat = rel.split('/')[2] ?? ''

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import TextInput from 'ink-text-input'
-import { getConfig, hasConfig } from '../../config/index.js'
+import { getConfig, hasConfig, configScope } from '../../config/index.js'
 import { getStatus } from '../../core/wiki.js'
 import { Header } from '../components/Header.js'
 import { SlashMenu, SLASH_COMMANDS, filterCommands, parseSlash } from '../components/SlashMenu.js'
@@ -44,6 +44,7 @@ const HELP_LINES: LogLine[] = [
 export function HomeScreen() {
   const { exit } = useApp()
   const config = getConfig()
+  const scope = configScope()
 
   const [screen, setScreen] = useState<ActiveScreen>({ name: 'shell' })
   const [input, setInput] = useState('')
@@ -214,7 +215,7 @@ export function HomeScreen() {
   // ── Shell ─────────────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" padding={1}>
-      <Header config={config} totalPages={totalPages} />
+      <Header config={config} totalPages={totalPages} scope={scope} />
 
       {/* Log / output area */}
       <Box flexDirection="column" marginBottom={1}>

@@ -1,15 +1,16 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { PROVIDERS } from '../../config/models.js'
-import type { AxiomConfig } from '../../config/index.js'
+import type { AxiomConfig, ConfigScope } from '../../config/index.js'
 
 interface Props {
   config: AxiomConfig
   totalPages?: number
   subtitle?: string
+  scope?: ConfigScope
 }
 
-export function Header({ config, totalPages, subtitle }: Props) {
+export function Header({ config, totalPages, subtitle, scope }: Props) {
   const prov = PROVIDERS[config.provider]
   const modelLabel = prov?.models.find((m) => m.id === config.model)?.label ?? config.model
 
@@ -18,6 +19,12 @@ export function Header({ config, totalPages, subtitle }: Props) {
       <Box>
         <Text bold color="cyan">axiom</Text>
         <Text color="white" bold> wiki</Text>
+        {scope === 'local' && (
+          <React.Fragment>
+            <Text color="gray">  ·  </Text>
+            <Text color="yellow">local</Text>
+          </React.Fragment>
+        )}
         <Text color="gray">  ·  </Text>
         <Text color="gray">{prov?.label ?? config.provider}</Text>
         <Text color="gray"> / </Text>

@@ -233,9 +233,7 @@ export async function searchWiki(
   return results.sort((a, b) => b.score - a.score).slice(0, limit)
 }
 
-export async function updateIndex(wikiDir: string): Promise<void> {
-  const pages = await listPages(wikiDir)
-
+export function buildIndex(pages: PageMeta[]): string {
   const byCategory: Record<string, PageMeta[]> = {
     entities: [],
     concepts: [],
@@ -263,8 +261,13 @@ export async function updateIndex(wikiDir: string): Promise<void> {
       lines.push('')
     }
   }
+  return lines.join('\n')
+}
 
-  await writePage(wikiDir, 'wiki/index.md', lines.join('\n'))
+export async function updateIndex(wikiDir: string): Promise<void> {
+  const pages = await listPages(wikiDir)
+  const content = buildIndex(pages)
+  await writePage(wikiDir, 'wiki/index.md', content)
 }
 
 export async function appendLog(
@@ -356,11 +359,11 @@ export function diffWiki(
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function today(): string {
+export function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function capitalize(s: string): string {
+export function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 

@@ -66,7 +66,7 @@ export async function searchWiki(
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function countOccurrences(text: string, term: string): number {
+export function countOccurrences(text: string, term: string): number {
   let count = 0
   let idx = 0
   while ((idx = text.indexOf(term, idx)) !== -1) {
@@ -80,7 +80,7 @@ function countOccurrences(text: string, term: string): number {
  * Find the 150-char window with the highest density of query term matches,
  * then highlight matched terms with *term*.
  */
-function buildExcerpt(content: string, terms: string[]): string {
+export function buildExcerpt(content: string, terms: string[]): string {
   const lower = content.toLowerCase()
   const windowSize = 150
 

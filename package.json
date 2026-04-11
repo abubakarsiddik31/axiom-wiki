@@ -14,7 +14,8 @@
     "build": "tsc",
     "dev": "tsx watch bin/axiom-wiki.ts",
     "start": "node dist/bin/axiom-wiki.js",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run"
   },
   "keywords": [
     "wiki",
@@ -72,6 +73,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^18.3.28",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
   }
 }

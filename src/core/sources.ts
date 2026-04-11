@@ -16,7 +16,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function parseLogEntries(logContent: string): SourceRecord[] {
+export function parseLogEntries(logContent: string): SourceRecord[] {
   const seen = new Map<string, SourceRecord>()
 
   for (const line of logContent.split('\n')) {
@@ -55,15 +55,19 @@ function findSummaryPage(wikiDir: string, filename: string): string {
   return ''
 }
 
-export function getIngestedFromLog(logPath: string): Set<string> {
+export function parseIngestedSet(logContent: string): Set<string> {
   const ingested = new Set<string>()
-  if (!fs.existsSync(logPath)) return ingested
-  const log = fs.readFileSync(logPath, 'utf-8')
-  for (const line of log.split('\n')) {
+  for (const line of logContent.split('\n')) {
     const m = line.match(/^## \[\d{4}-\d{2}-\d{2}\] (?:ingest|reingest) \| (.+?)(?:\s+\(|$)/)
     if (m?.[1]) ingested.add(m[1].trim())
   }
   return ingested
+}
+
+export function getIngestedFromLog(logPath: string): Set<string> {
+  if (!fs.existsSync(logPath)) return new Set<string>()
+  const log = fs.readFileSync(logPath, 'utf-8')
+  return parseIngestedSet(log)
 }
 
 export async function listSources(wikiDir: string): Promise<SourceRecord[]> {

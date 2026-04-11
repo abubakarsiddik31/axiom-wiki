@@ -38,7 +38,13 @@ axiom-wiki init
 
 The setup wizard asks for your API key, wiki directory, and raw sources folder. When it's done, your wiki is live.
 
-Drop a PDF or markdown file into your `raw/` folder, then:
+Launch the interactive shell:
+
+```bash
+axiom-wiki
+```
+
+Drop a PDF or markdown file into your `raw/` folder, then run `/ingest` from the shell — or directly from the CLI:
 
 ```bash
 axiom-wiki ingest
@@ -86,7 +92,7 @@ docker run -it -v $(pwd):/wiki axiomwiki/axiom-wiki init
 
 | Provider | Models | Free Tier | Get API Key |
 |---|---|---|---|
-| **Google Gemini** *(recommended)* | Gemini 3.1 Pro, 3 Flash, 2.5 Pro, 2.0 Flash | Yes | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| **Google Gemini** *(recommended)* | Gemini 3.1 Pro, 3 Flash, 3.1 Flash Lite, 2.5 Pro, 2.0 Flash | Yes | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
 | **OpenAI** | GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano | No | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 | **Anthropic** | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 | No | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
 | **Ollama** *(local, no key)* | Llama 3.2, Llama 3.1, Mistral, Qwen 2.5 | Free | [ollama.com](https://ollama.com) |
@@ -99,9 +105,52 @@ axiom-wiki model
 
 ---
 
-## Commands
+## Interactive Shell
+
+Run `axiom-wiki` with no arguments to enter the interactive shell — a persistent prompt where you run all commands without leaving the terminal:
 
 ```
+> type /help or ask a question...
+```
+
+Type `/` to open the slash command menu. Navigate with `↑↓`, complete with `Tab` or `→`, run with `Enter`, cancel with `Esc`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ▶ /ingest [file]     Ingest a source file into the wiki │
+│   /watch             Watch raw/ and auto-ingest new files│
+│   /clip [url]        Clip a URL and save it to raw/     │
+│   /sources           Browse and manage ingested sources  │
+│   /review            Review and resolve contradictions   │
+│   /status            Show wiki statistics                │
+│   /model             Switch provider or model            │
+│   /lint              Wiki health check                   │
+│   /help              Show all commands                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+Inline arguments work directly in the prompt:
+
+```
+> /ingest notes.md
+> /ingest notes.md --interactive
+> /clip https://example.com/article
+```
+
+Or just type a question to query your wiki directly — no slash needed:
+
+```
+> What did Alan Turing say about intelligence?
+```
+
+---
+
+## Commands
+
+Direct CLI commands (also available inside the interactive shell):
+
+```
+axiom-wiki                         Launch interactive shell
 axiom-wiki init                    First-time setup wizard
 axiom-wiki ingest [file]           Ingest a source file, or scan raw/ for new files
 axiom-wiki ingest [file] --interactive  Interactive ingest with topic review
@@ -111,7 +160,6 @@ axiom-wiki clip [url]              Clip a URL and save it to raw/
 axiom-wiki sources                 Browse and manage ingested sources
 axiom-wiki review                  Review and resolve wiki contradictions
 axiom-wiki model                   Switch LLM provider or model
-axiom-wiki lint                    Wiki health check (orphans, stale claims, broken links)
 axiom-wiki status                  Wiki statistics
 axiom-wiki mcp                     Start MCP server (for Claude Code / Cursor)
 ```

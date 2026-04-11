@@ -8,6 +8,7 @@ const STANDARD_IGNORES = [
   '.next', '.nuxt', '.svelte-kit', 'coverage', '__pycache__',
   '.DS_Store', 'Thumbs.db', '*.lock', '*.log', '.env', '.env.*',
   'vendor', '.cache', '.turbo', '.vercel', '.netlify',
+  'package-lock.json', 'pnpm-lock.yaml',
 ]
 
 const BINARY_EXTENSIONS = new Set([
@@ -30,9 +31,19 @@ const KEY_FILE_NAMES = new Set([
   'next.config.js', 'next.config.ts', 'nuxt.config.ts', 'svelte.config.js',
 ])
 
+const ENTRY_POINT_PATTERNS = [
+  /^index\.(ts|js|tsx|jsx|mjs|cjs)$/i,
+  /^main\.(ts|js|tsx|jsx|mjs|cjs|py|go|rs)$/i,
+  /^app\.(ts|js|tsx|jsx)$/i,
+  /^server\.(ts|js)$/i,
+  /^mod\.(ts|rs)$/i,
+]
+
 const MAX_KEY_FILE_BYTES = 50 * 1024
+const MAX_GATHER_FILE_BYTES = 512 * 1024
 const MAX_TREE_DEPTH = 4
 const COLLAPSE_THRESHOLD = 20
+const YIELD_EVERY_N_FILES = 100
 
 export interface KeyFile {
   path: string
@@ -125,12 +136,16 @@ function renderNode(node: DirNode, prefix: string, depth: number, lines: string[
 
   items.forEach((item, i) => {
     const last = i === items.length - 1
-    lines.push(prefix + (last ? '└── ' : '├── ') + item.label)
+    lines.push(prefix + (last ? '\u2514\u2500\u2500 ' : '\u251C\u2500\u2500 ') + item.label)
     if (item.childKey) {
       const child = node.children.get(item.childKey)!
-      renderNode(child, prefix + (last ? '    ' : '│   '), depth + 1, lines)
+      renderNode(child, prefix + (last ? '    ' : '\u2502   '), depth + 1, lines)
     }
   })
+}
+
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve))
 }
 
 export async function walkProject(
@@ -153,7 +168,7 @@ export async function walkProject(
   const keyFiles: KeyFile[] = []
   let progressCount = 0
 
-  function walk(dir: string): void {
+  async function walk(dir: string): Promise<void> {
     let entries: fs.Dirent[]
     try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
 
@@ -168,7 +183,7 @@ export async function walkProject(
         if (ig.ignores(checkPath)) continue
       } catch { continue }
 
-      if (entry.isDirectory()) { walk(fullPath); continue }
+      if (entry.isDirectory()) { await walk(fullPath); continue }
       if (!entry.isFile()) continue
 
       let sizeBytes = 0
@@ -179,11 +194,15 @@ export async function walkProject(
 
       files.push({ relPath, sizeBytes, ext, isBinary })
       progressCount++
-      if (progressCount % 50 === 0) onProgress?.(progressCount)
 
-      const isRoot = path.dirname(relPath) === '.'
+      if (progressCount % YIELD_EVERY_N_FILES === 0) {
+        onProgress?.(progressCount)
+        await yieldEventLoop()
+      }
+
       const baseLower = entry.name.toLowerCase()
       const isKeyByName = !isBinary && KEY_FILE_NAMES.has(baseLower) && sizeBytes <= MAX_KEY_FILE_BYTES
+      const isRoot = path.dirname(relPath) === '.'
       const isKeyByPattern = !isBinary && isRoot && /^[a-z]+\.config\.(js|ts|json|cjs|mjs)$/i.test(entry.name) && sizeBytes <= MAX_KEY_FILE_BYTES
       if (isKeyByName || isKeyByPattern) {
         try {
@@ -193,11 +212,10 @@ export async function walkProject(
     }
   }
 
-  walk(rootDir)
+  await walk(rootDir)
   onProgress?.(files.length)
 
-  // Deduplicate key files (e.g. multiple package.json in monorepos)
-  // and prioritize root-level files
+  // Deduplicate key files: root-level first, then unique nested
   const seenKeyNames = new Set<string>()
   const rootKeyFiles: KeyFile[] = []
   const nestedKeyFiles: KeyFile[] = []
@@ -210,7 +228,6 @@ export async function walkProject(
       nestedKeyFiles.push(kf)
     }
   }
-  // Only keep nested key files if we don't already have the same filename at root
   const dedupedKeyFiles = [
     ...rootKeyFiles,
     ...nestedKeyFiles.filter((kf) => !seenKeyNames.has(path.basename(kf.path).toLowerCase())),
@@ -246,6 +263,24 @@ export async function walkProject(
   }
 }
 
+function fileRelevanceScore(relPath: string, fileName: string): number {
+  const lower = fileName.toLowerCase()
+  if (lower.startsWith('readme')) return 100
+  if (KEY_FILE_NAMES.has(lower)) return 90
+  if (ENTRY_POINT_PATTERNS.some((re) => re.test(fileName))) return 80
+  if (/\.(test|spec|_test)\./i.test(fileName)) return 10
+  if (relPath.includes('__tests__') || relPath.includes('__mocks__')) return 5
+  if (/\.d\.ts$/i.test(fileName)) return 15
+  if (/\.(stories|fixture|mock)\./i.test(fileName)) return 8
+  return 50
+}
+
+function normalizePath(p: string): string {
+  const trimmed = p.replace(/\/+$/, '')
+  const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.basename(trimmed))
+  return hasExtension ? trimmed : trimmed + '/'
+}
+
 export function gatherFilesForPaths(
   snapshot: ProjectSnapshot,
   paths: string[],
@@ -257,11 +292,20 @@ export function gatherFilesForPaths(
 
   if (paths.length === 0) return result
 
+  const normalizedPaths = paths.map(normalizePath)
+
   const matching = snapshot.files.filter((f) => {
     if (f.isBinary) return false
-    return paths.some((p) =>
+    if (f.sizeBytes > MAX_GATHER_FILE_BYTES) return false
+    return normalizedPaths.some((p) =>
       p.endsWith('/') ? f.relPath.startsWith(p) : f.relPath === p
     )
+  })
+
+  matching.sort((a, b) => {
+    const scoreA = fileRelevanceScore(a.relPath, path.basename(a.relPath))
+    const scoreB = fileRelevanceScore(b.relPath, path.basename(b.relPath))
+    return scoreB - scoreA
   })
 
   for (const file of matching) {

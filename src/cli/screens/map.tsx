@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
+import path from 'path'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
@@ -82,22 +83,23 @@ function fallbackPlan(): PagePlan[] {
   }]
 }
 
-function buildPlanContext(snapshot: ProjectSnapshot): string {
-  const keyFileSection = snapshot.keyFiles
-    .slice(0, MAX_KEY_FILES_IN_PLAN)
-    .map((f) => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_KEY_FILE_CHARS)}\n\`\`\``)
-    .join('\n\n')
+function buildProjectSummary(snapshot: ProjectSnapshot): string {
+  const langSummary = topLanguages(snapshot.languages)
 
   const tree = snapshot.tree.length > MAX_TREE_CHARS
     ? snapshot.tree.slice(0, MAX_TREE_CHARS) + '\n... [truncated]'
     : snapshot.tree
 
-  return `## Project Stats
-- Root: ${snapshot.root}
+  const keyFileSection = snapshot.keyFiles
+    .slice(0, MAX_KEY_FILES_IN_PLAN)
+    .map((f) => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_KEY_FILE_CHARS)}\n\`\`\``)
+    .join('\n\n')
+
+  return `## Project: ${path.basename(snapshot.root)}
 - Files: ${snapshot.totalFiles} total (${snapshot.totalTextFiles} text files)
 - Size: ${formatSize(snapshot.totalSizeBytes)}
 - Approx words: ${snapshot.totalWords.toLocaleString()}
-- Languages: ${topLanguages(snapshot.languages)}
+- Languages: ${langSummary}
 
 ## Directory Tree
 \`\`\`
@@ -107,14 +109,31 @@ ${tree}
 ${keyFileSection ? `## Key Files\n${keyFileSection}` : ''}`
 }
 
+function buildCompactSummary(snapshot: ProjectSnapshot): string {
+  const langSummary = topLanguages(snapshot.languages, 3)
+  const readmeFile = snapshot.keyFiles.find((f) => f.path.toLowerCase().startsWith('readme'))
+  const readmeExcerpt = readmeFile
+    ? readmeFile.content.split('\n').slice(0, 10).join('\n')
+    : ''
+
+  return `Project: ${path.basename(snapshot.root)} (${snapshot.totalFiles} files, ${langSummary})
+${readmeExcerpt ? `\nFrom README:\n${readmeExcerpt}\n` : ''}`
+}
+
 function buildPageSlugs(plan: PagePlan[]): string[] {
-  return plan.map((p) =>
-    p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  )
+  const seen = new Map<string, number>()
+  return plan.map((p) => {
+    let slug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    if (!slug) slug = 'page'
+    const count = seen.get(slug) ?? 0
+    seen.set(slug, count + 1)
+    return count > 0 ? `${slug}-${count}` : slug
+  })
 }
 
 export function MapScreen({ onExit }: Props) {
   const config = getConfig()!
+  const mountedRef = useRef(true)
 
   const [mapState, setMapState] = useState<MapState>('walking')
   const [fileCount, setFileCount] = useState(0)
@@ -125,6 +144,7 @@ export function MapScreen({ onExit }: Props) {
   const [planOutputTokens, setPlanOutputTokens] = useState(0)
   const [currentPageIdx, setCurrentPageIdx] = useState(0)
   const [pagesCreated, setPagesCreated] = useState<string[]>([])
+  const [pagesFailed, setPagesFailed] = useState(0)
   const [totalCostUsd, setTotalCostUsd] = useState(0)
   const [totalInputTokens, setTotalInputTokens] = useState(0)
   const [totalOutputTokens, setTotalOutputTokens] = useState(0)
@@ -137,6 +157,10 @@ export function MapScreen({ onExit }: Props) {
   const spin = SPINNER[spinnerTick % SPINNER.length]!
 
   useEffect(() => {
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
     const id = setInterval(() => setSpinnerTick((t) => t + 1), 100)
     return () => clearInterval(id)
   }, [])
@@ -144,13 +168,17 @@ export function MapScreen({ onExit }: Props) {
   // Walk
   useEffect(() => {
     if (mapState !== 'walking') return
-    walkProject(projectRoot.current, setFileCount)
+    walkProject(projectRoot.current, (count) => {
+      if (mountedRef.current) setFileCount(count)
+    })
       .then((snap) => {
+        if (!mountedRef.current) return
         setSnapshot(snap)
         setFileCount(snap.totalFiles)
         setMapState('planning')
       })
       .catch((err: unknown) => {
+        if (!mountedRef.current) return
         setErrorMessage(`Walk failed: ${err instanceof Error ? err.message : String(err)}`)
         setMapState('error')
       })
@@ -162,11 +190,11 @@ export function MapScreen({ onExit }: Props) {
 
     const run = async () => {
       const agent = createAxiomAgent(config)
-      const projectContext = buildPlanContext(snapshot)
+      const projectSummary = buildProjectSummary(snapshot)
 
       const prompt = `You are analyzing a software project to create a wiki map. Study the structure below and output a JSON array of wiki pages to create.
 
-${projectContext}
+${projectSummary}
 
 ## Instructions
 Output ONLY a valid JSON array. Do not use any tools. Do not write prose before or after the JSON.
@@ -174,15 +202,21 @@ Output ONLY a valid JSON array. Do not use any tools. Do not write prose before 
 Each element must have:
 - "title": string — wiki page title
 - "category": "entities" | "concepts" | "analyses" (use "analyses" for overviews and architecture; "entities" for modules and components; "concepts" for patterns and tech stack)
-- "description": string — what this page covers
-- "paths": string[] — relative dirs/files to analyze (e.g. ["src/core/", "README.md"]). Use [] for the overview page only.
+- "description": string — 1-2 sentences about what this page should cover
+- "paths": string[] — relative dirs/files to analyze (e.g. ["src/core/", "README.md"]). Use [] for the overview page ONLY.
 
-Create 4-8 pages. Always include an overview page (category "analyses", paths []). Create pages for major modules, architecture, and tech stack. Keep it focused on what's actually in this codebase. Every non-overview page MUST have at least one path.
+Rules:
+- Create 4-8 pages. Always include one overview page (category "analyses", paths []).
+- Every non-overview page MUST have at least one path in "paths".
+- Paths should use trailing "/" for directories (e.g. "src/core/" not "src/core").
+- Focus on what's actually in this codebase — no generic pages.
 
 Output the JSON array now:`
 
       try {
         const result = await agent.generate([{ role: 'user', content: prompt }])
+        if (!mountedRef.current) return
+
         const usage = (result as any).usage ?? null
         const inputTokens = usage?.inputTokens ?? usage?.promptTokens ?? 0
         const outputTokens = usage?.outputTokens ?? usage?.completionTokens ?? 0
@@ -196,6 +230,7 @@ Output the JSON array now:`
         setPlan(parsed && parsed.length > 0 ? parsed : fallbackPlan())
         setMapState('confirming')
       } catch (err: unknown) {
+        if (!mountedRef.current) return
         setErrorMessage(`Planning failed: ${err instanceof Error ? err.message : String(err)}`)
         setMapState('error')
       }
@@ -213,60 +248,75 @@ Output the JSON array now:`
       let runningCost = 0
       let runningInputTokens = 0
       let runningOutputTokens = 0
+      let failed = 0
       const slugs = buildPageSlugs(plan)
+      const today = new Date().toISOString().slice(0, 10)
 
-      const projectContext = buildPlanContext(snapshot)
+      const compactSummary = buildCompactSummary(snapshot)
 
-      const otherPagesContext = (currentIdx: number) =>
-        plan.map((p, j) => `- ${p.title} (${p.category}/${slugs[j]}.md)`).filter((_, j) => j !== currentIdx).join('\n')
+      const allPagesListing = plan.map((p, j) =>
+        `- [[${p.category}/${slugs[j]}]] — ${p.title}`
+      ).join('\n')
 
       for (let i = 0; i < plan.length; i++) {
+        if (!mountedRef.current) return
+
         const page = plan[i]!
         const slug = slugs[i]!
         setCurrentPageIdx(i)
         setLog((prev) => [...prev, `[${i + 1}/${plan.length}] Writing "${page.title}"...`])
 
         const isOverview = page.paths.length === 0
-        const fileSection = isOverview
-          ? `## Project Context\n${projectContext}`
-          : (() => {
-              const gathered = gatherFilesForPaths(snapshot, page.paths)
-              return gathered.length > 0
-                ? gathered.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
-                : '(no matching files found — write based on project structure knowledge)'
-            })()
+        let fileSection: string
+        if (isOverview) {
+          fileSection = `## Project Context\n${buildProjectSummary(snapshot)}`
+        } else {
+          const gathered = gatherFilesForPaths(snapshot, page.paths)
+          fileSection = gathered.length > 0
+            ? gathered.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
+            : '(no matching files found for the specified paths)'
+        }
 
         const prompt = `Write a wiki page titled "${page.title}" for this codebase.
 
-Category: ${page.category}
+${!isOverview ? `## Project context\n${compactSummary}\n` : ''}Category: ${page.category}
 Description: ${page.description}
 Save path: wiki/pages/${page.category}/${slug}.md
 
-## Other pages in this wiki (use for cross-references)
-${otherPagesContext(i)}
+## All pages in this wiki (for cross-references)
+${allPagesListing}
 
 ${fileSection}
 
-Use the write_page tool to save the page at path "wiki/pages/${page.category}/${slug}.md". Include proper YAML frontmatter:
-- title: "${page.title}"
-- summary: one-sentence description
-- tags: relevant tags
-- category: ${page.category}
-- updatedAt: "${new Date().toISOString().slice(0, 10)}"
+Use the write_page tool to save the page at path "wiki/pages/${page.category}/${slug}.md".
 
-Write thorough, accurate content based on the actual code shown. Use [[${page.category}/page-name]] syntax for cross-references to other pages listed above. Overwrite any existing page at this path.`
+Include YAML frontmatter:
+---
+title: "${page.title}"
+summary: "<one-sentence description>"
+tags: [<relevant tags>]
+category: ${page.category}
+updatedAt: "${today}"
+---
+
+Write thorough, accurate content based on the actual code shown above. For cross-references to other wiki pages, use the [[category/slug]] syntax matching the paths listed above. Do not invent content that isn't supported by the code.`
 
         try {
           const result = await agent.generate(
             [{ role: 'user', content: prompt }],
             {
               onStepFinish: (step: any) => {
-                if (step?.toolResults?.length > 0) {
-                  setLog((prev) => [...prev, `  saved ${page.category}/${slug}.md`])
-                }
+                try {
+                  if (step?.toolResults?.length > 0) {
+                    if (mountedRef.current) {
+                      setLog((prev) => [...prev, `  saved ${page.category}/${slug}.md`])
+                    }
+                  }
+                } catch { /* never crash the agent loop */ }
               },
             } as any,
           )
+          if (!mountedRef.current) return
 
           const usage = (result as any).usage ?? null
           const inputTokens = usage?.inputTokens ?? usage?.promptTokens ?? 0
@@ -294,9 +344,15 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
             })
           } catch { /* non-fatal */ }
         } catch (err: unknown) {
-          setLog((prev) => [...prev, `  ⚠ Failed: ${err instanceof Error ? err.message : String(err)}`])
+          failed++
+          if (mountedRef.current) {
+            setPagesFailed(failed)
+            setLog((prev) => [...prev, `  failed: ${err instanceof Error ? err.message : String(err)}`])
+          }
         }
       }
+
+      if (!mountedRef.current) return
 
       // Update index and log
       try {
@@ -307,8 +363,8 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
       try {
         await appendLog(
           config.wikiDir,
-          `map: created ${plan.length} pages from project at ${projectRoot.current}`,
-          'ingest',
+          `map: created ${plan.length - failed} pages from project at ${path.basename(projectRoot.current)}`,
+          'map',
         )
       } catch { /* non-fatal */ }
 
@@ -323,6 +379,9 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
       setMapState('executing')
     }
     if (mapState === 'done' && onExit && key.return) {
+      onExit()
+    }
+    if (mapState === 'error' && onExit && key.return) {
       onExit()
     }
   })
@@ -399,7 +458,7 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
         <Text bold color="cyan">Writing wiki pages... <Text color="gray">({currentPageIdx + 1}/{plan.length})</Text></Text>
         <Box marginTop={1} flexDirection="column">
           {log.slice(-10).map((line, i) => (
-            <Text key={i} color={line.startsWith('  saved') ? 'green' : line.startsWith('  ⚠') ? 'yellow' : 'gray'}>
+            <Text key={i} color={line.startsWith('  saved') ? 'green' : line.startsWith('  failed') ? 'yellow' : 'gray'}>
               {line}
             </Text>
           ))}
@@ -414,13 +473,16 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
 
   if (mapState === 'done') {
     const elapsed = Date.now() - startTime.current
+    const grandTotalCost = totalCostUsd + (planCost ?? 0)
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color="green">Wiki map complete</Text>
+        <Text bold color={pagesFailed > 0 ? 'yellow' : 'green'}>
+          Wiki map complete{pagesFailed > 0 ? ` (${pagesFailed} failed)` : ''}
+        </Text>
         <Box marginTop={1} flexDirection="column">
           <Text>{pagesCreated.length} pages created</Text>
           <Text color="gray">Tokens: in={totalInputTokens + planInputTokens} out={totalOutputTokens + planOutputTokens}</Text>
-          <Text color="gray">Total cost:  {formatCost(totalCostUsd + (planCost ?? 0))}</Text>
+          <Text color="gray">Total cost:  {formatCost(grandTotalCost)}</Text>
           <Text color="gray">Total time:  {formatDuration(elapsed)}</Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
@@ -446,7 +508,7 @@ Write thorough, accurate content based on the actual code shown. Use [[${page.ca
         <Text color="red">{errorMessage}</Text>
       </Box>
       <Box marginTop={1}>
-        <Text color="gray">Press <Text color="white">Ctrl+C</Text> to exit</Text>
+        <Text color="gray">Press <Text color="white">{onExit ? 'Enter' : 'Ctrl+C'}</Text> to {onExit ? 'go back' : 'exit'}</Text>
       </Box>
     </Box>
   )

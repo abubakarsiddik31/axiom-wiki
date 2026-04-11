@@ -5,13 +5,14 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { updateIndex, appendLog } from '../../core/wiki.js'
-import { walkProject, findProjectRoot, gatherFilesForPaths, type ProjectSnapshot } from '../../core/mapper.js'
+import { walkProject, findProjectRoot, gatherFilesForPaths, buildProjectSummary, buildCompactSummary, topLanguages, type ProjectSnapshot } from '../../core/mapper.js'
+import { saveMapState, getGitHeadHash, type MapState } from '../../core/sync.js'
 
 interface Props {
   onExit?: () => void
 }
 
-type MapState = 'walking' | 'planning' | 'confirming' | 'executing' | 'done' | 'error'
+type MapScreenState = 'walking' | 'planning' | 'confirming' | 'executing' | 'done' | 'error'
 
 const VALID_CATEGORIES = new Set(['entities', 'concepts', 'analyses', 'sources'])
 
@@ -23,10 +24,6 @@ interface PagePlan {
 }
 
 const SPINNER = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F']
-
-const MAX_TREE_CHARS = 8000
-const MAX_KEY_FILES_IN_PLAN = 6
-const MAX_KEY_FILE_CHARS = 3000
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -42,14 +39,6 @@ function formatCost(cost: number | null): string {
 function formatDuration(ms: number): string {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`
   return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`
-}
-
-function topLanguages(languages: Record<string, number>, n = 5): string {
-  return Object.entries(languages)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([ext, count]) => `${ext} (${count})`)
-    .join(', ')
 }
 
 function parsePlan(text: string): PagePlan[] | null {
@@ -83,43 +72,6 @@ function fallbackPlan(): PagePlan[] {
   }]
 }
 
-function buildProjectSummary(snapshot: ProjectSnapshot): string {
-  const langSummary = topLanguages(snapshot.languages)
-
-  const tree = snapshot.tree.length > MAX_TREE_CHARS
-    ? snapshot.tree.slice(0, MAX_TREE_CHARS) + '\n... [truncated]'
-    : snapshot.tree
-
-  const keyFileSection = snapshot.keyFiles
-    .slice(0, MAX_KEY_FILES_IN_PLAN)
-    .map((f) => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_KEY_FILE_CHARS)}\n\`\`\``)
-    .join('\n\n')
-
-  return `## Project: ${path.basename(snapshot.root)}
-- Files: ${snapshot.totalFiles} total (${snapshot.totalTextFiles} text files)
-- Size: ${formatSize(snapshot.totalSizeBytes)}
-- Approx words: ${snapshot.totalWords.toLocaleString()}
-- Languages: ${langSummary}
-
-## Directory Tree
-\`\`\`
-${tree}
-\`\`\`
-
-${keyFileSection ? `## Key Files\n${keyFileSection}` : ''}`
-}
-
-function buildCompactSummary(snapshot: ProjectSnapshot): string {
-  const langSummary = topLanguages(snapshot.languages, 3)
-  const readmeFile = snapshot.keyFiles.find((f) => f.path.toLowerCase().startsWith('readme'))
-  const readmeExcerpt = readmeFile
-    ? readmeFile.content.split('\n').slice(0, 10).join('\n')
-    : ''
-
-  return `Project: ${path.basename(snapshot.root)} (${snapshot.totalFiles} files, ${langSummary})
-${readmeExcerpt ? `\nFrom README:\n${readmeExcerpt}\n` : ''}`
-}
-
 function buildPageSlugs(plan: PagePlan[]): string[] {
   const seen = new Map<string, number>()
   return plan.map((p) => {
@@ -135,7 +87,7 @@ export function MapScreen({ onExit }: Props) {
   const config = getConfig()!
   const mountedRef = useRef(true)
 
-  const [mapState, setMapState] = useState<MapState>('walking')
+  const [mapState, setMapState] = useState<MapScreenState>('walking')
   const [fileCount, setFileCount] = useState(0)
   const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null)
   const [plan, setPlan] = useState<PagePlan[]>([])
@@ -366,6 +318,23 @@ Write thorough, accurate content based on the actual code shown above. For cross
           `map: created ${plan.length - failed} pages from project at ${path.basename(projectRoot.current)}`,
           'map',
         )
+      } catch { /* non-fatal */ }
+
+      try {
+        const mapStateData: MapState = {
+          version: 1 as const,
+          createdAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+          gitCommitHash: getGitHeadHash(projectRoot.current),
+          pages: plan.map((p, idx) => ({
+            slug: slugs[idx]!,
+            title: p.title,
+            category: p.category,
+            description: p.description,
+            paths: p.paths,
+          })),
+        }
+        saveMapState(config.wikiDir, mapStateData)
       } catch { /* non-fatal */ }
 
       setMapState('done')

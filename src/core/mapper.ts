@@ -275,7 +275,7 @@ function fileRelevanceScore(relPath: string, fileName: string): number {
   return 50
 }
 
-function normalizePath(p: string): string {
+export function normalizePath(p: string): string {
   const trimmed = p.replace(/\/+$/, '')
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.basename(trimmed))
   return hasExtension ? trimmed : trimmed + '/'
@@ -324,4 +324,55 @@ export function gatherFilesForPaths(
   }
 
   return result
+}
+
+// ── Shared summary builders (used by map + sync screens) ─────────────────
+
+const MAX_TREE_CHARS = 8000
+const MAX_KEY_FILES_IN_SUMMARY = 6
+const MAX_KEY_FILE_CHARS = 3000
+
+export function topLanguages(languages: Record<string, number>, n = 5): string {
+  return Object.entries(languages)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([ext, count]) => `${ext} (${count})`)
+    .join(', ')
+}
+
+export function buildProjectSummary(snapshot: ProjectSnapshot): string {
+  const langSummary = topLanguages(snapshot.languages)
+
+  const tree = snapshot.tree.length > MAX_TREE_CHARS
+    ? snapshot.tree.slice(0, MAX_TREE_CHARS) + '\n... [truncated]'
+    : snapshot.tree
+
+  const keyFileSection = snapshot.keyFiles
+    .slice(0, MAX_KEY_FILES_IN_SUMMARY)
+    .map((f) => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_KEY_FILE_CHARS)}\n\`\`\``)
+    .join('\n\n')
+
+  return `## Project: ${path.basename(snapshot.root)}
+- Files: ${snapshot.totalFiles} total (${snapshot.totalTextFiles} text files)
+- Size: ${formatSize(snapshot.totalSizeBytes)}
+- Approx words: ${snapshot.totalWords.toLocaleString()}
+- Languages: ${langSummary}
+
+## Directory Tree
+\`\`\`
+${tree}
+\`\`\`
+
+${keyFileSection ? `## Key Files\n${keyFileSection}` : ''}`
+}
+
+export function buildCompactSummary(snapshot: ProjectSnapshot): string {
+  const langSummary = topLanguages(snapshot.languages, 3)
+  const readmeFile = snapshot.keyFiles.find((f) => f.path.toLowerCase().startsWith('readme'))
+  const readmeExcerpt = readmeFile
+    ? readmeFile.content.split('\n').slice(0, 10).join('\n')
+    : ''
+
+  return `Project: ${path.basename(snapshot.root)} (${snapshot.totalFiles} files, ${langSummary})
+${readmeExcerpt ? `\nFrom README:\n${readmeExcerpt}\n` : ''}`
 }

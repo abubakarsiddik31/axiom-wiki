@@ -15,6 +15,7 @@ import { SourcesScreen } from './sources.js'
 import { ReviewScreen } from './review.js'
 import { GraphScreen } from './graph.js'
 import { MapScreen } from './map.js'
+import { SyncScreen } from './sync.js'
 
 type ActiveScreen =
   | { name: 'shell' }
@@ -28,6 +29,7 @@ type ActiveScreen =
   | { name: 'review' }
   | { name: 'graph' }
   | { name: 'map' }
+  | { name: 'sync' }
 
 interface LogLine {
   text: string
@@ -135,6 +137,7 @@ export function HomeScreen() {
       if (parsed.command === 'review')  { setScreen({ name: 'review' }); return }
       if (parsed.command === 'graph')   { setScreen({ name: 'graph' }); return }
       if (parsed.command === 'map')     { setScreen({ name: 'map' }); return }
+      if (parsed.command === 'sync')    { setScreen({ name: 'sync' }); return }
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
@@ -215,6 +218,7 @@ export function HomeScreen() {
   if (screen.name === 'review')  return <ReviewScreen onExit={goHome} />
   if (screen.name === 'graph')   return <GraphScreen onExit={goHome} />
   if (screen.name === 'map')     return <MapScreen onExit={goHome} />
+  if (screen.name === 'sync')    return <SyncScreen onExit={goHome} />
 
   // ── Shell ─────────────────────────────────────────────────────────────────
   return (

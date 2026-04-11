@@ -72,7 +72,7 @@ export function createAxiomTools(config: AxiomConfig) {
     description: 'Append an entry to wiki/log.md. Use after completing each operation.',
     inputSchema: z.object({
       entry: z.string().describe('Log entry text, e.g. source title or question asked'),
-      type: z.enum(['ingest', 'query', 'lint', 'status', 'map']),
+      type: z.enum(['ingest', 'query', 'lint', 'status', 'map', 'sync']),
     }),
     execute: async (input) => {
       await wiki.appendLog(wikiDir, input.entry, input.type)

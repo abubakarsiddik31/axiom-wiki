@@ -122,6 +122,14 @@ program
   })
 
 program
+  .command('sync')
+  .description('Update wiki pages for recent codebase changes')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'sync' })
+  })
+
+program
   .command('start')
   .description('Start MCP server and open home menu')
   .action(() => {

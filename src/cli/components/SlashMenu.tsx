@@ -14,6 +14,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'sources',                  desc: 'Browse and manage ingested sources' },
   { name: 'review',                   desc: 'Review and resolve contradictions' },
   { name: 'map',                      desc: 'Analyze project and generate wiki map pages' },
+  { name: 'sync',                     desc: 'Update wiki pages for codebase changes' },
   { name: 'graph',                    desc: 'Visualize the wiki page graph' },
   { name: 'status',                   desc: 'Show wiki statistics' },
   { name: 'model',                    desc: 'Switch provider or model' },

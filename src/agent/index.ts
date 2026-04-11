@@ -5,17 +5,24 @@ import { createAnthropic } from '@ai-sdk/anthropic'
 import { SYSTEM_PROMPT } from './prompts.js'
 import { createAxiomTools } from './tools.js'
 import type { AxiomConfig } from '../config/index.js'
+import { autoCommit } from '../core/git.js'
 
 export function createAxiomAgent(config: AxiomConfig) {
   const model = resolveModel(config)
   const tools = createAxiomTools(config)
 
-  return new Agent({
+  const agent = new Agent({
     id: 'axiom',
     name: 'axiom',
     instructions: SYSTEM_PROMPT,
     model,
     tools,
+  })
+
+  return Object.assign(agent, {
+    commitChanges: async (message: string) => {
+      return autoCommit(config.wikiDir, message)
+    },
   })
 }
 

@@ -4,13 +4,18 @@ import path from 'path'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { startWatcher, loadIgnorePatterns } from '../../core/watcher.js'
+import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
+import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
+import { getIngestedFromLog } from '../../core/sources.js'
+import { calcCost, appendUsageLog } from '../../core/usage.js'
 import type { FSWatcher } from 'chokidar'
 
 interface WatchLogEntry {
   time: string
   filename: string
-  status: 'detected' | 'ingesting' | 'done' | 'error'
+  status: 'ingesting' | 'done' | 'error'
   pageCount?: number
+  costUsd?: number | null
   error?: string
 }
 
@@ -18,8 +23,8 @@ function nowTime(): string {
   return new Date().toLocaleTimeString('en-US', { hour12: false })
 }
 
-function extractPageCount(output: string): number {
-  const m = output.match(/(\d+)\s+pages?\s+(created|updated)/i)
+function extractPageCount(text: string): number {
+  const m = text.match(/(\d+)\s+pages?\s+(created|updated)/i)
   return m ? parseInt(m[1]!, 10) : 0
 }
 
@@ -48,8 +53,7 @@ export function WatchScreen({ onExit }: Props) {
         if (prev[i]!.filename === filename) { idx = i; break }
       }
       if (idx === -1) {
-        const entry: WatchLogEntry = { time: nowTime(), filename, status: 'detected', ...update }
-        return [...prev, entry].slice(-50)
+        return [...prev, { time: nowTime(), filename, status: 'ingesting' as const, ...update }].slice(-50)
       }
       const next = [...prev]
       next[idx] = { ...next[idx]!, ...update } as WatchLogEntry
@@ -62,26 +66,52 @@ export function WatchScreen({ onExit }: Props) {
 
     const agent = createAxiomAgent(config)
     const patterns = loadIgnorePatterns(config.rawDir)
+    const logPath = path.join(config.wikiDir, 'wiki/log.md')
 
     const watcher = startWatcher(
       config.rawDir,
       async (filepath: string) => {
         const filename = path.basename(filepath)
-        upsertEntry(filename, { status: 'ingesting', time: nowTime() })
 
-        let output = ''
+        // Skip already-ingested files
+        const ingested = getIngestedFromLog(logPath)
+        if (ingested.has(filename)) return
+
+        upsertEntry(filename, { status: 'ingesting', time: nowTime() })
+        const before = snapshotWiki(config.wikiDir)
+
         try {
-          const stream = await agent.stream([{
-            role: 'user',
-            content: `Ingest this source file into the wiki: ${filepath}`,
-          }])
-          for await (const chunk of stream.textStream) {
-            output += chunk
-          }
-          const pageCount = extractPageCount(output)
-          upsertEntry(filename, { status: 'done', pageCount })
+          const message = await buildIngestMessage(filepath, false, '', config)
+          const result = await agent.generate([message])
+
+          await updateIndex(config.wikiDir)
+          await appendLog(config.wikiDir, filename, 'ingest')
+
+          const usage = (result as any).usage ?? null
+          const inputTokens: number = usage?.inputTokens ?? usage?.promptTokens ?? 0
+          const outputTokens: number = usage?.outputTokens ?? usage?.completionTokens ?? 0
+          const costUsd = calcCost(config.provider, config.model, inputTokens, outputTokens)
+
+          appendUsageLog(config.wikiDir, {
+            timestamp: new Date().toISOString(),
+            operation: 'ingest',
+            source: filename,
+            provider: config.provider,
+            model: config.model,
+            inputTokens,
+            outputTokens,
+            costUsd,
+          })
+
+          const changes = diffWiki(before, config.wikiDir)
+          const pageCount = changes.filter((c) => c.type === 'created').length || extractPageCount(result.text ?? '')
+          upsertEntry(filename, { status: 'done', pageCount, costUsd })
         } catch (err) {
-          upsertEntry(filename, { status: 'error', error: err instanceof Error ? err.message : String(err) })
+          const friendly = contextLimitMessage(err)
+          upsertEntry(filename, {
+            status: 'error',
+            error: friendly ?? (err instanceof Error ? err.message : String(err)),
+          })
         }
       },
       { ignore: patterns },
@@ -112,21 +142,24 @@ export function WatchScreen({ onExit }: Props) {
           <Text color="gray">Watching for new files...</Text>
         ) : (
           log.map((entry, i) => (
-            <Box key={i}>
-              <Text color="gray">[{entry.time}] </Text>
-              {entry.status === 'detected' && (
-                <Text>Detected: <Text color="cyan">{entry.filename}</Text></Text>
-              )}
-              {entry.status === 'ingesting' && (
-                <Text color="yellow">⠸ Ingesting <Text color="cyan">{entry.filename}</Text>...</Text>
-              )}
-              {entry.status === 'done' && (
-                <Text color="green">✓ <Text color="cyan">{entry.filename}</Text>
-                  {entry.pageCount ? ` → ${entry.pageCount} pages` : ' → done'}
-                </Text>
-              )}
-              {entry.status === 'error' && (
-                <Text color="red">✗ <Text color="cyan">{entry.filename}</Text>: {entry.error}</Text>
+            <Box key={i} flexDirection="column">
+              <Box>
+                <Text color="gray">[{entry.time}] </Text>
+                {entry.status === 'ingesting' && (
+                  <Text color="yellow">⠸ Ingesting <Text color="cyan">{entry.filename}</Text>…</Text>
+                )}
+                {entry.status === 'done' && (
+                  <Text color="green">✓ <Text color="cyan">{entry.filename}</Text>
+                    {entry.pageCount ? ` → ${entry.pageCount} pages` : ' → done'}
+                    {entry.costUsd != null ? <Text color="gray"> ${entry.costUsd.toFixed(4)}</Text> : null}
+                  </Text>
+                )}
+                {entry.status === 'error' && (
+                  <Text color="red">✗ <Text color="cyan">{entry.filename}</Text></Text>
+                )}
+              </Box>
+              {entry.status === 'error' && entry.error && (
+                <Text color="red" dimColor>  {entry.error}</Text>
               )}
             </Box>
           ))

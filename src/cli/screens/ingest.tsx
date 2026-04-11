@@ -7,8 +7,8 @@ import fs from "fs";
 import { getConfig } from "../../config/index.js";
 import { createAxiomAgent } from "../../agent/index.js";
 import { INTERACTIVE_INGEST_PREFIX } from "../../agent/prompts.js";
+import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage } from "../../core/files.js";
 import type { CoreMessage } from "../../agent/types.js";
-import { readSourceFile, SUPPORTED_EXTS } from "../../core/files.js";
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
 import { getIngestedFromLog } from "../../core/sources.js";
 import { calcCost, appendUsageLog } from "../../core/usage.js";
@@ -170,7 +170,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
       // Interactive mode: first pass — get topics
       if (interactive) {
-        const firstMessage = await buildMessage(filepath, reingest, "");
+        const firstMessage = await buildIngestMessage(filepath, reingest, "", config);
         const interactiveMsg: CoreMessage = {
           role: "user",
           content:
@@ -221,7 +221,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     const lines: Array<{ text: string; color?: string }> = [];
 
     try {
-      const message = await buildMessage(filepath, isReingest, userInput);
+      const message = await buildIngestMessage(filepath, isReingest, userInput, config);
       const result = await agent.generate([message], {
         onStepFinish: (step: any) => {
           try {
@@ -256,8 +256,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       );
       setStep("interactive-confirm");
     } catch (err: unknown) {
+      const friendly = contextLimitMessage(err);
       lines.push({
-        text: `✗ ${err instanceof Error ? err.message : String(err)}`,
+        text: `✗ ${friendly ?? (err instanceof Error ? err.message : String(err))}`,
         color: "red",
       });
       addResult(currentFile!, lines, [], [], null, "error");
@@ -295,7 +296,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     const before = snapshotWiki(config.wikiDir);
 
     try {
-      const message = await buildMessage(filepath, reingest, userContext);
+      const message = await buildIngestMessage(filepath, reingest, userContext, config);
       const result = await agent.generate([message], {
         onStepFinish: (step: any) => {
           try {
@@ -372,56 +373,14 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       return true;
     } catch (err: unknown) {
       const changes = diffWiki(before, config.wikiDir);
+      const friendly = contextLimitMessage(err);
       lines.push({
-        text: `✗ ${err instanceof Error ? err.message : String(err)}`,
+        text: `✗ ${friendly ?? (err instanceof Error ? err.message : String(err))}`,
         color: "red",
       });
       addResult(filename, lines, [], changes, null, "error");
       return false;
     }
-  }
-
-  async function buildMessage(
-    filepath: string,
-    reingest: boolean,
-    userContext: string,
-  ): Promise<CoreMessage> {
-    const src = await readSourceFile(filepath);
-    const instruction = reingest
-      ? `Re-ingest this source file into the wiki (diff against existing pages). Filename: ${src.filename}${userContext ? `\n\nUser instructions: ${userContext}` : ""}`
-      : `Ingest this source file into the wiki. Filename: ${src.filename}${userContext ? `\n\nUser instructions: ${userContext}` : ""}`;
-
-    if (src.isBase64 && src.mimeType.startsWith("image/")) {
-      return {
-        role: "user",
-        content: [
-          { type: "text", text: instruction },
-          { type: "image", image: src.content, mimeType: src.mimeType as any },
-        ],
-      };
-    }
-
-    if (src.isBase64) {
-      // PDF
-      return {
-        role: "user",
-        content: [
-          { type: "text", text: instruction },
-          {
-            type: "file",
-            data: src.content,
-            mimeType: src.mimeType as any,
-            filename: src.filename,
-          },
-        ],
-      };
-    }
-
-    // Plain text / markdown / html / docx (already converted to text)
-    return {
-      role: "user",
-      content: `${instruction}\n\n<file_content>\n${src.content}\n</file_content>`,
-    };
   }
 
   function addResult(

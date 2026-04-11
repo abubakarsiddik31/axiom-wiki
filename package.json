@@ -1,11 +1,11 @@
 {
   "name": "axiom-wiki",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "The wiki that maintains itself. AI-powered personal knowledge base that ingests documents, extracts entities, and maintains a structured wiki.",
   "type": "module",
   "bin": {
-    "axiom-wiki": "dist/bin/axiom-wiki.js",
-    "axwiki": "dist/bin/axiom-wiki.js"
+    "axiom-wiki": "./dist/bin/axiom-wiki.js",
+    "axwiki": "./dist/bin/axiom-wiki.js"
   },
   "files": [
     "dist"

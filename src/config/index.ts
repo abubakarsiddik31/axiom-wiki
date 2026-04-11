@@ -124,6 +124,31 @@ export function setLocalConfig(cfg: Partial<AxiomConfig>, configPath?: string): 
   fs.writeFileSync(target, JSON.stringify(merged, null, 2), 'utf-8')
 }
 
+export function configScope(): ConfigScope {
+  return getLocalConfig() !== null ? 'local' : 'global'
+}
+
+export function getLocalConfigError(): string | null {
+  const configPath = findLocalConfig()
+  if (!configPath) return null
+
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8')
+    const parsed = JSON.parse(raw)
+    const { provider, model, wikiDir, rawDir } = parsed
+
+    if (!provider || !model || !wikiDir || !rawDir) {
+      return `Local config at ${configPath} is missing required fields (provider, model, wikiDir, rawDir).`
+    }
+    if (provider !== 'ollama' && !parsed.apiKey) {
+      return `Local config at ${configPath} is missing apiKey for provider '${provider}'.`
+    }
+    return null
+  } catch (e) {
+    return `Local config at ${configPath} could not be parsed: ${e instanceof Error ? e.message : String(e)}`
+  }
+}
+
 export function getConfig(): AxiomConfig | null {
   const local = getLocalConfig()
   if (local) return local
@@ -131,8 +156,13 @@ export function getConfig(): AxiomConfig | null {
 }
 
 export function setConfig(cfg: Partial<AxiomConfig>): void {
-  for (const [key, value] of Object.entries(cfg)) {
-    store.set(key as keyof AxiomConfig, value)
+  const localPath = findLocalConfig()
+  if (localPath) {
+    setLocalConfig(cfg, localPath)
+  } else {
+    for (const [key, value] of Object.entries(cfg)) {
+      store.set(key as keyof AxiomConfig, value)
+    }
   }
 }
 
@@ -140,6 +170,12 @@ export function hasConfig(): boolean {
   return getConfig() !== null
 }
 
-export function clearConfig(): void {
-  store.clear()
+export function clearConfig(scope?: ConfigScope): void {
+  const target = scope ?? configScope()
+  if (target === 'local') {
+    const localPath = findLocalConfig()
+    if (localPath) fs.writeFileSync(localPath, '{}', 'utf-8')
+  } else {
+    store.clear()
+  }
 }

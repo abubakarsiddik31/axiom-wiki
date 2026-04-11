@@ -90,14 +90,19 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     // Resolve file list
     let filesToProcess: string[] = []
     if (file) {
-      const abs = path.resolve(file)
+      // Strip surrounding quotes and unescape shell-escaped spaces/chars
+      const cleaned = file
+        .trim()
+        .replace(/^["']|["']$/g, '')   // remove surrounding " or '
+        .replace(/\\(.)/g, '$1')        // unescape \<char> → <char>
+      const abs = path.resolve(cleaned)
       if (!fs.existsSync(abs)) {
-        addResult(file, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], 'error')
+        addResult(cleaned, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], 'error')
         setStep('done'); return
       }
       const ext = path.extname(abs).toLowerCase()
       if (!SUPPORTED_EXTS.includes(ext)) {
-        addResult(file, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], 'error')
+        addResult(cleaned, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], 'error')
         setStep('done'); return
       }
       filesToProcess = [abs]
@@ -359,6 +364,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
               <Text color="gray"> ({result.pagesCreated.length} pages)</Text>
             )}
           </Text>
+          {result.status === 'error' && result.lines.map((line, j) => (
+            <Text key={j} color="red" dimColor> {line.text}</Text>
+          ))}
         </Box>
       ))}
 
@@ -440,10 +448,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
       {step === 'done' && !currentFile && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="green" bold>
-            ✓ Ingest complete — {results.filter(r => r.status === 'done').length} succeeded,{' '}
-            {results.filter(r => r.status === 'error').length} failed
-          </Text>
+          {(() => {
+            const succeeded = results.filter(r => r.status === 'done').length
+            const failed = results.filter(r => r.status === 'error').length
+            return (
+              <Text color={failed > 0 ? 'red' : 'green'} bold>
+                {failed > 0 ? '✗' : '✓'} Ingest complete — {succeeded} succeeded, {failed} failed
+              </Text>
+            )
+          })()}
           <Box marginTop={1}>
             <Text color="gray">Press Enter to continue</Text>
           </Box>

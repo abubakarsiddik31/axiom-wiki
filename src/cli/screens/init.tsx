@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
-import { setConfig, clearConfig, setLocalConfig, findLocalConfig, getConfig, type ConfigScope } from '../../config/index.js'
+import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
@@ -35,9 +35,8 @@ function detectContext() {
 
   const isHomedir = process.cwd() === os.homedir()
   const existingLocalConfig = findLocalConfig()
-  const existingConfig = getConfig()
 
-  return { gitRoot, isHomedir, existingLocalConfig, existingConfig }
+  return { gitRoot, isHomedir, existingLocalConfig }
 }
 
 export function InitScreen() {
@@ -57,8 +56,8 @@ export function InitScreen() {
 
   useEffect(() => {
     if (scope === 'local') {
-      setWikiDir(path.join(process.cwd(), 'wiki'))
-      setRawDir(path.join(process.cwd(), 'raw'))
+      setWikiDir(path.join(process.cwd(), '.axiom/wiki'))
+      setRawDir(path.join(process.cwd(), '.axiom/raw'))
     } else if (scope === 'global') {
       setWikiDir(path.join(os.homedir(), 'my-wiki'))
       setRawDir(path.join(os.homedir(), 'my-wiki', 'raw'))
@@ -93,6 +92,15 @@ export function InitScreen() {
         if (scope === 'local') {
           const localConfigPath = path.join(process.cwd(), '.axiom/config.json')
           setLocalConfig(configToSave, localConfigPath)
+
+          // Add .axiom/ to .gitignore (contains API key + generated content)
+          const gitignorePath = path.join(context.gitRoot ?? process.cwd(), '.gitignore')
+          const entry = '.axiom/'
+          const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : ''
+          if (!existing.split('\n').some((l) => l.trim() === entry)) {
+            fs.writeFileSync(gitignorePath, existing + (existing.endsWith('\n') || !existing ? '' : '\n') + entry + '\n', 'utf-8')
+            addLog('✓ Added .axiom/ to .gitignore')
+          }
         } else {
           setConfig(configToSave)
         }
@@ -157,10 +165,10 @@ export function InitScreen() {
         <Box marginTop={1}>
           <Text color="gray">{'  '}v0.2.0</Text>
         </Box>
-        {context.existingConfig ? (
+        {context.existingLocalConfig ? (
           <Box marginTop={2} flexDirection="column">
-            <Text color="yellow">  ⚠ Already configured — wiki at <Text color="cyan">{context.existingConfig.wikiDir}</Text></Text>
-            <Text>  Continuing will let you reconfigure.</Text>
+            <Text color="yellow">  ⚠ Local wiki already configured here.</Text>
+            <Text>  Continuing will let you reconfigure it.</Text>
           </Box>
         ) : (
           <Box marginTop={2}>
@@ -168,7 +176,7 @@ export function InitScreen() {
           </Box>
         )}
         <Box marginTop={1}>
-          <Text color="gray">  Press <Text color="white">Enter</Text> to {context.existingConfig ? 'reconfigure' : 'continue'} →</Text>
+          <Text color="gray">  Press <Text color="white">Enter</Text> to {context.existingLocalConfig ? 'reconfigure' : 'continue'} →</Text>
         </Box>
       </Box>
     )

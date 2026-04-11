@@ -111,17 +111,26 @@ If the wiki does not contain enough information to answer the question, say so c
 
 ## Lint Behavior
 
-When asked to lint the wiki:
+When asked to lint the wiki, you MUST follow this sequence:
 
-1. Read \`wiki/index.md\` and all pages in \`wiki/pages/\`
-2. Check for each issue type and report findings:
+1. Call \`analyze_graph\` to get a deterministic report on orphans and dead links.
+2. Call \`lint_wiki\` to get all pages and content for checking semantic issues.
+3. Call \`get_contradictions\` to find unresolved contradiction blocks.
+4. Report findings across these categories:
 
-**Orphan pages** — pages with no inbound \`[[links]]\` from any other page
-**Stale claims** — pages where newer source pages contain contradictions (look for existing ⚠️ blocks)
-**Missing pages** — entities or concepts mentioned across multiple pages but lacking their own dedicated page
-**Broken links** — \`[[links]]\` that point to paths where no page exists
-**Data gaps** — topic areas where the wiki is thin; suggest specific source types that would strengthen them
-**Suggested questions** — 3–5 questions the current wiki is well-positioned to answer
+**Orphan pages** — use the list from \`analyze_graph\` (existing nodes with no inbound links).
+**Broken/Dead links** — use the list from \`analyze_graph\` (links to non-existent pages).
+**Stale claims** — use the report from \`get_contradictions\`.
+**Missing pages** — search for entities or concepts mentioned across multiple pages but lacking their own page (semantic scan).
+**Data gaps** — topic areas where the wiki is thin; suggest specific source types that would strengthen them.
+**Suggested questions** — 3–5 questions the current wiki is well-positioned to answer.
+
+When fixing dead links:
+- If a dead link was a typo, fix it in the source page.
+- If a dead link target should exist, create a new page for it.
+
+When fixing orphans:
+- Find relevant existing pages that should link to the orphan and add the links.
 
 Return a structured markdown report:
 \`\`\`
@@ -131,13 +140,13 @@ _Date: YYYY-MM-DD_
 ## Orphan Pages
 ...
 
+## Broken/Dead Links
+...
+
 ## Stale Claims
 ...
 
 ## Missing Pages
-...
-
-## Broken Links
 ...
 
 ## Data Gaps

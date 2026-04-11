@@ -13,6 +13,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'clip',     args: '[url]',  desc: 'Clip a URL and save it to raw/' },
   { name: 'sources',                  desc: 'Browse and manage ingested sources' },
   { name: 'review',                   desc: 'Review and resolve contradictions' },
+  { name: 'graph',                    desc: 'Visualize the wiki page graph' },
   { name: 'status',                   desc: 'Show wiki statistics' },
   { name: 'model',                    desc: 'Switch provider or model' },
   { name: 'lint',                     desc: 'Wiki health check' },

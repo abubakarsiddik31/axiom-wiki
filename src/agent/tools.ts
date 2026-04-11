@@ -5,6 +5,7 @@ import * as wiki from '../core/wiki.js'
 import * as search from '../core/search.js'
 import * as files from '../core/files.js'
 import * as sources from '../core/sources.js'
+import * as graph from '../core/graph.js'
 
 export function createAxiomTools(config: AxiomConfig) {
   const { wikiDir, rawDir } = config
@@ -165,6 +166,22 @@ export function createAxiomTools(config: AxiomConfig) {
     },
   })
 
+  const analyze_graph = createTool({
+    id: 'analyze_graph',
+    description:
+      'Perform static analysis of the wiki graph to find orphans (pages with no inbound links) and dead links (links to non-existent pages).',
+    inputSchema: z.object({}),
+    execute: async () => {
+      const g = graph.buildGraph(wikiDir)
+      return {
+        nodeCount: g.nodes.size,
+        edgeCount: g.edges.length,
+        orphans: g.orphans.map((id) => ({ id, title: g.nodes.get(id)?.title })),
+        deadLinks: g.deadLinks,
+      }
+    },
+  })
+
   return {
     read_page,
     write_page,
@@ -180,6 +197,7 @@ export function createAxiomTools(config: AxiomConfig) {
     remove_source,
     get_contradictions,
     resolve_contradiction,
+    analyze_graph,
   }
 }
 

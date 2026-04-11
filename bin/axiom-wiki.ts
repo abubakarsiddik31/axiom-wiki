@@ -54,6 +54,14 @@ program
   })
 
 program
+  .command('graph')
+  .description('Visualize the wiki page graph')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'graph' })
+  })
+
+program
   .command('lint')
   .description('Check wiki health')
   .action(async () => {

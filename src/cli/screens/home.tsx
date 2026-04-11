@@ -13,6 +13,7 @@ import { WatchScreen } from './watch.js'
 import { ClipScreen } from './clip.js'
 import { SourcesScreen } from './sources.js'
 import { ReviewScreen } from './review.js'
+import { GraphScreen } from './graph.js'
 
 type ActiveScreen =
   | { name: 'shell' }
@@ -24,6 +25,7 @@ type ActiveScreen =
   | { name: 'clip'; url?: string }
   | { name: 'sources' }
   | { name: 'review' }
+  | { name: 'graph' }
 
 interface LogLine {
   text: string
@@ -128,6 +130,7 @@ export function HomeScreen() {
       if (parsed.command === 'watch')   { setScreen({ name: 'watch' }); return }
       if (parsed.command === 'sources') { setScreen({ name: 'sources' }); return }
       if (parsed.command === 'review')  { setScreen({ name: 'review' }); return }
+      if (parsed.command === 'graph')   { setScreen({ name: 'graph' }); return }
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
@@ -206,6 +209,7 @@ export function HomeScreen() {
   if (screen.name === 'clip')    return <ClipScreen url={screen.url} onExit={goHome} />
   if (screen.name === 'sources') return <SourcesScreen onExit={goHome} />
   if (screen.name === 'review')  return <ReviewScreen onExit={goHome} />
+  if (screen.name === 'graph')   return <GraphScreen onExit={goHome} />
 
   // ── Shell ─────────────────────────────────────────────────────────────────
   return (

@@ -46,6 +46,7 @@ export function HomeScreen() {
   const [screen, setScreen] = useState<ActiveScreen>({ name: 'shell' })
   const [input, setInput] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)
+  const [inputKey, setInputKey] = useState(0)
   const [totalPages, setTotalPages] = useState<number | undefined>(undefined)
   const [log, setLog] = useState<LogLine[]>([
     { text: 'Type /help to see commands, or ask a question.', color: 'gray' },
@@ -87,7 +88,10 @@ export function HomeScreen() {
       // Tab or right arrow completes the selected command into the input
       if (key.tab || key.rightArrow) {
         const cmd = menuMatches[safeMenuIndex]
-        if (cmd) setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
+        if (cmd) {
+          setInput(`/${cmd.name}${cmd.args ? ' ' : ''}`)
+          setInputKey((k) => k + 1)
+        }
         return
       }
     }
@@ -228,6 +232,7 @@ export function HomeScreen() {
       <Box>
         <Text color="cyan" bold>{'> '}</Text>
         <TextInput
+          key={inputKey}
           value={input}
           onChange={setInput}
           onSubmit={submit}

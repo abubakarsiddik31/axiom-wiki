@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
-import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
+import { setConfig, clearConfig, setLocalConfig, findLocalConfig, getConfig, type ConfigScope } from '../../config/index.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
@@ -35,8 +35,9 @@ function detectContext() {
 
   const isHomedir = process.cwd() === os.homedir()
   const existingLocalConfig = findLocalConfig()
+  const existingConfig = getConfig()
 
-  return { gitRoot, isHomedir, existingLocalConfig }
+  return { gitRoot, isHomedir, existingLocalConfig, existingConfig }
 }
 
 export function InitScreen() {
@@ -156,11 +157,18 @@ export function InitScreen() {
         <Box marginTop={1}>
           <Text color="gray">{'  '}v0.2.0</Text>
         </Box>
-        <Box marginTop={2}>
-          <Text>  Let's set up your wiki. This takes about 2 minutes.</Text>
-        </Box>
+        {context.existingConfig ? (
+          <Box marginTop={2} flexDirection="column">
+            <Text color="yellow">  ⚠ Already configured — wiki at <Text color="cyan">{context.existingConfig.wikiDir}</Text></Text>
+            <Text>  Continuing will let you reconfigure.</Text>
+          </Box>
+        ) : (
+          <Box marginTop={2}>
+            <Text>  Let's set up your wiki. This takes about 2 minutes.</Text>
+          </Box>
+        )}
         <Box marginTop={1}>
-          <Text color="gray">  Press <Text color="white">Enter</Text> to continue →</Text>
+          <Text color="gray">  Press <Text color="white">Enter</Text> to {context.existingConfig ? 'reconfigure' : 'continue'} →</Text>
         </Box>
       </Box>
     )

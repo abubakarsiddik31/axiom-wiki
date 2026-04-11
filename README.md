@@ -1,5 +1,9 @@
 # Axiom Wiki
 
+<p align="center">
+  <img src="images/icon.svg" width="200" alt="Axiom Wiki Icon">
+</p>
+
 ![Axiom Wiki init screen](images/init.png)
 
 **The wiki that maintains itself.**

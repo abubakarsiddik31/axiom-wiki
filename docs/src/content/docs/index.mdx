@@ -1,40 +1,36 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
+title: Axiom Wiki
+description: The wiki that maintains itself.
+template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
-  image:
-    file: ../../assets/houston.webp
+  tagline: AI-powered personal knowledge base that ingests documents, extracts entities, and keeps an interconnected wiki of markdown pages — automatically.
   actions:
-    - text: Example Guide
-      link: /guides/example/
+    - text: Get Started
+      link: /axiom-wiki/getting-started/installation/
       icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/abubakarsiddik31/axiom-wiki
       icon: external
-      variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+## What is Axiom Wiki?
+
+Unlike RAG systems that re-derive answers from raw sources on every query, Axiom **compiles** knowledge into an interconnected wiki of markdown pages and keeps it current as new sources arrive.
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
-	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
-	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
-	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
-	</Card>
+  <Card title="Drop files, get a wiki" icon="document">
+    Drop PDFs, markdown, images, or URLs into your `raw/` folder. Axiom reads them, extracts entities and concepts, and creates cross-linked wiki pages automatically.
+  </Card>
+  <Card title="Map your codebase" icon="seti:folder">
+    Run `axiom-wiki map` inside any project to generate structured documentation — architecture, modules, tech stack — with one command.
+  </Card>
+  <Card title="Stay in sync" icon="refresh">
+    As your codebase evolves, `axiom-wiki sync` detects changes and updates only the affected wiki pages. No manual maintenance.
+  </Card>
+  <Card title="Works everywhere" icon="laptop">
+    Google Gemini (free tier), OpenAI, Anthropic, or fully offline with Ollama. Your data stays local. Plain markdown files work with Obsidian, VS Code, or any editor.
+  </Card>
 </CardGrid>

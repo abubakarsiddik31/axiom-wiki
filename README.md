@@ -139,6 +139,9 @@ Type `/` to open the slash command menu. Navigate with `↑↓`, complete with `
 │   /clip [url]        Clip a URL and save it to raw/     │
 │   /sources           Browse and manage ingested sources  │
 │   /review            Review and resolve contradictions   │
+│   /map               Analyze project and generate wiki   │
+│   /sync              Update wiki for codebase changes    │
+│   /graph             Visualize the wiki page graph       │
 │   /status            Show wiki statistics                │
 │   /model             Switch provider or model            │
 │   /lint              Wiki health check                   │
@@ -172,10 +175,13 @@ axiom-wiki init                    First-time setup wizard
 axiom-wiki ingest [file]           Ingest a source file, or scan raw/ for new files
 axiom-wiki ingest [file] --interactive  Interactive ingest with topic review
 axiom-wiki query                   Interactive chat against your wiki
+axiom-wiki map                     Analyze project codebase and generate wiki pages
+axiom-wiki sync                    Update wiki pages for recent codebase changes
 axiom-wiki watch                   Auto-ingest new files dropped into raw/
 axiom-wiki clip [url]              Clip a URL and save it to raw/
 axiom-wiki sources                 Browse and manage ingested sources
 axiom-wiki review                  Review and resolve wiki contradictions
+axiom-wiki graph                   Visualize the wiki page graph
 axiom-wiki model                   Switch LLM provider or model
 axiom-wiki status                  Wiki statistics
 axiom-wiki mcp                     Start MCP server (for Claude Code / Cursor)
@@ -211,6 +217,107 @@ While ingesting, the terminal shows live progress — each tool call the agent m
 ```
 
 Token usage and cost are shown per file and logged to `wiki/usage.log`.
+
+---
+
+## Local (Project) Wiki
+
+Axiom Wiki can run at two levels:
+
+- **Global** — a personal wiki in `~/my-wiki/` for general knowledge
+- **Local** — a project-scoped wiki inside `.axiom/` for codebase documentation
+
+During `axiom-wiki init`, the setup wizard detects your context (git repo, home directory) and offers the appropriate choice:
+
+```
+Where should this wiki live?
+  ▶ Local  — project wiki in /path/to/project/.axiom/
+    Global — personal wiki in ~/my-wiki/
+```
+
+**Local mode** stores everything inside `.axiom/` (config, wiki pages, raw sources) and automatically adds `.axiom/` to `.gitignore`. The interactive shell shows a yellow `local` badge in the header when using a project wiki.
+
+When both exist, local config takes priority — Axiom walks up from the current directory looking for `.axiom/config.json`. Move to a different directory and the global config is used automatically.
+
+---
+
+## Codebase Mapping
+
+Analyze a project and generate structured wiki pages describing its architecture, modules, and tech stack:
+
+```bash
+axiom-wiki map
+```
+
+The map command works in three phases:
+
+1. **Walk** — scans the filesystem (respects `.gitignore`), builds a directory tree, collects project stats
+2. **Plan** — one LLM call analyzes the tree and proposes 4-8 wiki pages to create
+3. **Execute** — one LLM call per page, writing thorough documentation with cross-references
+
+Before execution, you see the plan and cost estimate:
+
+```
+Analysis complete — here's the plan:
+
+  Pages to create (6):
+    1. [analyses] Codebase Overview
+    2. [entities] Core Module            (src/core/)
+    3. [entities] CLI Layer              (src/cli/)
+    4. [entities] Agent Layer            (src/agent/)
+    5. [concepts] Configuration System   (src/config/)
+    6. [concepts] Tech Stack
+
+  Planning: in=4821 out=312 cost=$0.0012
+  Estimated total: ~$0.021
+
+  Press Enter to proceed · Ctrl+C to cancel
+```
+
+Re-running `map` overwrites existing pages with fresh content.
+
+---
+
+## Sync
+
+After the initial map, keep wiki pages current as the codebase evolves:
+
+```bash
+axiom-wiki sync
+```
+
+Sync detects what changed since the last map/sync using `git diff`, identifies which wiki pages are affected, and re-generates only those pages:
+
+```
+Changes detected since last sync:
+
+  14 files changed:
+    src/core/    5 files
+    src/cli/     6 files
+
+  Pages to update (3 of 6):
+    1. [entities] Core Module         (5 changed files)
+    2. [entities] CLI Layer           (6 changed files)
+    3. [analyses] Codebase Overview   (always refreshed)
+
+  Unchanged: Agent Layer, Config System, Tech Stack
+
+  Press Enter to proceed · Ctrl+C to cancel
+```
+
+Sync also detects stale pages (where source directories were removed) and new directories not covered by any existing page.
+
+---
+
+## Graph
+
+Visualize the connections between wiki pages:
+
+```bash
+axiom-wiki graph
+```
+
+Shows an interactive terminal view of the wiki's page graph — nodes are pages, edges are cross-references (`[[entity/page-name]]` links). Navigate with arrow keys to explore how pages connect.
 
 ---
 
@@ -308,7 +415,7 @@ Apply this resolution? (Y/n/e=edit)
 
 ## Cost Tracking
 
-Every ingest, re-ingest, and query operation logs token usage and estimated cost to `wiki/usage.log`:
+Every operation (ingest, map, sync, query) logs token usage and estimated cost to `wiki/usage.log`:
 
 ```
 2026-04-11T07:23:19Z | ingest | my-notes.pdf | google/gemini-3-flash-preview | in=42318 out=1847 | $0.0231
@@ -425,6 +532,7 @@ Or with npx (no global install required):
 - `remove_source` — remove a source summary page
 - `get_contradictions` — find all unresolved contradiction blocks
 - `resolve_contradiction` — apply a resolution to a contradiction
+- `analyze_graph` — find orphan pages and dead links
 
 ---
 
@@ -446,7 +554,8 @@ my-wiki/
     usage.log       ← Token usage and cost per operation
     schema.md       ← Wiki conventions
   .axiom/
-    config.json     ← Local config placeholder
+    config.json     ← Local config (provider, model, paths)
+    map-state.json  ← Map/sync state (pages, git hash)
 ```
 
 Every wiki page uses consistent frontmatter:

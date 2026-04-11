@@ -27,8 +27,8 @@ Be respectful. Disagreement is fine; rudeness is not. We're all here to build so
 
 | Type | How |
 |------|-----|
-| Bug report | [Open an issue](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=bug_report.md) |
-| Feature request | [Open an issue](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=feature_request.md) |
+| Bug report | [Open an issue](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=bug_report.md) |
+| Feature request | [Open an issue](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=feature_request.md) |
 | Fix a bug | Open an issue first (for anything non-trivial), then a PR |
 | New file type | Add a handler in `src/core/files.ts`, open a PR |
 | New LLM provider | Add to `src/config/models.ts` and `src/agent/index.ts`, open a PR |
@@ -42,7 +42,7 @@ Be respectful. Disagreement is fine; rudeness is not. We're all here to build so
 **Requirements:** Node.js ≥ 18, pnpm
 
 ```bash
-git clone https://github.com/abubakarsiddiq/axiom-wiki.git
+git clone https://github.com/abubakarsiddik/axiom-wiki.git
 cd axiom-wiki
 pnpm install
 pnpm build
@@ -180,7 +180,7 @@ Scope is the affected layer: `core`, `cli`, `agent`, `config`, `mcp`, `ci`
 
 ## Where to Start
 
-Good first issues are tagged [`good first issue`](https://github.com/abubakarsiddiq/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) on GitHub.
+Good first issues are tagged [`good first issue`](https://github.com/abubakarsiddik/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) on GitHub.
 
 Areas that always welcome contributions:
 - **New file types** — `.epub`, `.rtf`, `.csv`, `.pptx`

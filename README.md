@@ -1,22 +1,37 @@
-# Axiom Wiki
+<p align="center">
+  <img src="images/icon.svg" width="120" alt="Axiom Wiki" />
+</p>
+
+<h1 align="center">Axiom Wiki</h1>
 
 <p align="center">
-  <img src="images/icon.svg" width="200" alt="Axiom Wiki Icon">
+  <strong>The wiki that maintains itself.</strong><br/>
+  AI-powered personal knowledge base that ingests documents, extracts entities,<br/>and keeps an interconnected wiki of markdown pages — automatically.
 </p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/v/axiom-wiki" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/dm/axiom-wiki" alt="npm downloads" /></a>
+  <a href="https://github.com/abubakarsiddik/axiom-wiki/actions/workflows/ci.yml"><img src="https://github.com/abubakarsiddik/axiom-wiki/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://www.elastic.co/licensing/elastic-license"><img src="https://img.shields.io/badge/License-Elastic%20v2-blue.svg" alt="License: ELv2" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18" /></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#supported-llm-providers">Providers</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="https://github.com/abubakarsiddik/axiom-wiki/issues">Issues</a>
+</p>
+
+<br/>
 
 ![Axiom Wiki init screen](images/init.png)
 
-**The wiki that maintains itself.**
+<br/>
 
-[![npm](https://img.shields.io/npm/v/axiom-wiki)](https://www.npmjs.com/package/axiom-wiki)
-[![License: ELv2](https://img.shields.io/badge/License-Elastic%20v2-blue.svg)](https://www.elastic.co/licensing/elastic-license)
-[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-
-Axiom Wiki turns a folder of raw documents into a persistent, AI-maintained personal knowledge base. Unlike RAG systems that re-derive answers from raw sources on every query, Axiom compiles knowledge into an interconnected wiki of markdown pages — and keeps it current as new sources arrive.
-
-The human curates sources and asks questions. The AI does everything else: summarising, cross-referencing, filing, updating, and maintaining consistency across all pages.
-
-> **Inspired by** Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — the idea that LLMs should maintain a persistent, compounding wiki rather than re-derive answers from raw sources on every query.
+> Unlike RAG systems that re-derive answers from raw sources on every query, Axiom **compiles** knowledge into an interconnected wiki of markdown pages and keeps it current as new sources arrive. Inspired by Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
 ---
 
@@ -75,7 +90,7 @@ Both `axiom-wiki` and the shorthand `axwiki` are available after install.
 ### From source
 
 ```bash
-git clone https://github.com/abubakarsiddiq/axiom-wiki.git
+git clone https://github.com/abubakarsiddik/axiom-wiki.git
 cd axiom-wiki
 pnpm install && pnpm build
 pnpm link --global
@@ -515,14 +530,26 @@ services:
 
 ---
 
+## Sponsoring
+
+Axiom Wiki is free and open source. If it saves you time or becomes part of your workflow, consider supporting development:
+
+- **[GitHub Sponsors](https://github.com/sponsors/abubakarsiddik)** — recurring or one-time
+- **[Ko-fi](https://ko-fi.com/abubakarsiddik)** — buy me a coffee
+- **[Open Collective](https://opencollective.com/axiom-wiki)** — transparent, supports teams
+
+You can also help by starring the repo, sharing it, or contributing code.
+
+---
+
 ## Contributing
 
 PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, project structure, conventions, and where to start.
 
 Quick links:
-- [Report a bug](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=bug_report.md)
-- [Request a feature](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=feature_request.md)
-- [Good first issues](https://github.com/abubakarsiddiq/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+- [Report a bug](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/abubakarsiddik/axiom-wiki/issues/new?template=feature_request.md)
+- [Good first issues](https://github.com/abubakarsiddik/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 - [Security policy](SECURITY.md)
 
 ---

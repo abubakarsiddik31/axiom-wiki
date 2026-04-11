@@ -4,7 +4,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Email: security@axiomwiki.dev (or open a [GitHub Security Advisory](https://github.com/abubakarsiddiq/axiom-wiki/security/advisories/new))
+Email: security@axiomwiki.dev (or open a [GitHub Security Advisory](https://github.com/abubakarsiddik/axiom-wiki/security/advisories/new))
 
 Include:
 - Description of the vulnerability

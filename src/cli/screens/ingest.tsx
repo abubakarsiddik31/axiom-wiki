@@ -3,9 +3,12 @@ import { Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
 import path from 'path'
 import fs from 'fs'
+type CoreMessage = { role: 'user'; content: string | Array<{ type: string; [k: string]: unknown }> }
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { INTERACTIVE_INGEST_PREFIX } from '../../agent/prompts.js'
+import { readSourceFile } from '../../core/files.js'
+import { updateIndex, appendLog } from '../../core/wiki.js'
 import { getSource } from '../../core/sources.js'
 import { loadIgnorePatterns } from '../../core/watcher.js'
 import ignore from 'ignore'
@@ -25,7 +28,37 @@ interface FileResult {
   filename: string
   lines: Array<{ text: string; color?: string }>
   pagesCreated: string[]
+  changes: Array<{ path: string; type: 'created' | 'modified' }>
   status: Status
+}
+
+function snapshotWiki(wikiDir: string): Map<string, number> {
+  const snap = new Map<string, number>()
+  const pagesDir = path.join(wikiDir, 'wiki/pages')
+  const extras = [path.join(wikiDir, 'wiki/index.md'), path.join(wikiDir, 'wiki/log.md')]
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else snap.set(full, fs.statSync(full).mtimeMs)
+    }
+  }
+  walk(pagesDir)
+  for (const f of extras) if (fs.existsSync(f)) snap.set(f, fs.statSync(f).mtimeMs)
+  return snap
+}
+
+function diffWiki(before: Map<string, number>, wikiDir: string): Array<{ path: string; type: 'created' | 'modified' }> {
+  const after = snapshotWiki(wikiDir)
+  const changes: Array<{ path: string; type: 'created' | 'modified' }> = []
+  for (const [file, mtime] of after) {
+    const rel = path.relative(wikiDir, file)
+    const prev = before.get(file)
+    if (prev === undefined) changes.push({ path: rel, type: 'created' })
+    else if (mtime > prev) changes.push({ path: rel, type: 'modified' })
+  }
+  return changes.sort((a, b) => a.path.localeCompare(b.path))
 }
 
 function getIngestedFromLog(logPath: string): Set<string> {
@@ -74,6 +107,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   const [liveLines, setLiveLines] = useState<Array<{ text: string; color?: string }>>([])
   const [currentPages, setCurrentPages] = useState<string[]>([])
   const [isReingest, setIsReingest] = useState(false)
+  const [spinnerTick, setSpinnerTick] = useState(0)
+  const [receivedFirstChunk, setReceivedFirstChunk] = useState(false)
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+  useEffect(() => {
+    if (step !== 'running') return
+    const id = setInterval(() => setSpinnerTick((t) => t + 1), 100)
+    return () => clearInterval(id)
+  }, [step])
 
   // Kick off once on mount
   useEffect(() => {
@@ -97,12 +139,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         .replace(/\\(.)/g, '$1')        // unescape \<char> → <char>
       const abs = path.resolve(cleaned)
       if (!fs.existsSync(abs)) {
-        addResult(cleaned, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], 'error')
+        addResult(cleaned, [{ text: `✗ File not found: ${abs}`, color: 'red' }], [], [], 'error')
         setStep('done'); return
       }
       const ext = path.extname(abs).toLowerCase()
       if (!SUPPORTED_EXTS.includes(ext)) {
-        addResult(cleaned, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], 'error')
+        addResult(cleaned, [{ text: `✗ Unsupported file type: ${ext}`, color: 'red' }], [], [], 'error')
         setStep('done'); return
       }
       filesToProcess = [abs]
@@ -150,14 +192,22 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
       // Interactive mode: first pass — get topics
       if (interactive) {
-        const firstGoal = `${INTERACTIVE_INGEST_PREFIX}\n\nRead this source file and present the key topics you found: ${filepath}`
-        const firstResult = await agent.generate([{ role: 'user', content: firstGoal }])
+        const firstMessage = await buildMessage(filepath, reingest, '')
+        const interactiveMsg: CoreMessage = {
+          role: 'user',
+          content: typeof firstMessage.content === 'string'
+            ? `${INTERACTIVE_INGEST_PREFIX}\n\n${firstMessage.content}`
+            : [{ type: 'text', text: INTERACTIVE_INGEST_PREFIX }, ...(firstMessage.content as any[])],
+        }
+        const firstResult = await agent.generate([interactiveMsg])
         setInteractivePrompt(firstResult.text)
         setStep('interactive-reply')
         // Pause here — useInput will call continueInteractive()
         return
       }
 
+      setReceivedFirstChunk(false)
+      setStep('running')
       await runIngest(agent, filepath, filename, reingest, '')
     }
 
@@ -169,6 +219,8 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     if (!config || !currentFile) return
     const agent = createAxiomAgent(config)
     const filepath = file ? path.resolve(file) : path.join(config.rawDir, currentFile)
+    setReceivedFirstChunk(false)
+    setStep('running')
     await runIngest(agent, filepath, currentFile, true, '')
     setCurrentFile(null)
     setStep('done')
@@ -182,16 +234,17 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     setInteractiveResponse(userInput)
     setStep('running')
 
-    const goal = buildGoal(filepath, isReingest, userInput)
     const lines: Array<{ text: string; color?: string }> = []
     const pagesFound: string[] = []
 
     try {
-      const stream = await agent.stream([{ role: 'user', content: goal }])
+      const message = await buildMessage(filepath, isReingest, userInput)
+      const stream = await agent.stream([message])
       let buffer = ''
       let allOutput = ''
 
       for await (const chunk of stream.textStream) {
+        setReceivedFirstChunk(true)
         buffer += chunk
         allOutput += chunk
 
@@ -208,7 +261,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
             }
           }
           if (newEntries.length > 0) {
-            setLiveLines((prev) => [...prev, ...newEntries].slice(-12))
+            setLiveLines((prev) => [...prev, ...newEntries].slice(-20))
           }
           const newPages = extractPages(allOutput)
           setCurrentPages(newPages)
@@ -223,7 +276,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       setStep('interactive-confirm')
     } catch (err: unknown) {
       lines.push({ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: 'red' })
-      addResult(currentFile!, lines, pagesFound, 'error')
+      addResult(currentFile!, lines, pagesFound, [], 'error')
       setCurrentFile(null)
       setStep('done')
     }
@@ -238,7 +291,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       await agent.generate([{ role: 'user', content: 'Please update the wiki index and append the log entry now.' }])
     } catch { /* best effort */ }
 
-    addResult(currentFile, [], currentPages, 'done')
+    addResult(currentFile, [], currentPages, [], 'done')
     setCurrentFile(null)
     setStep('done')
   }
@@ -250,15 +303,34 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     reingest: boolean,
     userContext: string,
   ) {
+    if (!config) return
     const lines: Array<{ text: string; color?: string }> = []
     const pagesFound: string[] = []
+    const before = snapshotWiki(config.wikiDir)
 
     try {
-      const stream = await agent.stream([{ role: 'user', content: buildGoal(filepath, reingest, userContext) }])
+      const message = await buildMessage(filepath, reingest, userContext)
+      const stream = await agent.stream([message], {
+        onStepFinish: (step: any) => {
+          for (const call of step.toolCalls ?? []) {
+            const entry = { text: `  ⚙ ${call.toolName}(${JSON.stringify(call.args).slice(0, 80)})`, color: 'yellow' as string | undefined }
+            lines.push(entry)
+            setLiveLines((prev) => [...prev, entry].slice(-20))
+          }
+          for (const result of step.toolResults ?? []) {
+            if (result.result && typeof result.result === 'string' && result.result.length < 120) {
+              const entry = { text: `    → ${result.result}`, color: 'gray' as string | undefined }
+              lines.push(entry)
+              setLiveLines((prev) => [...prev, entry].slice(-20))
+            }
+          }
+        },
+      })
       let buffer = ''
       let allOutput = ''
 
       for await (const chunk of stream.textStream) {
+        setReceivedFirstChunk(true)
         buffer += chunk
         allOutput += chunk
 
@@ -275,7 +347,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
             }
           }
           if (newEntries.length > 0) {
-            setLiveLines((prev) => [...prev, ...newEntries].slice(-12))
+            setLiveLines((prev) => [...prev, ...newEntries].slice(-20))
           }
           const newPages = extractPages(allOutput)
           setCurrentPages(newPages)
@@ -286,24 +358,58 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (buffer.trim()) {
         const entry = { text: buffer.trim(), color: detectColor(buffer) }
         lines.push(entry)
-        setLiveLines((prev) => [...prev, entry].slice(-12))
+        setLiveLines((prev) => [...prev, entry].slice(-20))
       }
-      addResult(filename, lines, pagesFound, 'done')
+
+      // Guarantee index + log are always updated
+      await updateIndex(config.wikiDir)
+      await appendLog(config.wikiDir, filename, reingest ? 'ingest' : 'ingest')
+
+      const changes = diffWiki(before, config.wikiDir)
+      addResult(filename, lines, pagesFound, changes, 'done')
     } catch (err: unknown) {
+      const changes = diffWiki(before, config.wikiDir)
       lines.push({ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: 'red' })
-      addResult(filename, lines, pagesFound, 'error')
+      addResult(filename, lines, pagesFound, changes, 'error')
     }
   }
 
-  function buildGoal(filepath: string, reingest: boolean, userContext: string): string {
-    const base = reingest
-      ? `Re-ingest this source file into the wiki (diff against existing pages): ${filepath}`
-      : `Ingest this source file into the wiki: ${filepath}`
-    return userContext ? `${base}\n\nUser instructions: ${userContext}` : base
+  async function buildMessage(filepath: string, reingest: boolean, userContext: string): Promise<CoreMessage> {
+    const src = await readSourceFile(filepath)
+    const instruction = reingest
+      ? `Re-ingest this source file into the wiki (diff against existing pages). Filename: ${src.filename}${userContext ? `\n\nUser instructions: ${userContext}` : ''}`
+      : `Ingest this source file into the wiki. Filename: ${src.filename}${userContext ? `\n\nUser instructions: ${userContext}` : ''}`
+
+    if (src.isBase64 && src.mimeType.startsWith('image/')) {
+      return {
+        role: 'user',
+        content: [
+          { type: 'text', text: instruction },
+          { type: 'image', image: src.content, mimeType: src.mimeType as any },
+        ],
+      }
+    }
+
+    if (src.isBase64) {
+      // PDF
+      return {
+        role: 'user',
+        content: [
+          { type: 'text', text: instruction },
+          { type: 'file', data: src.content, mimeType: src.mimeType as any, filename: src.filename },
+        ],
+      }
+    }
+
+    // Plain text / markdown / html / docx (already converted to text)
+    return {
+      role: 'user',
+      content: `${instruction}\n\n<file_content>\n${src.content}\n</file_content>`,
+    }
   }
 
-  function addResult(filename: string, lines: FileResult['lines'], pagesCreated: string[], status: Status) {
-    setResults((prev) => [...prev, { filename, lines, pagesCreated, status }])
+  function addResult(filename: string, lines: FileResult['lines'], pagesCreated: string[], changes: FileResult['changes'], status: Status) {
+    setResults((prev) => [...prev, { filename, lines, pagesCreated, changes, status }])
   }
 
   useInput((input, key) => {
@@ -367,6 +473,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           {result.status === 'error' && result.lines.map((line, j) => (
             <Text key={j} color="red" dimColor> {line.text}</Text>
           ))}
+          {result.changes.length > 0 && (
+            <Box flexDirection="column" marginLeft={2} marginTop={0}>
+              {result.changes.map((c, j) => (
+                <Text key={j} color={c.type === 'created' ? 'green' : 'blue'}>
+                  {c.type === 'created' ? '+ ' : '~ '}{c.path}
+                </Text>
+              ))}
+            </Box>
+          )}
         </Box>
       ))}
 
@@ -374,24 +489,35 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       {currentFile && (
         <Box flexDirection="column" marginTop={1}>
           <Box>
-            {isReingest && <Text color="yellow">[RE-INGEST] </Text>}
-            <Text bold>Processing: <Text color="cyan">{currentFile}</Text></Text>
+            {isReingest && <Text color="yellow">[re-ingest] </Text>}
+            <Text bold color="cyan">{currentFile}</Text>
           </Box>
 
-          {/* Pages as they appear */}
-          {currentPages.length > 0 && (
+          {/* Waiting for first API response */}
+          {step === 'running' && !receivedFirstChunk && (
+            <Box marginTop={1} marginLeft={2}>
+              <Text color="yellow">{spinnerFrames[spinnerTick % spinnerFrames.length]} Calling LLM…</Text>
+            </Box>
+          )}
+
+          {/* Live streaming output */}
+          {step === 'running' && receivedFirstChunk && liveLines.length > 0 && (
             <Box flexDirection="column" marginTop={1} marginLeft={2}>
-              <Text color="gray">Pages written:</Text>
-              {currentPages.map((p, i) => (
-                <Text key={i} color="green">  ✓ {p}</Text>
+              <Text color="gray" dimColor>
+                {spinnerFrames[spinnerTick % spinnerFrames.length]} streaming
+                {currentPages.length > 0 ? ` · ${currentPages.length} pages written` : ''}
+              </Text>
+              {liveLines.slice(-16).map((line, i) => (
+                <Text key={i} color={(line.color as any) ?? 'gray'} dimColor={!line.color}>{line.text}</Text>
               ))}
             </Box>
           )}
 
-          {step === 'running' && liveLines.length > 0 && (
+          {/* Pages as they appear */}
+          {currentPages.length > 0 && step !== 'running' && (
             <Box flexDirection="column" marginTop={1} marginLeft={2}>
-              {liveLines.map((line, i) => (
-                <Text key={i} color={(line.color as any) ?? 'gray'} dimColor={!line.color}>{line.text}</Text>
+              {currentPages.map((p, i) => (
+                <Text key={i} color="green">✓ {p}</Text>
               ))}
             </Box>
           )}

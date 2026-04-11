@@ -29,11 +29,13 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyUrl: 'https://aistudio.google.com/app/apikey',
     requiresApiKey: true,
     models: [
-      { id: 'gemini-3.1-pro',         label: 'Gemini 3.1 Pro',      desc: 'Latest flagship — agentic workflows, 1M context, adaptive thinking', pricing: { input: 1.25, output: 5.00 } },
-      { id: 'gemini-3-flash-preview',  label: 'Gemini 3 Flash',      desc: 'Fast and multimodal, recommended for most wikis', recommended: true, pricing: { input: 0.075, output: 0.30 } },
-      { id: 'gemini-3.1-pro-lite',    label: 'Gemini 3.1 Pro Lite', desc: 'Lightweight Pro variant — lower cost, still capable', pricing: { input: 0.10, output: 0.40 } },
-      { id: 'gemini-2.5-pro',         label: 'Gemini 2.5 Pro',      desc: 'Stable Pro — multimodal, 1M context', pricing: { input: 1.25, output: 10.00 } },
-      { id: 'gemini-2.0-flash',       label: 'Gemini 2.0 Flash',    desc: 'Affordable stable option, wide availability', pricing: { input: 0.075, output: 0.30 } },
+      { id: 'gemini-3-flash-preview',      label: 'Gemini 3 Flash Preview',      desc: 'Fast, frontier intelligence with search and grounding', recommended: true, pricing: { input: 0.50, output: 3.00 } },
+      { id: 'gemini-3.1-pro-preview',      label: 'Gemini 3.1 Pro Preview',      desc: 'SOTA reasoning, multimodal, deep coding capabilities', pricing: { input: 2.00, output: 12.00 } },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite',     desc: 'Most cost-efficient, optimized for high-volume agentic tasks', pricing: { input: 0.25, output: 1.50 } },
+      { id: 'gemini-2.5-pro',              label: 'Gemini 2.5 Pro',              desc: 'Advanced reasoning, 1M context, coding and complex tasks', pricing: { input: 1.25, output: 10.00 } },
+      { id: 'gemini-2.0-flash',            label: 'Gemini 2.0 Flash',            desc: 'Second-gen multimodal, great performance across all tasks', pricing: { input: 0.10, output: 0.40 } },
+      { id: 'gemma-4-26b-a4b-it',          label: 'Gemma 4 26B (MoE)',           desc: 'Open-weight MoE, activates 4B params per inference, free tier' },
+      { id: 'gemma-4-31b-it',              label: 'Gemma 4 31B',                 desc: 'Open-weight dense model, 256K context, data center quality, free tier' },
     ],
   },
   openai: {

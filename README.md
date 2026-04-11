@@ -92,7 +92,7 @@ docker run -it -v $(pwd):/wiki axiomwiki/axiom-wiki init
 
 | Provider | Models | Free Tier | Get API Key |
 |---|---|---|---|
-| **Google Gemini** *(recommended)* | Gemini 3.1 Pro, 3 Flash, 3.1 Flash Lite, 2.5 Pro, 2.0 Flash | Yes | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| **Google Gemini** *(recommended)* | Gemini 3 Flash, 3.1 Pro, 3.1 Flash Lite, 2.5 Pro, 2.0 Flash, Gemma 4 26B/31B | Yes | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
 | **OpenAI** | GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano | No | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 | **Anthropic** | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 | No | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
 | **Ollama** *(local, no key)* | Llama 3.2, Llama 3.1, Mistral, Qwen 2.5 | Free | [ollama.com](https://ollama.com) |

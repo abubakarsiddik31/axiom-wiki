@@ -11,6 +11,7 @@ import { ClipScreen } from './screens/clip.js'
 import { SourcesScreen } from './screens/sources.js'
 import { ReviewScreen } from './screens/review.js'
 import { GraphScreen } from './screens/graph.js'
+import { MapScreen } from './screens/map.js'
 
 export type AxiomCommand =
   | { name: 'init' }
@@ -24,6 +25,7 @@ export type AxiomCommand =
   | { name: 'sources' }
   | { name: 'review' }
   | { name: 'graph' }
+  | { name: 'map' }
 
 export function renderApp(command: AxiomCommand): void {
   switch (command.name) {
@@ -59,6 +61,9 @@ export function renderApp(command: AxiomCommand): void {
       break
     case 'graph':
       render(<GraphScreen />)
+      break
+    case 'map':
+      render(<MapScreen />)
       break
     default: {
       const _exhaustive: never = command

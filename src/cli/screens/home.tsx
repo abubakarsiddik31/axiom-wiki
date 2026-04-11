@@ -14,6 +14,7 @@ import { ClipScreen } from './clip.js'
 import { SourcesScreen } from './sources.js'
 import { ReviewScreen } from './review.js'
 import { GraphScreen } from './graph.js'
+import { MapScreen } from './map.js'
 
 type ActiveScreen =
   | { name: 'shell' }
@@ -26,6 +27,7 @@ type ActiveScreen =
   | { name: 'sources' }
   | { name: 'review' }
   | { name: 'graph' }
+  | { name: 'map' }
 
 interface LogLine {
   text: string
@@ -132,6 +134,7 @@ export function HomeScreen() {
       if (parsed.command === 'sources') { setScreen({ name: 'sources' }); return }
       if (parsed.command === 'review')  { setScreen({ name: 'review' }); return }
       if (parsed.command === 'graph')   { setScreen({ name: 'graph' }); return }
+      if (parsed.command === 'map')     { setScreen({ name: 'map' }); return }
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
@@ -211,6 +214,7 @@ export function HomeScreen() {
   if (screen.name === 'sources') return <SourcesScreen onExit={goHome} />
   if (screen.name === 'review')  return <ReviewScreen onExit={goHome} />
   if (screen.name === 'graph')   return <GraphScreen onExit={goHome} />
+  if (screen.name === 'map')     return <MapScreen onExit={goHome} />
 
   // ── Shell ─────────────────────────────────────────────────────────────────
   return (

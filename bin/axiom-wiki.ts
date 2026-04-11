@@ -114,6 +114,14 @@ program
   })
 
 program
+  .command('map')
+  .description('Analyze project folder and generate wiki map pages')
+  .action(() => {
+    requireConfig()
+    renderApp({ name: 'map' })
+  })
+
+program
   .command('start')
   .description('Start MCP server and open home menu')
   .action(() => {

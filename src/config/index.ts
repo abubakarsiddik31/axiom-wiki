@@ -1,4 +1,6 @@
 import Conf from 'conf'
+import fs from 'fs'
+import path from 'path'
 
 export interface AxiomConfig {
   provider: 'google' | 'openai' | 'anthropic' | 'ollama'
@@ -9,16 +11,19 @@ export interface AxiomConfig {
   ollamaBaseUrl?: string
 }
 
+export type ConfigScope = 'local' | 'global'
+
+const LOCAL_CONFIG_FILENAME = '.axiom/config.json'
+
 const store = new Conf<AxiomConfig>({ projectName: 'axiom-wiki' })
 
-export function getConfig(): AxiomConfig | null {
+function getGlobalConfig(): AxiomConfig | null {
   const provider = store.get('provider')
   const apiKey = store.get('apiKey')
   const model = store.get('model')
   const wikiDir = store.get('wikiDir')
   const rawDir = store.get('rawDir')
 
-  // Ollama doesn't require an apiKey
   if (!provider || !model || !wikiDir || !rawDir) return null
   if (provider !== 'ollama' && !apiKey) return null
 
@@ -28,6 +33,101 @@ export function getConfig(): AxiomConfig | null {
     'http://localhost:11434/api'
 
   return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl }
+}
+
+let _cachedLocalConfigPath: string | null | undefined = undefined
+
+export function findLocalConfig(startDir?: string): string | null {
+  if (_cachedLocalConfigPath !== undefined) return _cachedLocalConfigPath
+
+  let dir = path.resolve(startDir ?? process.cwd())
+  const root = path.parse(dir).root
+
+  while (true) {
+    const candidate = path.join(dir, LOCAL_CONFIG_FILENAME)
+    if (fs.existsSync(candidate)) {
+      _cachedLocalConfigPath = candidate
+      return candidate
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir || dir === root) break
+    dir = parent
+  }
+
+  _cachedLocalConfigPath = null
+  return null
+}
+
+interface LocalConfigFile {
+  provider?: AxiomConfig['provider']
+  apiKey?: string
+  model?: string
+  wikiDir?: string
+  rawDir?: string
+  ollamaBaseUrl?: string
+}
+
+function readLocalConfig(configPath: string): AxiomConfig | null {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8')
+    const parsed: LocalConfigFile = JSON.parse(raw)
+    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl } = parsed
+
+    if (!provider || !model || !wikiDir || !rawDir) return null
+    if (provider !== 'ollama' && !apiKey) return null
+
+    const resolvedOllamaUrl =
+      process.env['OLLAMA_BASE_URL'] ?? ollamaBaseUrl ?? 'http://localhost:11434/api'
+
+    return {
+      provider,
+      apiKey: apiKey ?? '',
+      model,
+      wikiDir,
+      rawDir,
+      ollamaBaseUrl: resolvedOllamaUrl,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function getLocalConfig(): AxiomConfig | null {
+  const configPath = findLocalConfig()
+  if (!configPath) return null
+  return readLocalConfig(configPath)
+}
+
+export function hasLocalConfig(): boolean {
+  return getLocalConfig() !== null
+}
+
+export function setLocalConfig(cfg: Partial<AxiomConfig>, configPath?: string): void {
+  const target = configPath ?? findLocalConfig() ?? path.join(process.cwd(), LOCAL_CONFIG_FILENAME)
+
+  if (cfg.wikiDir && !path.isAbsolute(cfg.wikiDir)) {
+    cfg = { ...cfg, wikiDir: path.resolve(cfg.wikiDir) }
+  }
+  if (cfg.rawDir && !path.isAbsolute(cfg.rawDir)) {
+    cfg = { ...cfg, rawDir: path.resolve(cfg.rawDir) }
+  }
+
+  let existing: LocalConfigFile = {}
+  try {
+    existing = JSON.parse(fs.readFileSync(target, 'utf-8'))
+  } catch {
+    // File doesn't exist or is empty — start fresh
+  }
+
+  const merged = { ...existing, ...cfg }
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, JSON.stringify(merged, null, 2), 'utf-8')
+}
+
+export function getConfig(): AxiomConfig | null {
+  const local = getLocalConfig()
+  if (local) return local
+  return getGlobalConfig()
 }
 
 export function setConfig(cfg: Partial<AxiomConfig>): void {

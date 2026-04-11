@@ -31,8 +31,6 @@ Or run without installing:
 npx axiom-wiki init
 ```
 
-The setup wizard asks for your API key, wiki directory, and raw sources folder. When it's done, your wiki is live.
-
 Launch the interactive shell:
 
 ```bash
@@ -67,6 +65,8 @@ pnpm add -g axiom-wiki
 ```bash
 npx axiom-wiki init
 ```
+
+Both `axiom-wiki` and the shorthand `axwiki` are available after install.
 
 ### From source
 
@@ -162,6 +162,37 @@ axiom-wiki status                  Wiki statistics
 axiom-wiki mcp                     Start MCP server (for Claude Code / Cursor)
 ```
 
+`axwiki` is an alias for `axiom-wiki` — all commands work with either.
+
+---
+
+## Ingest
+
+Ingest a specific file or scan `raw/` for anything not yet processed:
+
+```bash
+axiom-wiki ingest path/to/file.pdf
+axiom-wiki ingest          # scans raw/ and ingests new files
+```
+
+While ingesting, the terminal shows live progress — each tool call the agent makes (`write_page`, `update_index`, etc.) appears as it happens, along with the files created or modified:
+
+```
+⚙ write_page({"pagePath":"wiki/pages/entities/alan-turing.md"...})
+  → wiki/pages/entities/alan-turing.md written
+⚙ write_page({"pagePath":"wiki/pages/concepts/turing-test.md"...})
+
+✓ my-notes.pdf
+  in=42318 out=1847  $0.0231
+
++ wiki/pages/entities/alan-turing.md
++ wiki/pages/concepts/turing-test.md
+~ wiki/index.md
+~ wiki/log.md
+```
+
+Token usage and cost are shown per file and logged to `wiki/usage.log`.
+
 ---
 
 ## Watch Mode
@@ -172,7 +203,7 @@ Automatically ingest files as they land in `raw/`:
 axiom-wiki watch
 ```
 
-Drop any supported file into your `raw/` folder and it is ingested within seconds. Watch mode respects `.axiomignore` and skips already-ingested files. Press `q` to stop.
+Drop any supported file into your `raw/` folder and it is ingested within seconds. Watch mode respects `.axiomignore`, skips already-ingested files, and shows cost per file. Press `q` to stop.
 
 ---
 
@@ -184,7 +215,7 @@ Clip any URL directly into your wiki:
 axiom-wiki clip https://example.com/article
 ```
 
-Axiom fetches the page, extracts the article content via Readability, converts it to Markdown with frontmatter, and saves it to `raw/`. You can ingest immediately or later.
+Axiom fetches the page, extracts the article content via Readability (the same engine Firefox uses for Reader Mode), converts it to Markdown with frontmatter, and saves it to `raw/`. You are then prompted to ingest immediately — with the same live progress display as a normal ingest — or save it for later.
 
 **Supported content types:**
 - HTML articles — Readability extraction → Markdown with `source_url` frontmatter
@@ -253,6 +284,19 @@ AI: Both sources agree on 1912. Wikipedia provides the full date.
 
 Apply this resolution? (Y/n/e=edit)
 ```
+
+---
+
+## Cost Tracking
+
+Every ingest, re-ingest, and query operation logs token usage and estimated cost to `wiki/usage.log`:
+
+```
+2026-04-11T07:23:19Z | ingest | my-notes.pdf | google/gemini-3-flash-preview | in=42318 out=1847 | $0.0231
+2026-04-11T08:01:05Z | ingest | article-2026-04-11.md | google/gemini-3-flash-preview | in=8204 out=921 | $0.0046
+```
+
+Cost is also shown inline after each operation in the terminal.
 
 ---
 
@@ -380,6 +424,7 @@ my-wiki/
       analyses/     ← Filed answers and comparisons
     index.md        ← Catalog of all pages (agent reads this first)
     log.md          ← Append-only operation history
+    usage.log       ← Token usage and cost per operation
     schema.md       ← Wiki conventions
   .axiom/
     config.json     ← Local config placeholder
@@ -393,7 +438,7 @@ title: "Alan Turing"
 summary: "British mathematician and pioneer of computer science"
 tags: [mathematics, computing, ai]
 category: entities
-sources: [turing-biography.pdf]
+sources: ["turing-biography.pdf"]
 updatedAt: "2026-04-10"
 ---
 ```
@@ -403,6 +448,7 @@ The `index.md` and `log.md` files are plain text — parseable with standard Uni
 ```bash
 grep "^## \[" wiki/log.md | tail -5       # last 5 operations
 grep "ingest" wiki/log.md | wc -l          # total sources ingested
+grep "ingest" wiki/usage.log               # cost breakdown per ingest
 ```
 
 ---
@@ -423,10 +469,12 @@ Axiom Wiki stores everything as plain markdown — Obsidian works perfectly as a
 | Extension | How it's processed |
 |---|---|
 | `.md`, `.txt` | Read as plain text |
-| `.pdf` | Extracted as base64 and passed to the model |
-| `.png`, `.jpg`, `.jpeg`, `.webp` | Sent as images (vision models) |
+| `.pdf` | Uploaded to the provider's Files API (Google) or sent as base64 (other providers) |
+| `.png`, `.jpg`, `.jpeg`, `.webp` | Uploaded to the provider's Files API (Google) or sent as base64 (other providers) |
 | `.html` | Converted to Markdown via node-html-markdown |
 | `.docx` | Converted to Markdown via mammoth |
+
+For Google Gemini, binary files (PDFs and images) are uploaded to the Google Files API before ingestion — the file bytes are hosted server-side and referenced by URI, bypassing the model's inline token limit.
 
 ---
 

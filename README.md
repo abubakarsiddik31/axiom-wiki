@@ -517,15 +517,13 @@ services:
 
 ## Contributing
 
-PRs are welcome. Areas where contributions help most:
+PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, project structure, conventions, and where to start.
 
-- **New file type handlers** — add support in `src/core/files.ts`
-- **LLM provider integrations** — add to `src/config/models.ts` and `src/agent/index.ts`
-- **CLI UX improvements** — Ink screens in `src/cli/screens/`
-- **Documentation** — usage guides, examples, walkthroughs
-- **Bug fixes** — open an issue first for anything non-trivial
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Quick links:
+- [Report a bug](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/abubakarsiddiq/axiom-wiki/issues/new?template=feature_request.md)
+- [Good first issues](https://github.com/abubakarsiddiq/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+- [Security policy](SECURITY.md)
 
 ---
 

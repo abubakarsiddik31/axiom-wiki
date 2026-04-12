@@ -73,7 +73,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     keyEnv: 'OLLAMA_BASE_URL',
     keyUrl: 'https://ollama.com',
     requiresApiKey: false,
-    defaultBaseUrl: 'http://localhost:11434/api',
+    defaultBaseUrl: 'http://localhost:11434/v1',
     models: [
       { id: 'llama3.2',  label: 'Llama 3.2 (3B)',  desc: 'Fast and lightweight', recommended: true, contextWindow: 128_000 },
       { id: 'llama3.1',  label: 'Llama 3.1 (8B)',  desc: 'Strong general-purpose model', contextWindow: 128_000 },

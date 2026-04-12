@@ -30,7 +30,7 @@ function getGlobalConfig(): AxiomConfig | null {
   const ollamaBaseUrl =
     process.env['OLLAMA_BASE_URL'] ||
     store.get('ollamaBaseUrl') ||
-    'http://localhost:11434/api'
+    'http://localhost:11434/v1'
 
   return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl }
 }
@@ -77,7 +77,7 @@ function readLocalConfig(configPath: string): AxiomConfig | null {
     if (provider !== 'ollama' && !apiKey) return null
 
     const resolvedOllamaUrl =
-      process.env['OLLAMA_BASE_URL'] ?? ollamaBaseUrl ?? 'http://localhost:11434/api'
+      process.env['OLLAMA_BASE_URL'] ?? ollamaBaseUrl ?? 'http://localhost:11434/v1'
 
     return {
       provider,

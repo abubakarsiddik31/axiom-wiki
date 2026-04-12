@@ -72,8 +72,8 @@ function resolveModel(config: AxiomConfig) {
     case 'anthropic':
       return createAnthropic({ apiKey })(modelId)
     case 'ollama': {
-      const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/api'
-      return createOpenAI({ baseURL, apiKey: 'ollama' })(modelId)
+      const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/v1'
+      return createOpenAI({ baseURL, apiKey: 'ollama' }).chat(modelId)
     }
     default: {
       const _exhaustive: never = provider

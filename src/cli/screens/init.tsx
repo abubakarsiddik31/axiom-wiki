@@ -11,6 +11,7 @@ import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.j
 import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
+import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, type OllamaModel } from '../../core/ollama.js'
 
 // Steps: 0=welcome 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
@@ -54,6 +55,11 @@ export function InitScreen() {
   const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'my-wiki'))
   const [rawDir, setRawDir] = useState('')
   const [log, setLog] = useState<string[]>([])
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([])
+  const [ollamaStatus, setOllamaStatus] = useState<'ok' | 'no-models' | 'unreachable' | null>(null)
+  const [pulling, setPulling] = useState(false)
+  const [pullProgress, setPullProgress] = useState('')
+  const [pullError, setPullError] = useState('')
 
   useEffect(() => {
     if (scope === 'local') {
@@ -85,7 +91,7 @@ export function InitScreen() {
         const finalModel = model === '__custom__' ? customModel.trim() : model
 
         const configToSave = provider === 'ollama'
-          ? { provider: provider!, apiKey: '', model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw, ollamaBaseUrl: ollamaUrl.trim() + '/api' }
+          ? { provider: provider!, apiKey: '', model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw, ollamaBaseUrl: ollamaUrl.trim() + '/v1' }
           : { provider: provider!, apiKey, model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw }
 
         clearConfig(scope ?? 'global')
@@ -260,13 +266,14 @@ export function InitScreen() {
                 const url = (val.trim() || 'http://localhost:11434').replace(/\/+$/, '')
                 setOllamaUrl(url)
                 setOllamaError('')
-                try {
-                  const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(4000) })
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                  setStep(4)
-                } catch {
-                  setOllamaError(`Could not connect to Ollama at ${url}\nIs Ollama running? Try: ollama serve`)
+                const result = await fetchOllamaModels(url)
+                setOllamaStatus(result.status)
+                if (result.status === 'unreachable') {
+                  setOllamaError(`Could not connect to Ollama at ${url}\nIs Ollama installed? Visit https://ollama.com\nIs it running? Try: ollama serve`)
+                  return
                 }
+                setOllamaModels(result.models)
+                setStep(4)
               }}
             />
           </Box>
@@ -301,27 +308,138 @@ export function InitScreen() {
   }
 
   if (step === 4) {
-    const models = [
-      ...PROVIDERS[provider!].models.map((m) => ({ label: `${m.label}  ${m.desc}`, value: m.id })),
-      { label: '[ Enter custom model name ]', value: '__custom__' },
-    ]
+    // Helper: pick or pull an Ollama model, then advance
+    const selectOllamaModel = async (modelName: string) => {
+      // Check if model is already local
+      const isLocal = ollamaModels.some((m) => m.name === modelName || m.name === `${modelName}:latest`)
+      if (isLocal) {
+        setModel(modelName)
+        setStep(5)
+        return
+      }
+      // Pull the model
+      setPulling(true)
+      setPullProgress(`Pulling ${modelName}...`)
+      setPullError('')
+      const result = await pullOllamaModel(ollamaUrl, modelName, (p) => {
+        setPullProgress(formatPullProgress(p))
+      })
+      setPulling(false)
+      if (!result.ok) {
+        setPullError(`Failed to pull ${modelName}: ${result.error}`)
+        return
+      }
+      // Refresh model list and advance
+      const refreshed = await fetchOllamaModels(ollamaUrl)
+      setOllamaStatus(refreshed.status)
+      setOllamaModels(refreshed.models)
+      setModel(modelName)
+      setStep(5)
+    }
 
+    // Show pulling progress
+    if (pulling) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Pulling model...</Text>
+          <Box marginTop={1}>
+            <Text>{pullProgress}</Text>
+          </Box>
+        </Box>
+      )
+    }
+
+    // Custom model name input
     if (model === '__custom__') {
       return (
         <Box flexDirection="column" padding={1}>
           <Text bold>Enter model name:</Text>
+          {provider === 'ollama' && (
+            <Text color="gray">The model will be pulled automatically if not already available.</Text>
+          )}
           <Box marginTop={1}>
             <Text>{'> '}</Text>
             <TextInput
               value={customModel}
               onChange={setCustomModel}
-              onSubmit={(val) => { if (val.trim()) setStep(5) }}
+              onSubmit={async (val) => {
+                if (!val.trim()) return
+                if (provider === 'ollama') {
+                  await selectOllamaModel(val.trim())
+                } else {
+                  setStep(5)
+                }
+              }}
+            />
+          </Box>
+          {pullError && (
+            <Box marginTop={1}>
+              <Text color="red">✗ {pullError}</Text>
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
+    // Ollama: show locally available models or suggestions
+    if (provider === 'ollama') {
+      if (ollamaStatus === 'no-models') {
+        const suggestedItems = OLLAMA_SUGGESTED_MODELS.map((s) => ({
+          label: `${s.name}  ${s.desc}`,
+          value: s.name,
+        }))
+        const items = [
+          ...suggestedItems,
+          { label: '[ Enter custom model name ]', value: '__custom__' },
+        ]
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold color="yellow">No models found on your Ollama instance.</Text>
+            <Text>Select a model to pull it automatically:</Text>
+            <Box marginTop={1}>
+              <SelectInput
+                items={items}
+                onSelect={async (item) => {
+                  if (item.value === '__custom__') { setModel('__custom__'); return }
+                  await selectOllamaModel(item.value)
+                }}
+              />
+            </Box>
+            {pullError && (
+              <Box marginTop={1}>
+                <Text color="red">✗ {pullError}</Text>
+              </Box>
+            )}
+          </Box>
+        )
+      }
+
+      // Has local models
+      const localModels = [
+        ...ollamaModelsToSelectItems(ollamaModels),
+        { label: '[ Enter custom model name ]', value: '__custom__' },
+      ]
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Choose a model <Text color="gray">(locally available)</Text>:</Text>
+          <Box marginTop={1}>
+            <SelectInput
+              items={localModels}
+              onSelect={(item) => {
+                setModel(item.value)
+                if (item.value !== '__custom__') setStep(5)
+              }}
             />
           </Box>
         </Box>
       )
     }
 
+    // Non-Ollama providers: hardcoded list
+    const models = [
+      ...PROVIDERS[provider!].models.map((m) => ({ label: `${m.label}  ${m.desc}`, value: m.id })),
+      { label: '[ Enter custom model name ]', value: '__custom__' },
+    ]
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Choose a model:</Text>

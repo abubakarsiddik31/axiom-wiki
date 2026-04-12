@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import SelectInput from 'ink-select-input'
 import { getConfig, setConfig } from '../../config/index.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
+import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, stripOllamaApiSuffix, type OllamaModel } from '../../core/ollama.js'
 
 type Action = 'full' | 'model-only' | 'key-only' | 'cancel'
 type Step = 0 | 1 | 2 | 3 | 4
@@ -21,6 +22,16 @@ export function ModelScreen({ onExit }: Props) {
   const [action, setAction] = useState<Action | null>(null)
   const [provider, setProvider] = useState<ProviderId>(existing?.provider ?? 'google')
   const [apiKey, setApiKey] = useState(existing?.apiKey ?? '')
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([])
+  const [ollamaStatus, setOllamaStatus] = useState<'ok' | 'no-models' | 'unreachable' | null>(null)
+  const [ollamaUrl, setOllamaUrl] = useState(existing?.ollamaBaseUrl ? stripOllamaApiSuffix(existing.ollamaBaseUrl) : 'http://localhost:11434')
+  const [ollamaError, setOllamaError] = useState('')
+  const [ollamaLoading, setOllamaLoading] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const [pullProgress, setPullProgress] = useState('')
+  const [pullError, setPullError] = useState('')
+  const [customModel, setCustomModel] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
 
   // Snapshot of original values for the diff
   const [origProvider] = useState(existing?.provider ?? null)
@@ -31,6 +42,19 @@ export function ModelScreen({ onExit }: Props) {
     if (key.escape) { doExit(); return }
     if (step === 4 && key.return) { doExit() }
   })
+
+  // Fetch Ollama models when doing "model-only" change with Ollama provider
+  useEffect(() => {
+    if (!ollamaLoading) return
+    const run = async () => {
+      const result = await fetchOllamaModels(ollamaUrl)
+      setOllamaStatus(result.status)
+      setOllamaModels(result.models)
+      setOllamaLoading(false)
+      setStep(3)
+    }
+    void run()
+  }, [ollamaLoading])
 
   if (!existing) {
     return (
@@ -70,12 +94,28 @@ export function ModelScreen({ onExit }: Props) {
                 setAction(val)
                 if (val === 'cancel') { doExit(); return }
                 if (val === 'full') { setProvider(existing.provider); setStep(1) }
-                if (val === 'model-only') { setProvider(existing.provider); setStep(3) }
+                if (val === 'model-only') {
+                  setProvider(existing.provider)
+                  if (existing.provider === 'ollama') {
+                    setOllamaLoading(true)
+                  } else {
+                    setStep(3)
+                  }
+                }
                 if (val === 'key-only') { setProvider(existing.provider); setStep(2) }
               }}
             />
           </Box>
         </Box>
+      </Box>
+    )
+  }
+
+  // ── Loading: fetching Ollama models ──────────────────────────────────────
+  if (ollamaLoading) {
+    return (
+      <Box padding={1}>
+        <Text>Checking Ollama for available models...</Text>
       </Box>
     )
   }
@@ -92,8 +132,6 @@ export function ModelScreen({ onExit }: Props) {
             onSelect={(item) => {
               const newProvider = item.value as ProviderId
               setProvider(newProvider)
-              // Reset model to default for new provider
-              void PROVIDERS[newProvider].models.find((m) => m.recommended) // reset sentinel
               // If provider changed, must re-enter key
               if (newProvider !== existing.provider) {
                 setApiKey('')
@@ -106,8 +144,43 @@ export function ModelScreen({ onExit }: Props) {
     )
   }
 
-  // ── Step 2: API key ───────────────────────────────────────────────────────
+  // ── Step 2: API key (or Ollama URL) ──────────────────────────────────────
   if (step === 2) {
+    if (provider === 'ollama') {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Ollama base URL:</Text>
+          <Text color="gray">(Press Enter for default: {ollamaUrl})</Text>
+          <Box marginTop={1}>
+            <Text>{'> '}</Text>
+            <TextInput
+              value={ollamaUrl}
+              onChange={(v) => { setOllamaUrl(v); setOllamaError('') }}
+              onSubmit={async (val) => {
+                const url = (val.trim() || 'http://localhost:11434').replace(/\/+$/, '')
+                setOllamaUrl(url)
+                setOllamaError('')
+                const result = await fetchOllamaModels(url)
+                setOllamaStatus(result.status)
+                if (result.status === 'unreachable') {
+                  setOllamaError(`Could not connect to Ollama at ${url}\nIs Ollama installed? Visit https://ollama.com\nIs it running? Try: ollama serve`)
+                  return
+                }
+                setOllamaModels(result.models)
+                setStep(3)
+              }}
+            />
+          </Box>
+          {ollamaError && (
+            <Box marginTop={1} flexDirection="column">
+              <Text color="red">✗ {ollamaError}</Text>
+              <Text color="gray">Press Enter to retry, or Esc to go back.</Text>
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
     const prov = PROVIDERS[provider]
     return (
       <Box flexDirection="column" padding={1}>
@@ -139,6 +212,143 @@ export function ModelScreen({ onExit }: Props) {
 
   // ── Step 3: select model ──────────────────────────────────────────────────
   if (step === 3) {
+    const saveModel = (modelId: string) => {
+      if (provider === 'ollama') {
+        const ollamaBaseUrl = ollamaUrl.replace(/\/+$/, '') + '/v1'
+        if (action === 'model-only') {
+          setConfig({ model: modelId, ollamaBaseUrl })
+        } else {
+          setConfig({ provider, apiKey: '', model: modelId, ollamaBaseUrl })
+        }
+      } else if (action === 'model-only') {
+        setConfig({ model: modelId })
+      } else {
+        setConfig({ provider, apiKey, model: modelId })
+      }
+      setStep(4)
+    }
+
+    const selectOllamaModel = async (modelName: string) => {
+      const isLocal = ollamaModels.some((m) => m.name === modelName || m.name === `${modelName}:latest`)
+      if (isLocal) {
+        saveModel(modelName)
+        return
+      }
+      setPulling(true)
+      setPullProgress(`Pulling ${modelName}...`)
+      setPullError('')
+      const result = await pullOllamaModel(ollamaUrl, modelName, (p) => {
+        setPullProgress(formatPullProgress(p))
+      })
+      setPulling(false)
+      if (!result.ok) {
+        setPullError(`Failed to pull ${modelName}: ${result.error}`)
+        return
+      }
+      const refreshed = await fetchOllamaModels(ollamaUrl)
+      setOllamaStatus(refreshed.status)
+      setOllamaModels(refreshed.models)
+      saveModel(modelName)
+    }
+
+    // Show pulling progress
+    if (pulling) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Pulling model...</Text>
+          <Box marginTop={1}>
+            <Text>{pullProgress}</Text>
+          </Box>
+        </Box>
+      )
+    }
+
+    // Custom model name input (Ollama)
+    if (provider === 'ollama' && showCustomInput) {
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold>Enter model name:</Text>
+            <Text color="gray">The model will be pulled automatically if not already available.</Text>
+            <Box marginTop={1}>
+              <Text>{'> '}</Text>
+              <TextInput
+                value={customModel}
+                onChange={setCustomModel}
+                onSubmit={async (val) => {
+                  if (!val.trim()) return
+                  await selectOllamaModel(val.trim())
+                }}
+              />
+            </Box>
+            {pullError && (
+              <Box marginTop={1}>
+                <Text color="red">✗ {pullError}</Text>
+              </Box>
+            )}
+          </Box>
+        )
+    }
+
+    // Ollama: show locally available models or suggestions
+    if (provider === 'ollama') {
+      if (ollamaStatus === 'no-models' || ollamaStatus === 'unreachable') {
+        const suggestedItems = OLLAMA_SUGGESTED_MODELS.map((s) => ({
+          label: `${s.name}  ${s.desc}`,
+          value: s.name,
+        }))
+        const items = [
+          ...suggestedItems,
+          { label: '[ Enter custom model name ]', value: '__custom__' },
+        ]
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold color="yellow">
+              {ollamaStatus === 'unreachable' ? 'Could not connect to Ollama.' : 'No models found on your Ollama instance.'}
+            </Text>
+            <Text>Select a model to pull it automatically:</Text>
+            <Box marginTop={1}>
+              <SelectInput
+                items={items}
+                onSelect={async (item) => {
+                  if (item.value === '__custom__') { setCustomModel(''); setShowCustomInput(true); return }
+                  await selectOllamaModel(item.value)
+                }}
+              />
+            </Box>
+            {pullError && (
+              <Box marginTop={1}>
+                <Text color="red">✗ {pullError}</Text>
+              </Box>
+            )}
+          </Box>
+        )
+      }
+
+      // Has local models
+      const localModels = [
+        ...ollamaModelsToSelectItems(ollamaModels).map((m) => ({
+          ...m,
+          label: m.value === existing.model ? `${m.label}  (current)` : m.label,
+        })),
+        { label: '[ Enter custom model name ]', value: '__custom__' },
+      ]
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Choose a model <Text color="gray">(locally available)</Text>:</Text>
+          <Box marginTop={1}>
+            <SelectInput
+              items={localModels}
+              onSelect={(item) => {
+                if (item.value === '__custom__') { setCustomModel(''); setShowCustomInput(true); return }
+                saveModel(item.value)
+              }}
+            />
+          </Box>
+        </Box>
+      )
+    }
+
+    // Non-Ollama: hardcoded list
     const models = PROVIDERS[provider].models.map((m) => ({
       label: `${m.label}  —  ${m.desc}${m.id === existing.model ? '  (current)' : ''}`,
       value: m.id,
@@ -150,13 +360,7 @@ export function ModelScreen({ onExit }: Props) {
           <SelectInput
             items={models}
             onSelect={(item) => {
-              // Save config
-              if (action === 'model-only') {
-                setConfig({ model: item.value })
-              } else {
-                setConfig({ provider, apiKey, model: item.value })
-              }
-              setStep(4)
+              saveModel(item.value)
             }}
           />
         </Box>

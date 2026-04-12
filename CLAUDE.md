@@ -10,9 +10,11 @@ pnpm dev        # Watch mode with live reload (tsx watch)
 pnpm start      # Run compiled binary (node dist/bin/axiom-wiki.js)
 ```
 
-There is no test runner configured. Type-check with `pnpm build` (strict TypeScript compilation).
+Tests: `pnpm test` (Vitest). Type-check with `pnpm build` (strict TypeScript compilation).
 
 **Run `pnpm build` after every code change** to catch type errors early. The compiled output in `dist/` is what gets executed.
+
+**Update docs after every user-facing change.** The documentation site lives in `docs/src/content/docs/` (Astro + Starlight). When adding or changing commands, features, or wiki structure, update the relevant doc pages under `docs/src/content/docs/commands/`, `docs/src/content/docs/guides/`, or `docs/src/content/docs/reference/`.
 
 Run a specific CLI command in dev mode:
 ```bash
@@ -96,9 +98,11 @@ updatedAt: "YYYY-MM-DD"
 Any code change that creates, modifies, or removes wiki content must keep these systems in sync. Forgetting one causes subtle bugs (stale state, missing log entries, broken incremental compilation).
 
 **After every source ingest** (ingest, watch, clip):
-1. `updateIndex(wikiDir)` — rebuild `wiki/index.md` from all pages
-2. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
-3. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `.axiom/state.json` with SHA-256 hash and concept mappings
+1. `acquireLock(wikiDir)` — acquire compilation lock before any writes
+2. `updateIndex(wikiDir)` — rebuild `wiki/index.md` from all pages
+3. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
+4. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `.axiom/state.json` with SHA-256 hash and concept mappings
+5. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
 
 **After source deletion** (sources screen → delete):
 1. `removeSource(wikiDir, filename)` — delete summary page
@@ -108,15 +112,21 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 1. `markForReingest(wikiDir, filename)` — append to log
 2. `state.sources[filename].sha256 = ''` + `saveState()` — clear hash so next ingest detects it as "changed"
 
+**Compilation lock rules:**
+- Lock is at `.axiom/lock` (PID + timestamp JSON). Stale locks from dead processes auto-reclaim.
+- **Every code path that acquires the lock must release it** — including early returns, error catches, user cancellation ("n"), and Escape key. This is the most common source of bugs.
+- The `watch` screen uses `try/finally` to guarantee release.
+- The `ingest` screen has multiple async pause points (reingest-confirm, interactive-reply, interactive-confirm) where the lock stays held until the user responds — release on both "y" and "n" paths.
+
 **Commands that must track state:**
-| Command | log.md | index.md | state.json | usage.log |
-|---------|--------|----------|------------|-----------|
-| `ingest` | yes | yes | yes | yes |
-| `watch` | yes | yes | yes | yes |
-| `clip` (with ingest) | yes | yes | yes | yes |
-| `sources` → delete | no | no | yes (remove) | no |
-| `sources` → reingest | yes | no | yes (clear hash) | no |
-| `query` | yes | no | no | yes |
-| `map` / `sync` | yes | yes | no (own state) | yes |
+| Command | lock | log.md | index.md | state.json | usage.log |
+|---------|------|--------|----------|------------|-----------|
+| `ingest` | yes | yes | yes | yes | yes |
+| `watch` | yes | yes | yes | yes | yes |
+| `clip` (with ingest) | yes | yes | yes | yes | yes |
+| `sources` → delete | no | no | no | yes (remove) | no |
+| `sources` → reingest | no | yes | no | yes (clear hash) | no |
+| `query` | no | yes | no | no | yes |
+| `map` / `sync` | no | yes | yes | no (own state) | yes |
 
 **Both config scopes work identically** — state always lives at `{wikiDir}/.axiom/state.json` and `wikiDir` is always an absolute path regardless of local vs global config.

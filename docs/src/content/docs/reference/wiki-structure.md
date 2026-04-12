@@ -22,6 +22,8 @@ my-wiki/
     schema.md           # Wiki conventions
   .axiom/
     config.json         # Local config (provider, model, paths)
+    state.json          # Compilation state (SHA-256 hashes per source, concept mappings)
+    lock                # PID-based lock file (present only during active ingest)
     map-state.json      # Map/sync state (pages, git hash)
 ```
 

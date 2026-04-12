@@ -4,18 +4,21 @@ description: Ingest source files into the wiki.
 ---
 
 ```bash
-axiom-wiki ingest [file]
-axiom-wiki ingest [file] --interactive
+axiom-wiki ingest [file-or-url]
+axiom-wiki ingest [file-or-url] --interactive
 ```
 
-Ingest a specific file or scan `raw/` for anything not yet processed.
+Ingest a local file, a URL, or scan `raw/` for anything not yet processed.
 
 ## Usage
 
 ```bash
-axiom-wiki ingest path/to/file.pdf    # ingest a specific file
-axiom-wiki ingest                      # scan raw/ and ingest new files
+axiom-wiki ingest path/to/file.pdf           # ingest a local file
+axiom-wiki ingest https://example.com/article # clip URL and ingest in one step
+axiom-wiki ingest                             # scan raw/ and ingest new files
 ```
+
+When given a URL, Axiom fetches the page, extracts the article content (using Readability), saves it to `raw/`, and immediately ingests it — no separate `clip` step needed.
 
 ## What happens
 

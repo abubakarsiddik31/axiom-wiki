@@ -80,7 +80,7 @@ See the [full documentation](https://abubakarsiddik31.github.io/axiom-wiki) for 
 ```
 axiom-wiki                    Launch interactive shell
 axiom-wiki init               First-time setup wizard
-axiom-wiki ingest [file]      Ingest source files into the wiki
+axiom-wiki ingest [file|url]  Ingest a file, URL, or scan raw/
 axiom-wiki query              Chat against your wiki
 axiom-wiki map                Analyze codebase and generate wiki pages
 axiom-wiki sync               Update wiki pages for codebase changes

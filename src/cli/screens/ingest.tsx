@@ -8,6 +8,7 @@ import { getConfig } from "../../config/index.js";
 import { createAxiomAgent } from "../../agent/index.js";
 import { INTERACTIVE_INGEST_PREFIX } from "../../agent/prompts.js";
 import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage } from "../../core/files.js";
+import { clipUrl } from "../../core/clip.js";
 import type { CoreMessage } from "../../agent/types.js";
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
 import { getIngestedFromLog } from "../../core/sources.js";
@@ -115,35 +116,65 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           .trim()
           .replace(/^["']|["']$/g, "") // remove surrounding " or '
           .replace(/\\(.)/g, "$1"); // unescape \<char> → <char>
-        const abs = path.resolve(cleaned);
-        if (!fs.existsSync(abs)) {
-          addResult(
-            cleaned,
-            [{ text: `✗ File not found: ${abs}`, color: "red" }],
-            [],
-            [],
-            null,
-            "error",
-          );
-          releaseLock(wikiDir);
-          setStep("done");
-          return;
+
+        // URL detection: clip first, then ingest the saved file
+        const isUrl = /^https?:\/\//i.test(cleaned);
+        if (isUrl) {
+          setCurrentFile(cleaned);
+          setLiveLines([{ text: "⠸ Clipping URL…", color: "yellow" }]);
+          setStep("running");
+          try {
+            const result = await clipUrl(cleaned, rawDir);
+            setCurrentFile(result.filename);
+            setLiveLines((prev) => [
+              ...prev,
+              { text: `✓ Saved: ${result.filename} (${(result.sizeBytes / 1024).toFixed(1)} KB)`, color: "green" },
+            ]);
+            filesToProcess = [result.filepath];
+          } catch (err) {
+            addResult(
+              cleaned,
+              [{ text: `✗ ${err instanceof Error ? err.message : String(err)}`, color: "red" }],
+              [],
+              [],
+              null,
+              "error",
+            );
+            releaseLock(wikiDir);
+            setStep("done");
+            return;
+          }
+        } else {
+          const abs = path.resolve(cleaned);
+          if (!fs.existsSync(abs)) {
+            addResult(
+              cleaned,
+              [{ text: `✗ File not found: ${abs}`, color: "red" }],
+              [],
+              [],
+              null,
+              "error",
+            );
+            releaseLock(wikiDir);
+            setStep("done");
+            return;
+          }
+          const ext = path.extname(abs).toLowerCase();
+          if (!SUPPORTED_EXTS.includes(ext)) {
+            addResult(
+              cleaned,
+              [{ text: `✗ Unsupported file type: ${ext}`, color: "red" }],
+              [],
+              [],
+              null,
+              "error",
+            );
+            releaseLock(wikiDir);
+            setStep("done");
+            return;
+          }
+          filesToProcess = [abs];
         }
-        const ext = path.extname(abs).toLowerCase();
-        if (!SUPPORTED_EXTS.includes(ext)) {
-          addResult(
-            cleaned,
-            [{ text: `✗ Unsupported file type: ${ext}`, color: "red" }],
-            [],
-            [],
-            null,
-            "error",
-          );
-          releaseLock(wikiDir);
-          setStep("done");
-          return;
-        }
-        filesToProcess = [abs];
       } else {
         // Incremental compilation: use SHA-256 hash-based change detection
         const ignorePatterns = loadIgnorePatterns(rawDir);

@@ -3,6 +3,10 @@ title: clip
 description: Clip a URL and save it to raw/ for ingest.
 ---
 
+:::tip
+You can also use `axiom-wiki ingest <url>` to clip and ingest a URL in one step.
+:::
+
 ```bash
 axiom-wiki clip [url]
 ```

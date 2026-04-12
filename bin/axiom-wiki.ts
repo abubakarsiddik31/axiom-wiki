@@ -24,8 +24,8 @@ program
   .action(() => renderApp({ name: 'init' }))
 
 program
-  .command('ingest [file]')
-  .description('Ingest a source file, or scan raw/ for new files')
+  .command('ingest [file-or-url]')
+  .description('Ingest a file or URL, or scan raw/ for new files')
   .option('--interactive', 'Enable interactive ingest mode')
   .action((file: string | undefined, opts: { interactive?: boolean }) => {
     requireConfig()

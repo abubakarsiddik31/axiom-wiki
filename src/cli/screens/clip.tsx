@@ -8,6 +8,7 @@ import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest } from '../../core/state.js'
+import { acquireLock, releaseLock } from '../../core/lock.js'
 
 interface Props {
   url?: string
@@ -68,6 +69,12 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
   useEffect(() => {
     if (step !== 'ingesting' || !clipResult || !config) return
     void (async () => {
+      // Acquire compilation lock
+      if (!acquireLock(config.wikiDir)) {
+        setIngest({ liveLines: [], changes: [], usage: null, done: true, error: 'Another ingest is running. Try again later.' })
+        return
+      }
+
       const agent = createAxiomAgent(config)
       const before = snapshotWiki(config.wikiDir)
       const lines: Array<{ text: string; color?: string }> = []
@@ -131,10 +138,12 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
         })
 
         const changes = diffWiki(before, config.wikiDir)
+        releaseLock(config.wikiDir)
         setIngest({ liveLines: lines, changes, usage: { inputTokens, outputTokens, costUsd }, done: true, error: null })
       } catch (err) {
         const friendly = contextLimitMessage(err)
         const changes = diffWiki(before, config.wikiDir)
+        releaseLock(config.wikiDir)
         setIngest({
           liveLines: lines,
           changes,

@@ -40,6 +40,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 ### Core/Wiki Layer (`src/core/`)
 - **`wiki.ts`** — Atomic wiki I/O: `readPage`, `writePage`, `listPages`, `updateIndex`, `appendLog`, `getStatus`. Pages are Markdown with YAML frontmatter parsed by `gray-matter`.
 - **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `.axiom/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
+- **`lock.ts`** — PID-based compilation lock (`.axiom/lock`). Prevents concurrent ingest/compile operations. Stale locks from dead processes are auto-reclaimed. Key functions: `acquireLock`, `releaseLock`, `getLockInfo`, `forceReleaseLock`.
 - **`files.ts`** — Normalizes source files into `SourceFile` objects. Supported: `.md`, `.txt`, `.pdf`, `.docx`, `.html`, `.png/.jpg/.jpeg/.webp`. PDF/images → base64; HTML → Markdown via `node-html-markdown`; DOCX → Markdown via `mammoth`.
 - **`search.ts`** — Full-text search over title, summary, tags, and content with ranked results.
 - **`sources.ts`** — Tracks ingested sources by parsing `wiki/log.md`.

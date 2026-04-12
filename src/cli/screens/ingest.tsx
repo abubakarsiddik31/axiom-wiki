@@ -14,6 +14,7 @@ import { getIngestedFromLog } from "../../core/sources.js";
 import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
 import { loadState, saveState, detectChanges, recordIngest, migrateFromLog, statePath } from "../../core/state.js";
+import { acquireLock, releaseLock, getLockInfo } from "../../core/lock.js";
 import ignore from "ignore";
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
 type Status = "running" | "done" | "error";
 type IngestStep =
   | "idle"
+  | "locked"
   | "reingest-confirm"
   | "interactive-reply"
   | "interactive-confirm"
@@ -71,6 +73,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   >([]);
   const [currentPages, setCurrentPages] = useState<string[]>([]);
   const [isReingest, setIsReingest] = useState(false);
+  const [lockMessage, setLockMessage] = useState("");
   const [spinnerTick, setSpinnerTick] = useState(0);
   const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -88,121 +91,141 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   async function startIngest() {
     if (!config) return;
-    const agent = createAxiomAgent(config);
     const { wikiDir, rawDir } = config;
-    const logPath = path.join(wikiDir, "wiki/log.md");
 
-    // Resolve file list
-    let filesToProcess: string[] = [];
-    if (file) {
-      // Strip surrounding quotes and unescape shell-escaped spaces/chars
-      const cleaned = file
-        .trim()
-        .replace(/^["']|["']$/g, "") // remove surrounding " or '
-        .replace(/\\(.)/g, "$1"); // unescape \<char> → <char>
-      const abs = path.resolve(cleaned);
-      if (!fs.existsSync(abs)) {
-        addResult(
-          cleaned,
-          [{ text: `✗ File not found: ${abs}`, color: "red" }],
-          [],
-          [],
-          null,
-          "error",
-        );
-        setStep("done");
-        return;
-      }
-      const ext = path.extname(abs).toLowerCase();
-      if (!SUPPORTED_EXTS.includes(ext)) {
-        addResult(
-          cleaned,
-          [{ text: `✗ Unsupported file type: ${ext}`, color: "red" }],
-          [],
-          [],
-          null,
-          "error",
-        );
-        setStep("done");
-        return;
-      }
-      filesToProcess = [abs];
-    } else {
-      // Incremental compilation: use SHA-256 hash-based change detection
-      const ignorePatterns = loadIgnorePatterns(rawDir);
-      const ig = ignore().add(ignorePatterns);
-
-      const allRaw = fs.existsSync(rawDir)
-        ? fs.readdirSync(rawDir).filter((f: string) => {
-            const ext = path.extname(f).toLowerCase();
-            if (!SUPPORTED_EXTS.includes(ext)) return false;
-            if (!fs.statSync(path.join(rawDir, f)).isFile()) return false;
-            if (ig.ignores(f)) return false;
-            return true;
-          })
-        : [];
-
-      // Load or migrate state for hash-based detection
-      const stateFile = statePath(wikiDir);
-      const state = fs.existsSync(stateFile)
-        ? loadState(wikiDir)
-        : migrateFromLog(wikiDir, rawDir);
-
-      const changes = detectChanges(rawDir, allRaw, state);
-      const toProcess = changes.filter((c) => c.kind !== "unchanged");
-      filesToProcess = toProcess.map((c) => c.filepath);
-
-      if (filesToProcess.length === 0) {
-        setStep("no-files");
-        return;
-      }
+    // Acquire compilation lock
+    if (!acquireLock(wikiDir)) {
+      const { info } = getLockInfo(wikiDir);
+      setLockMessage(
+        `Another ingest is running (PID ${info?.pid ?? '?'} since ${info?.acquiredAt ?? '?'})`
+      );
+      setStep("locked");
+      return;
     }
 
-    // Process files sequentially
-    for (const filepath of filesToProcess) {
-      const filename = path.basename(filepath);
-      setCurrentFile(filename);
-      setLiveLines([]);
-      setCurrentPages([]);
+    try {
+      const agent = createAxiomAgent(config);
+      const logPath = path.join(wikiDir, "wiki/log.md");
 
-      // Detect re-ingest: check the log file (authoritative source of truth)
-      const ingested = getIngestedFromLog(logPath);
-      const reingest = ingested.has(filename);
-      setIsReingest(reingest);
+      // Resolve file list
+      let filesToProcess: string[] = [];
+      if (file) {
+        // Strip surrounding quotes and unescape shell-escaped spaces/chars
+        const cleaned = file
+          .trim()
+          .replace(/^["']|["']$/g, "") // remove surrounding " or '
+          .replace(/\\(.)/g, "$1"); // unescape \<char> → <char>
+        const abs = path.resolve(cleaned);
+        if (!fs.existsSync(abs)) {
+          addResult(
+            cleaned,
+            [{ text: `✗ File not found: ${abs}`, color: "red" }],
+            [],
+            [],
+            null,
+            "error",
+          );
+          releaseLock(wikiDir);
+          setStep("done");
+          return;
+        }
+        const ext = path.extname(abs).toLowerCase();
+        if (!SUPPORTED_EXTS.includes(ext)) {
+          addResult(
+            cleaned,
+            [{ text: `✗ Unsupported file type: ${ext}`, color: "red" }],
+            [],
+            [],
+            null,
+            "error",
+          );
+          releaseLock(wikiDir);
+          setStep("done");
+          return;
+        }
+        filesToProcess = [abs];
+      } else {
+        // Incremental compilation: use SHA-256 hash-based change detection
+        const ignorePatterns = loadIgnorePatterns(rawDir);
+        const ig = ignore().add(ignorePatterns);
 
-      // If a specific file was passed and it's already ingested, ask the user
-      if (file && reingest) {
-        setStep("reingest-confirm");
-        return; // wait for user input — continueAfterReingestConfirm will resume
+        const allRaw = fs.existsSync(rawDir)
+          ? fs.readdirSync(rawDir).filter((f: string) => {
+              const ext = path.extname(f).toLowerCase();
+              if (!SUPPORTED_EXTS.includes(ext)) return false;
+              if (!fs.statSync(path.join(rawDir, f)).isFile()) return false;
+              if (ig.ignores(f)) return false;
+              return true;
+            })
+          : [];
+
+        // Load or migrate state for hash-based detection
+        const stateFile = statePath(wikiDir);
+        const state = fs.existsSync(stateFile)
+          ? loadState(wikiDir)
+          : migrateFromLog(wikiDir, rawDir);
+
+        const changes = detectChanges(rawDir, allRaw, state);
+        const toProcess = changes.filter((c) => c.kind !== "unchanged");
+        filesToProcess = toProcess.map((c) => c.filepath);
+
+        if (filesToProcess.length === 0) {
+          releaseLock(wikiDir);
+          setStep("no-files");
+          return;
+        }
       }
 
-      // Interactive mode: first pass — get topics
-      if (interactive) {
-        const firstMessage = await buildIngestMessage(filepath, reingest, "", config);
-        const interactiveMsg: CoreMessage = {
-          role: "user",
-          content:
-            typeof firstMessage.content === "string"
-              ? `${INTERACTIVE_INGEST_PREFIX}\n\n${firstMessage.content}`
-              : [
-                  { type: "text", text: INTERACTIVE_INGEST_PREFIX },
-                  ...(firstMessage.content as any[]),
-                ],
-        };
-        const firstResult = await agent.generate([interactiveMsg]);
-        setInteractivePrompt(firstResult.text);
-        setStep("interactive-reply");
-        // Pause here — useInput will call continueInteractive()
-        return;
+      // Process files sequentially
+      for (const filepath of filesToProcess) {
+        const filename = path.basename(filepath);
+        setCurrentFile(filename);
+        setLiveLines([]);
+        setCurrentPages([]);
+
+        // Detect re-ingest: check the log file (authoritative source of truth)
+        const ingested = getIngestedFromLog(logPath);
+        const reingest = ingested.has(filename);
+        setIsReingest(reingest);
+
+        // If a specific file was passed and it's already ingested, ask the user
+        if (file && reingest) {
+          setStep("reingest-confirm");
+          return; // lock released in continueAfterReingestConfirm or useInput "n" handler
+        }
+
+        // Interactive mode: first pass — get topics
+        if (interactive) {
+          const firstMessage = await buildIngestMessage(filepath, reingest, "", config);
+          const interactiveMsg: CoreMessage = {
+            role: "user",
+            content:
+              typeof firstMessage.content === "string"
+                ? `${INTERACTIVE_INGEST_PREFIX}\n\n${firstMessage.content}`
+                : [
+                    { type: "text", text: INTERACTIVE_INGEST_PREFIX },
+                    ...(firstMessage.content as any[]),
+                  ],
+          };
+          const firstResult = await agent.generate([interactiveMsg]);
+          setInteractivePrompt(firstResult.text);
+          setStep("interactive-reply");
+          return; // lock released in finaliseInteractive or useInput "n" handler
+        }
+
+        setStep("running");
+        const ok = await runIngest(agent, filepath, filename, reingest, "");
+        if (!ok) break;
       }
 
-      setStep("running");
-      const ok = await runIngest(agent, filepath, filename, reingest, "");
-      if (!ok) break;
+      releaseLock(wikiDir);
+      setCurrentFile(null);
+      setStep("done");
+    } catch {
+      releaseLock(wikiDir);
+      setCurrentFile(null);
+      setStep("done");
     }
-
-    setCurrentFile(null);
-    setStep("done");
   }
 
   async function continueAfterReingestConfirm() {
@@ -213,6 +236,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       : path.join(config.rawDir, currentFile);
     setStep("running");
     await runIngest(agent, filepath, currentFile, true, ""); // single file — no loop, stop regardless
+    releaseLock(config.wikiDir);
     setCurrentFile(null);
     setStep("done");
   }
@@ -269,6 +293,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         text: `✗ ${friendly ?? (err instanceof Error ? err.message : String(err))}`,
         color: "red",
       });
+      releaseLock(config.wikiDir);
       addResult(currentFile!, lines, [], [], null, "error");
       setCurrentFile(null);
       setStep("done");
@@ -294,6 +319,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       /* best effort */
     }
 
+    releaseLock(config.wikiDir);
     const changes = diffWiki(new Map(), config.wikiDir);
     addResult(currentFile, [], currentPages, changes, null, "done");
     setCurrentFile(null);
@@ -420,6 +446,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   useInput((input, key) => {
     if (key.escape) {
+      if (config) releaseLock(config.wikiDir);
       doExit();
       return;
     }
@@ -427,6 +454,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (input === "y" || input === "Y" || key.return)
         void continueAfterReingestConfirm();
       if (input === "n" || input === "N") {
+        if (config) releaseLock(config.wikiDir);
         setCurrentFile(null);
         setStep("done");
       }
@@ -435,11 +463,12 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (input === "y" || input === "Y" || key.return)
         void finaliseInteractive();
       if (input === "n" || input === "N") {
+        if (config) releaseLock(config.wikiDir);
         setCurrentFile(null);
         setStep("done");
       }
     }
-    if ((step === "done" || step === "no-files") && key.return) {
+    if ((step === "done" || step === "no-files" || step === "locked") && key.return) {
       doExit();
     }
   });
@@ -452,6 +481,24 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         <Text color="yellow">
           Not configured. Run <Text color="cyan">axiom-wiki init</Text> first.
         </Text>
+      </Box>
+    );
+  }
+
+  if (step === "locked") {
+    return (
+      <Box padding={1} flexDirection="column">
+        <Text color="red" bold>
+          ✗ Compilation locked
+        </Text>
+        <Box marginTop={1}>
+          <Text color="yellow">{lockMessage}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray" dimColor>
+            Press Enter to go back
+          </Text>
+        </Box>
       </Box>
     );
   }

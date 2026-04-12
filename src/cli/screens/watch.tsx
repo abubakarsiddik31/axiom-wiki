@@ -9,6 +9,7 @@ import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest, computeHash, statePath, migrateFromLog } from '../../core/state.js'
+import { acquireLock, releaseLock } from '../../core/lock.js'
 import type { FSWatcher } from 'chokidar'
 
 interface WatchLogEntry {
@@ -74,6 +75,9 @@ export function WatchScreen({ onExit }: Props) {
       async (filepath: string) => {
         const filename = path.basename(filepath)
 
+        // Acquire lock — skip if another process is ingesting
+        if (!acquireLock(wikiDir)) return
+
         // Skip unchanged files using SHA-256 hash-based detection
         const stateFile = statePath(wikiDir)
         const state = fs.existsSync(stateFile)
@@ -81,7 +85,10 @@ export function WatchScreen({ onExit }: Props) {
           : migrateFromLog(wikiDir, rawDir)
         const currentHash = computeHash(filepath)
         const prev = state.sources[filename]
-        if (prev && prev.sha256 === currentHash) return
+        if (prev && prev.sha256 === currentHash) {
+          releaseLock(wikiDir)
+          return
+        }
 
         upsertEntry(filename, { status: 'ingesting', time: nowTime() })
         const before = snapshotWiki(wikiDir)
@@ -128,6 +135,8 @@ export function WatchScreen({ onExit }: Props) {
             status: 'error',
             error: friendly ?? (err instanceof Error ? err.message : String(err)),
           })
+        } finally {
+          releaseLock(wikiDir)
         }
       },
       { ignore: patterns },

@@ -1,21 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
-import path from 'path'
 import { getConfig } from '../../config/index.js'
-import { createAxiomAgent } from '../../agent/index.js'
-import { calcCost, appendUsageLog } from '../../core/usage.js'
-import { withRetry } from '../../core/retry.js'
-import { updateIndex, appendLog } from '../../core/wiki.js'
+import { walkProject, findProjectRoot, type ProjectSnapshot } from '../../core/mapper.js'
 import {
-  walkProject, findProjectRoot, gatherFilesForPaths,
-  buildProjectSummary, buildCompactSummary, topLanguages,
-  type ProjectSnapshot,
-} from '../../core/mapper.js'
-import {
-  loadMapState, saveMapState, getGitHeadHash, getGitChangedFiles,
-  analyzeSync, groupChangedFilesByDir,
-  type MapState, type MapPageEntry, type SyncAnalysis,
+  loadMapState, getGitChangedFiles,
+  groupChangedFilesByDir, type MapState,
 } from '../../core/sync.js'
+import { runSync, type AutowikiBatchResult } from '../../core/autowiki.js'
 
 interface Props {
   onExit?: () => void
@@ -35,12 +26,6 @@ function formatDuration(ms: number): string {
   return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
-
 export function SyncScreen({ onExit }: Props) {
   const config = getConfig()!
   const mountedRef = useRef(true)
@@ -48,10 +33,8 @@ export function SyncScreen({ onExit }: Props) {
   const [screenState, setScreenState] = useState<SyncScreenState>('loading')
   const [mapState, setMapState] = useState<MapState | null>(null)
   const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null)
-  const [analysis, setAnalysis] = useState<SyncAnalysis | null>(null)
-  const [currentPageIdx, setCurrentPageIdx] = useState(0)
+  const [changedFiles, setChangedFiles] = useState<string[]>([])
   const [pagesUpdated, setPagesUpdated] = useState<string[]>([])
-  const [pagesFailed, setPagesFailed] = useState(0)
   const [totalCostUsd, setTotalCostUsd] = useState(0)
   const [totalInputTokens, setTotalInputTokens] = useState(0)
   const [totalOutputTokens, setTotalOutputTokens] = useState(0)
@@ -59,6 +42,7 @@ export function SyncScreen({ onExit }: Props) {
   const [spinnerTick, setSpinnerTick] = useState(0)
   const [log, setLog] = useState<string[]>([])
   const [upToDate, setUpToDate] = useState(false)
+  const [abortReason, setAbortReason] = useState('')
   const startTime = useRef(Date.now())
   const projectRoot = useRef(findProjectRoot())
 
@@ -93,29 +77,29 @@ export function SyncScreen({ onExit }: Props) {
     const run = async () => {
       try {
         const snap = await walkProject(projectRoot.current, (count) => {
-          if (mountedRef.current) setLog((prev) => {
-            const last = prev[prev.length - 1]
-            if (last?.startsWith('  Scanning')) return [...prev.slice(0, -1), `  Scanning... ${count} files`]
-            return [...prev, `  Scanning... ${count} files`]
-          })
+          if (mountedRef.current) {
+            setLog((prev) => {
+              const last = prev[prev.length - 1]
+              if (last?.startsWith('  Scanning')) return [...prev.slice(0, -1), `  Scanning... ${count} files`]
+              return [...prev, `  Scanning... ${count} files`]
+            })
+          }
         })
         if (!mountedRef.current) return
         setSnapshot(snap)
 
-        let changedFiles: string[]
+        let changed: string[]
         if (mapState.gitCommitHash) {
-          changedFiles = getGitChangedFiles(projectRoot.current, mapState.gitCommitHash)
-          setLog((prev) => [...prev, `  ${changedFiles.length} files changed since last sync`])
+          changed = getGitChangedFiles(projectRoot.current, mapState.gitCommitHash)
+          setLog((prev) => [...prev, `  ${changed.length} files changed since last sync`])
         } else {
-          changedFiles = snap.files.map((f) => f.relPath)
-          setLog((prev) => [...prev, `  No git history — treating all ${changedFiles.length} files as changed`])
+          changed = snap.files.map((f) => f.relPath)
+          setLog((prev) => [...prev, `  No git history — treating all ${changed.length} files as changed`])
         }
 
-        const result = analyzeSync(mapState, changedFiles, snap)
-        if (!mountedRef.current) return
-        setAnalysis(result)
+        setChangedFiles(changed)
 
-        if (result.affectedPages.length === 0 && result.uncoveredDirs.length === 0) {
+        if (changed.length === 0) {
           setUpToDate(true)
           setScreenState('done')
         } else {
@@ -131,142 +115,57 @@ export function SyncScreen({ onExit }: Props) {
     void run()
   }, [screenState, mapState])
 
-  // Execute: re-generate affected pages
+  // Execute sync
   useEffect(() => {
-    if (screenState !== 'executing' || !snapshot || !analysis || !mapState) return
+    if (screenState !== 'executing' || !snapshot || !mapState) return
 
     const run = async () => {
-      const agent = createAxiomAgent(config)
-      let runningCost = 0
-      let runningInputTokens = 0
-      let runningOutputTokens = 0
-      let failed = 0
-      const today = new Date().toISOString().slice(0, 10)
-      const pages = analysis.affectedPages
-
-      const compactSummary = buildCompactSummary(snapshot)
-      const allPagesListing = mapState.pages.map((p) =>
-        `- [[${p.category}/${p.slug}]] — ${p.title}`
-      ).join('\n')
-
-      for (let i = 0; i < pages.length; i++) {
-        if (!mountedRef.current) return
-
-        const page = pages[i]!
-        setCurrentPageIdx(i)
-        setLog((prev) => [...prev, `[${i + 1}/${pages.length}] Updating "${page.title}"...`])
-
-        const isOverview = page.paths.length === 0
-        let fileSection: string
-        if (isOverview) {
-          fileSection = `## Project Context\n${buildProjectSummary(snapshot)}`
-        } else {
-          const gathered = gatherFilesForPaths(snapshot, page.paths)
-          fileSection = gathered.length > 0
-            ? gathered.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
-            : '(no matching files found for the specified paths)'
-        }
-
-        const prompt = `Update the wiki page titled "${page.title}" for this codebase. The codebase has changed since this page was last written — regenerate it with current, accurate content.
-
-${!isOverview ? `## Project context\n${compactSummary}\n` : ''}Category: ${page.category}
-Description: ${page.description}
-Save path: wiki/pages/${page.category}/${page.slug}.md
-
-## All pages in this wiki (for cross-references)
-${allPagesListing}
-
-${fileSection}
-
-Use the write_page tool to save the page at path "wiki/pages/${page.category}/${page.slug}.md".
-
-Include YAML frontmatter:
----
-title: "${page.title}"
-summary: "<one-sentence description>"
-tags: [<relevant tags>]
-category: ${page.category}
-updatedAt: "${today}"
----
-
-Write thorough, accurate content based on the actual code shown above. For cross-references to other wiki pages, use the [[category/slug]] syntax matching the paths listed above. Do not invent content that isn't supported by the code.`
-
-        try {
-          const stepFinish = (step: any) => {
-            try {
-              if (step?.toolResults?.length > 0) {
-                if (mountedRef.current) {
-                  setLog((prev) => [...prev, `  saved ${page.category}/${page.slug}.md`])
-                }
+      try {
+        const result = await runSync(
+          config,
+          projectRoot.current,
+          snapshot,
+          changedFiles,
+          mapState,
+          {
+            maxBatches: 3,
+            onBatchStart: (batch) => {
+              if (mountedRef.current) setLog((prev) => [...prev, `--- Batch ${batch} ---`])
+            },
+            onBatchEnd: (_batch, batchResult: AutowikiBatchResult) => {
+              if (!mountedRef.current) return
+              for (const p of batchResult.pagesWritten) {
+                setPagesUpdated((prev) => prev.includes(p) ? prev : [...prev, p])
               }
-            } catch { /* never crash the agent loop */ }
-          }
-          const result = await withRetry(() => agent.generate(
-            [{ role: 'user', content: prompt }],
-            { onStepFinish: stepFinish } as any,
-          ))
-          if (!mountedRef.current) return
-
-          const usage = (result as any).usage ?? null
-          const inputTokens = usage?.inputTokens ?? usage?.promptTokens ?? 0
-          const outputTokens = usage?.outputTokens ?? usage?.completionTokens ?? 0
-          const cost = calcCost(config.provider, config.model, inputTokens, outputTokens)
-
-          if (cost !== null) runningCost += cost
-          runningInputTokens += inputTokens
-          runningOutputTokens += outputTokens
-          setTotalCostUsd(runningCost)
-          setTotalInputTokens(runningInputTokens)
-          setTotalOutputTokens(runningOutputTokens)
-          setPagesUpdated((prev) => [...prev, `${page.category}/${page.slug}.md`])
-
-          try {
-            appendUsageLog(config.wikiDir, {
-              timestamp: new Date().toISOString(),
-              operation: 'sync',
-              source: page.slug,
-              provider: config.provider,
-              model: config.model,
-              inputTokens,
-              outputTokens,
-              costUsd: cost,
-            })
-          } catch { /* non-fatal */ }
-        } catch (err: unknown) {
-          failed++
-          if (mountedRef.current) {
-            setPagesFailed(failed)
-            setLog((prev) => [...prev, `  failed: ${err instanceof Error ? err.message : String(err)}`])
-          }
-        }
-      }
-
-      if (!mountedRef.current) return
-
-      // Update index, log, and map state
-      try {
-        await updateIndex(config.wikiDir)
-        setLog((prev) => [...prev, 'Index updated'])
-      } catch { /* non-fatal */ }
-
-      try {
-        await appendLog(
-          config.wikiDir,
-          `sync: updated ${pages.length - failed} pages`,
-          'sync',
+              if (batchResult.costUsd !== null) {
+                setTotalCostUsd((prev) => prev + batchResult.costUsd!)
+              }
+              setTotalInputTokens((prev) => prev + batchResult.inputTokens)
+              setTotalOutputTokens((prev) => prev + batchResult.outputTokens)
+            },
+            onToolCall: (toolName, args) => {
+              if (!mountedRef.current) return
+              const shortArgs = args.length > 80 ? args.slice(0, 80) + '...' : args
+              setLog((prev) => [...prev, `  ${toolName}(${shortArgs})`].slice(-30))
+            },
+            onLog: (msg) => {
+              if (mountedRef.current) setLog((prev) => [...prev, msg])
+            },
+          },
         )
-      } catch { /* non-fatal */ }
 
-      try {
-        const updatedState: MapState = {
-          ...mapState,
-          lastSyncAt: new Date().toISOString(),
-          gitCommitHash: getGitHeadHash(projectRoot.current),
-        }
-        saveMapState(config.wikiDir, updatedState)
-      } catch { /* non-fatal */ }
-
-      setScreenState('done')
+        if (!mountedRef.current) return
+        setTotalCostUsd(result.totalCostUsd)
+        setTotalInputTokens(result.totalInputTokens)
+        setTotalOutputTokens(result.totalOutputTokens)
+        setPagesUpdated(result.pagesWritten)
+        if (result.abortReason) setAbortReason(result.abortReason)
+        setScreenState('done')
+      } catch (err: unknown) {
+        if (!mountedRef.current) return
+        setErrorMessage(err instanceof Error ? err.message : String(err))
+        setScreenState('error')
+      }
     }
 
     void run()
@@ -312,60 +211,23 @@ Write thorough, accurate content based on the actual code shown above. For cross
     )
   }
 
-  if (screenState === 'confirming' && analysis) {
-    const changedDirs = groupChangedFilesByDir(analysis.changedFiles)
-    const estimatedCost = totalCostUsd > 0
-      ? totalCostUsd
-      : (analysis.affectedPages.length * 0.003)
+  if (screenState === 'confirming') {
+    const changedDirs = groupChangedFilesByDir(changedFiles)
 
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="green">Changes detected since last sync:</Text>
 
         <Box marginTop={1} flexDirection="column">
-          <Text color="gray">  {analysis.changedFiles.length} files changed:</Text>
+          <Text color="gray">  {changedFiles.length} files changed:</Text>
           {changedDirs.slice(0, 6).map((d, i) => (
             <Text key={i} color="gray">    {d.dir}/  {d.count} files</Text>
           ))}
         </Box>
 
         <Box marginTop={1} flexDirection="column">
-          <Text bold>Pages to update ({analysis.affectedPages.length} of {mapState!.pages.length}):</Text>
-          {analysis.affectedPages.map((p, i) => (
-            <Text key={i} color="gray">
-              {'  '}{i + 1}. <Text color="white">[{p.category}]</Text> {p.title}
-              {p.paths.length === 0 && <Text color="gray" dimColor> (always refreshed)</Text>}
-            </Text>
-          ))}
-        </Box>
-
-        {analysis.unchangedPages.length > 0 && (
-          <Box marginTop={1}>
-            <Text color="gray" dimColor>  Unchanged: {analysis.unchangedPages.map((p) => p.title).join(', ')}</Text>
-          </Box>
-        )}
-
-        {analysis.stalePages.length > 0 && (
-          <Box marginTop={1} flexDirection="column">
-            <Text color="yellow">  Stale pages (source paths removed):</Text>
-            {analysis.stalePages.map((p, i) => (
-              <Text key={i} color="yellow">    {p.title} ({p.paths.join(', ')})</Text>
-            ))}
-          </Box>
-        )}
-
-        {analysis.uncoveredDirs.length > 0 && (
-          <Box marginTop={1} flexDirection="column">
-            <Text color="cyan">  New directories not covered by any page:</Text>
-            {analysis.uncoveredDirs.map((d, i) => (
-              <Text key={i} color="cyan">    {d}/</Text>
-            ))}
-            <Text color="gray" dimColor>  Run /autowiki to add pages for these.</Text>
-          </Box>
-        )}
-
-        <Box marginTop={1}>
-          <Text color="gray">Estimated cost: <Text color="white">~{formatCost(estimatedCost)}</Text></Text>
+          <Text>The agent will read existing wiki pages and the changed code,</Text>
+          <Text>then update stale pages and create new ones as needed.</Text>
         </Box>
 
         <Box marginTop={1}>
@@ -376,13 +238,17 @@ Write thorough, accurate content based on the actual code shown above. For cross
   }
 
   if (screenState === 'executing') {
-    const total = analysis?.affectedPages.length ?? 0
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color="cyan">Updating wiki pages... <Text color="gray">({currentPageIdx + 1}/{total})</Text></Text>
+        <Text bold color="cyan">Syncing wiki... <Text color="gray">({pagesUpdated.length} pages updated)</Text></Text>
         <Box marginTop={1} flexDirection="column">
           {log.slice(-10).map((line, i) => (
-            <Text key={i} color={line.startsWith('  saved') ? 'green' : line.startsWith('  failed') ? 'yellow' : 'gray'}>
+            <Text key={i} color={
+              line.startsWith('---') ? 'cyan'
+              : line.startsWith('  write_page') ? 'green'
+              : line.startsWith('  error') ? 'red'
+              : 'gray'
+            } dimColor={!line.startsWith('---')}>
               {line}
             </Text>
           ))}
@@ -411,8 +277,8 @@ Write thorough, accurate content based on the actual code shown above. For cross
     const elapsed = Date.now() - startTime.current
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color={pagesFailed > 0 ? 'yellow' : 'green'}>
-          Sync complete{pagesFailed > 0 ? ` (${pagesFailed} failed)` : ''}
+        <Text bold color={abortReason ? 'yellow' : 'green'}>
+          Sync complete{abortReason ? ` (${abortReason})` : ''}
         </Text>
         <Box marginTop={1} flexDirection="column">
           <Text>{pagesUpdated.length} pages updated</Text>
@@ -422,7 +288,7 @@ Write thorough, accurate content based on the actual code shown above. For cross
         </Box>
         <Box marginTop={1} flexDirection="column">
           {pagesUpdated.map((p, i) => (
-            <Text key={i} color="gray">  {p}</Text>
+            <Text key={i} color="gray">  ~ {p}</Text>
           ))}
         </Box>
         <Box marginTop={1}>

@@ -1,11 +1,13 @@
 ---
-title: map
-description: Analyze a project codebase and generate wiki pages.
+title: autowiki
+description: Auto-generate wiki pages from a project codebase.
 ---
 
 ```bash
-axiom-wiki map
+axiom-wiki autowiki
 ```
+
+> `axiom-wiki map` still works as an alias.
 
 Analyzes the current project directory and generates structured wiki pages describing the architecture, modules, and tech stack.
 
@@ -29,8 +31,8 @@ Each page has proper YAML frontmatter, cross-references to other pages, and cont
 
 The planning call is cheap (tree + stats only). Execution cost depends on the number of pages and how much source code each page covers. The cost estimate is shown before execution.
 
-## Re-mapping
+## Re-running
 
-Running `map` again overwrites all existing map pages with fresh content. Use this when the project structure has changed significantly. For incremental updates, use [`sync`](/axiom-wiki/commands/sync/) instead.
+Running `autowiki` again overwrites all existing pages with fresh content. Use this when the project structure has changed significantly. For incremental updates, use [`sync`](/axiom-wiki/commands/sync/) instead.
 
 See the [Codebase Mapping guide](/axiom-wiki/guides/mapping/) for more details.

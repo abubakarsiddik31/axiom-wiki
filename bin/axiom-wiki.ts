@@ -114,8 +114,9 @@ program
   })
 
 program
-  .command('map')
-  .description('Analyze project folder and generate wiki map pages')
+  .command('autowiki')
+  .alias('map')
+  .description('Auto-generate wiki from a project folder')
   .action(() => {
     requireConfig()
     renderApp({ name: 'map' })

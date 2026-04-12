@@ -8,18 +8,18 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: 'ingest',   args: '[file]', desc: 'Ingest a source file into the wiki' },
-  { name: 'watch',                    desc: 'Watch raw/ and auto-ingest new files' },
-  { name: 'clip',     args: '[url]',  desc: 'Clip a URL and save it to raw/' },
-  { name: 'sources',                  desc: 'Browse and manage ingested sources' },
-  { name: 'review',                   desc: 'Review and resolve contradictions' },
-  { name: 'map',                      desc: 'Analyze project and generate wiki map pages' },
-  { name: 'sync',                     desc: 'Update wiki pages for codebase changes' },
-  { name: 'graph',                    desc: 'Visualize the wiki page graph' },
-  { name: 'status',                   desc: 'Show wiki statistics' },
-  { name: 'model',                    desc: 'Switch provider or model' },
-  { name: 'lint',                     desc: 'Wiki health check' },
-  { name: 'help',                     desc: 'Show all commands' },
+  { name: 'ingest',   args: '[file|url]', desc: 'Ingest a file, URL, or scan raw/' },
+  { name: 'autowiki',                     desc: 'Auto-generate wiki from a project folder' },
+  { name: 'sync',                         desc: 'Update wiki pages for codebase changes' },
+  { name: 'watch',                        desc: 'Watch raw/ and auto-ingest new files' },
+  { name: 'clip',     args: '[url]',      desc: 'Clip a URL to raw/ without ingesting' },
+  { name: 'sources',                      desc: 'Browse and manage ingested sources' },
+  { name: 'review',                       desc: 'Review and resolve contradictions' },
+  { name: 'graph',                        desc: 'Visualize the wiki page graph' },
+  { name: 'status',                       desc: 'Show wiki statistics' },
+  { name: 'model',                        desc: 'Switch provider or model' },
+  { name: 'lint',                         desc: 'Wiki health check' },
+  { name: 'help',                         desc: 'Show all commands' },
 ]
 
 interface Props {
@@ -63,11 +63,16 @@ export function filterCommands(input: string): SlashCommand[] {
   )
 }
 
+// Hidden aliases — old names that still work but don't appear in the menu
+const COMMAND_ALIASES: Record<string, string> = { map: 'autowiki' }
+
 /** Parse "/ingest notes.md" → { command: 'ingest', arg: 'notes.md' } */
 export function parseSlash(input: string): { command: string; arg: string } | null {
   if (!input.startsWith('/')) return null
   const [raw, ...rest] = input.slice(1).trim().split(/\s+/)
-  const command = raw?.toLowerCase() ?? ''
+  let command = raw?.toLowerCase() ?? ''
+  // Resolve aliases
+  if (COMMAND_ALIASES[command]) command = COMMAND_ALIASES[command]
   if (!SLASH_COMMANDS.find((c) => c.name === command)) return null
   return { command, arg: rest.join(' ') }
 }

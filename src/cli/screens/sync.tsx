@@ -77,7 +77,7 @@ export function SyncScreen({ onExit }: Props) {
     if (screenState !== 'loading') return
     const state = loadMapState(config.wikiDir)
     if (!state) {
-      setErrorMessage('No map state found. Run /map first to analyze the project.')
+      setErrorMessage('No map state found. Run /autowiki first to analyze the project.')
       setScreenState('error')
       return
     }
@@ -360,7 +360,7 @@ Write thorough, accurate content based on the actual code shown above. For cross
             {analysis.uncoveredDirs.map((d, i) => (
               <Text key={i} color="cyan">    {d}/</Text>
             ))}
-            <Text color="gray" dimColor>  Run /map to add pages for these.</Text>
+            <Text color="gray" dimColor>  Run /autowiki to add pages for these.</Text>
           </Box>
         )}
 

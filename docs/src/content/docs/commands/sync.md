@@ -7,11 +7,11 @@ description: Update wiki pages for recent codebase changes.
 axiom-wiki sync
 ```
 
-Detects what changed in the codebase since the last `map` or `sync`, and re-generates only the affected wiki pages.
+Detects what changed in the codebase since the last `autowiki` or `sync`, and re-generates only the affected wiki pages.
 
 ## Prerequisites
 
-Run [`map`](/axiom-wiki/commands/map/) first. Sync reads the map state (`.axiom/map-state.json`) to know which pages cover which source paths.
+Run [`autowiki`](/axiom-wiki/commands/map/) first. Sync reads the map state (`.axiom/map-state.json`) to know which pages cover which source paths.
 
 ## How it works
 

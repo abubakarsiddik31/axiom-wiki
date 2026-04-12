@@ -43,13 +43,13 @@ axiom-wiki ingest
 
 The agent reads the file, extracts entities and concepts, creates wiki pages, and updates the index — all automatically.
 
-## Map a codebase
+## Auto-wiki a codebase
 
 Inside a project directory:
 
 ```bash
-axiom-wiki init    # choose "Local"
-axiom-wiki map     # analyze the codebase
+axiom-wiki init       # choose "Local"
+axiom-wiki autowiki   # auto-generate wiki from codebase
 ```
 
 Later, after making code changes:

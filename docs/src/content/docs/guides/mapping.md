@@ -3,15 +3,15 @@ title: Codebase Mapping
 description: Automatically generate wiki pages from your project's source code.
 ---
 
-The `map` and `sync` commands turn any codebase into structured wiki documentation.
+The `autowiki` and `sync` commands turn any codebase into structured wiki documentation.
 
 ## Initial mapping
 
 ```bash
-axiom-wiki map
+axiom-wiki autowiki
 ```
 
-Map works in three phases:
+Autowiki works in three phases:
 
 ### 1. Walk
 
@@ -48,13 +48,13 @@ Pages are saved to `wiki/pages/` with proper frontmatter, cross-links, and accur
 
 ## Keeping pages current
 
-After the initial map, use sync to update only what changed:
+After the initial autowiki, use sync to update only what changed:
 
 ```bash
 axiom-wiki sync
 ```
 
-Sync uses `git diff` to detect changed files since the last map/sync, matches them to wiki pages, and re-generates only the affected pages. The overview page is always refreshed.
+Sync uses `git diff` to detect changed files since the last autowiki/sync, matches them to wiki pages, and re-generates only the affected pages. The overview page is always refreshed.
 
 ```
 Changes detected since last sync:
@@ -73,12 +73,12 @@ Changes detected since last sync:
 
 Sync also detects:
 - **Stale pages** — where all source directories have been removed
-- **New directories** — not covered by any existing page (run `/map` again to add them)
+- **New directories** — not covered by any existing page (run `/autowiki` again to add them)
 
-## Re-mapping
+## Re-running autowiki
 
-Running `map` again overwrites all existing pages with fresh content. Use this when the project structure has changed significantly.
+Running `autowiki` again overwrites all existing pages with fresh content. Use this when the project structure has changed significantly.
 
 ## How it works under the hood
 
-Map saves its state to `.axiom/map-state.json` — this tracks which pages cover which source paths and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.
+Autowiki saves its state to `.axiom/map-state.json` — this tracks which pages cover which source paths and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.

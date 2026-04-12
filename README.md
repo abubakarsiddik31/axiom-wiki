@@ -48,10 +48,10 @@ The setup wizard configures your LLM provider, wiki directory, and source folder
 axiom-wiki ingest
 ```
 
-Or map an entire codebase:
+Or auto-wiki an entire codebase:
 
 ```bash
-axiom-wiki map
+axiom-wiki autowiki
 ```
 
 Launch the interactive shell:
@@ -82,7 +82,7 @@ axiom-wiki                    Launch interactive shell
 axiom-wiki init               First-time setup wizard
 axiom-wiki ingest [file|url]  Ingest a file, URL, or scan raw/
 axiom-wiki query              Chat against your wiki
-axiom-wiki map                Analyze codebase and generate wiki pages
+axiom-wiki autowiki           Auto-generate wiki from a project folder
 axiom-wiki sync               Update wiki pages for codebase changes
 axiom-wiki watch              Auto-ingest new files in raw/
 axiom-wiki clip [url]         Clip a URL to raw/
@@ -102,7 +102,7 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 
 **Ingest documents** — Drop PDFs, markdown, images, DOCX, or HTML into `raw/`. The agent extracts entities, concepts, and creates cross-linked wiki pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/ingest/)
 
-**Map a codebase** — `axiom-wiki map` scans your project, plans wiki pages with one LLM call, then generates thorough documentation with cost estimates before execution. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
+**Auto-wiki a codebase** — `axiom-wiki autowiki` scans your project, plans wiki pages with one LLM call, then generates thorough documentation with cost estimates before execution. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
 
 **Incremental compilation** — Source files are tracked by SHA-256 hash. Re-running `axiom-wiki ingest` skips unchanged files and only processes new or modified sources — fast even on large wikis.
 

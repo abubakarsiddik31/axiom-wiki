@@ -136,7 +136,7 @@ export function HomeScreen() {
       if (parsed.command === 'sources') { setScreen({ name: 'sources' }); return }
       if (parsed.command === 'review')  { setScreen({ name: 'review' }); return }
       if (parsed.command === 'graph')   { setScreen({ name: 'graph' }); return }
-      if (parsed.command === 'map')     { setScreen({ name: 'map' }); return }
+      if (parsed.command === 'autowiki' || parsed.command === 'map') { setScreen({ name: 'map' }); return }
       if (parsed.command === 'sync')    { setScreen({ name: 'sync' }); return }
 
       if (parsed.command === 'ingest') {

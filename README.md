@@ -104,6 +104,8 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 
 **Map a codebase** — `axiom-wiki map` scans your project, plans wiki pages with one LLM call, then generates thorough documentation with cost estimates before execution. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
 
+**Incremental compilation** — Source files are tracked by SHA-256 hash. Re-running `axiom-wiki ingest` skips unchanged files and only processes new or modified sources — fast even on large wikis.
+
 **Incremental sync** — `axiom-wiki sync` uses `git diff` to detect changes and re-generates only affected pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
 
 **Local project wikis** — Scope a wiki to a single project inside `.axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
@@ -156,6 +158,7 @@ my-wiki/
     usage.log           Token usage and cost
   .axiom/
     config.json         Local config
+    state.json          Compilation state (source hashes)
     map-state.json      Map/sync state
 ```
 

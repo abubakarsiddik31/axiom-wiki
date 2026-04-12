@@ -7,6 +7,7 @@ import { clipUrl, type ClipResult } from '../../core/clip.js'
 import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
+import { loadState, saveState, recordIngest } from '../../core/state.js'
 
 interface Props {
   url?: string
@@ -101,6 +102,17 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
 
         await updateIndex(config.wikiDir)
         await appendLog(config.wikiDir, clipResult.filename, 'ingest')
+
+        // Record source state for incremental compilation
+        const pageRe = /wiki\/pages\/[\w/-]+\.md/g
+        const pagesFound: string[] = []
+        let pm: RegExpExecArray | null
+        while ((pm = pageRe.exec(result.text ?? '')) !== null) {
+          if (!pagesFound.includes(pm[0])) pagesFound.push(pm[0])
+        }
+        const state = loadState(config.wikiDir)
+        recordIngest(state, clipResult.filename, clipResult.filepath, pagesFound)
+        saveState(config.wikiDir, state)
 
         const usage = (result as any).usage ?? null
         const inputTokens: number = usage?.inputTokens ?? usage?.promptTokens ?? 0

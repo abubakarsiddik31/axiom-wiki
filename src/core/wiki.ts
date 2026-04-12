@@ -124,6 +124,11 @@ export async function scaffoldWiki(wikiDir: string): Promise<void> {
     fs.writeFileSync(axiomConfigPath, '{}')
   }
 
+  const stateJsonPath = path.join(wikiDir, '.axiom/state.json')
+  if (!fs.existsSync(stateJsonPath)) {
+    fs.writeFileSync(stateJsonPath, JSON.stringify({ version: 1, sources: {}, frozenSlugs: [] }, null, 2))
+  }
+
   const rawDir = path.join(wikiDir, 'raw')
   fs.mkdirSync(rawDir, { recursive: true })
   const axiomignorePath = path.join(rawDir, '.axiomignore')

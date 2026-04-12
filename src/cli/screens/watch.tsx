@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useInput, useApp } from 'ink'
 import path from 'path'
+import fs from 'fs'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { startWatcher, loadIgnorePatterns } from '../../core/watcher.js'
 import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
-import { getIngestedFromLog } from '../../core/sources.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
+import { loadState, saveState, recordIngest, computeHash, statePath, migrateFromLog } from '../../core/state.js'
 import type { FSWatcher } from 'chokidar'
 
 interface WatchLogEntry {
@@ -66,33 +67,48 @@ export function WatchScreen({ onExit }: Props) {
 
     const agent = createAxiomAgent(config)
     const patterns = loadIgnorePatterns(config.rawDir)
-    const logPath = path.join(config.wikiDir, 'wiki/log.md')
+    const { wikiDir, rawDir } = config
 
     const watcher = startWatcher(
-      config.rawDir,
+      rawDir,
       async (filepath: string) => {
         const filename = path.basename(filepath)
 
-        // Skip already-ingested files
-        const ingested = getIngestedFromLog(logPath)
-        if (ingested.has(filename)) return
+        // Skip unchanged files using SHA-256 hash-based detection
+        const stateFile = statePath(wikiDir)
+        const state = fs.existsSync(stateFile)
+          ? loadState(wikiDir)
+          : migrateFromLog(wikiDir, rawDir)
+        const currentHash = computeHash(filepath)
+        const prev = state.sources[filename]
+        if (prev && prev.sha256 === currentHash) return
 
         upsertEntry(filename, { status: 'ingesting', time: nowTime() })
-        const before = snapshotWiki(config.wikiDir)
+        const before = snapshotWiki(wikiDir)
 
         try {
-          const message = await buildIngestMessage(filepath, false, '', config)
+          const message = await buildIngestMessage(filepath, !!prev, '', config)
           const result = await agent.generate([message])
 
-          await updateIndex(config.wikiDir)
-          await appendLog(config.wikiDir, filename, 'ingest')
+          await updateIndex(wikiDir)
+          await appendLog(wikiDir, filename, 'ingest')
+
+          // Record source state for incremental compilation
+          const re = /wiki\/pages\/[\w/-]+\.md/g
+          const pagesFound: string[] = []
+          let m: RegExpExecArray | null
+          while ((m = re.exec(result.text ?? '')) !== null) {
+            if (!pagesFound.includes(m[0])) pagesFound.push(m[0])
+          }
+          recordIngest(state, filename, filepath, pagesFound)
+          saveState(wikiDir, state)
 
           const usage = (result as any).usage ?? null
           const inputTokens: number = usage?.inputTokens ?? usage?.promptTokens ?? 0
           const outputTokens: number = usage?.outputTokens ?? usage?.completionTokens ?? 0
           const costUsd = calcCost(config.provider, config.model, inputTokens, outputTokens)
 
-          appendUsageLog(config.wikiDir, {
+          appendUsageLog(wikiDir, {
             timestamp: new Date().toISOString(),
             operation: 'ingest',
             source: filename,
@@ -103,7 +119,7 @@ export function WatchScreen({ onExit }: Props) {
             costUsd,
           })
 
-          const changes = diffWiki(before, config.wikiDir)
+          const changes = diffWiki(before, wikiDir)
           const pageCount = changes.filter((c) => c.type === 'created').length || extractPageCount(result.text ?? '')
           upsertEntry(filename, { status: 'done', pageCount, costUsd })
         } catch (err) {

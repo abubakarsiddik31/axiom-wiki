@@ -13,6 +13,7 @@ import { updateIndex, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.
 import { getIngestedFromLog } from "../../core/sources.js";
 import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
+import { loadState, saveState, detectChanges, recordIngest, migrateFromLog, statePath } from "../../core/state.js";
 import ignore from "ignore";
 
 interface Props {
@@ -127,7 +128,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       }
       filesToProcess = [abs];
     } else {
-      const ingested = getIngestedFromLog(logPath);
+      // Incremental compilation: use SHA-256 hash-based change detection
       const ignorePatterns = loadIgnorePatterns(rawDir);
       const ig = ignore().add(ignorePatterns);
 
@@ -140,9 +141,16 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
             return true;
           })
         : [];
-      filesToProcess = allRaw
-        .filter((f: string) => !ingested.has(f))
-        .map((f: string) => path.join(rawDir, f));
+
+      // Load or migrate state for hash-based detection
+      const stateFile = statePath(wikiDir);
+      const state = fs.existsSync(stateFile)
+        ? loadState(wikiDir)
+        : migrateFromLog(wikiDir, rawDir);
+
+      const changes = detectChanges(rawDir, allRaw, state);
+      const toProcess = changes.filter((c) => c.kind !== "unchanged");
+      filesToProcess = toProcess.map((c) => c.filepath);
 
       if (filesToProcess.length === 0) {
         setStep("no-files");
@@ -274,6 +282,14 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     try {
       await updateIndex(config.wikiDir);
       await appendLog(config.wikiDir, currentFile, "ingest");
+
+      // Record source state for incremental compilation
+      const filepath = file
+        ? path.resolve(file)
+        : path.join(config.rawDir, currentFile);
+      const state = loadState(config.wikiDir);
+      recordIngest(state, currentFile, filepath, currentPages);
+      saveState(config.wikiDir, state);
     } catch {
       /* best effort */
     }
@@ -337,6 +353,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       // Always write index + log ourselves — don't rely on the agent
       await updateIndex(config.wikiDir);
       await appendLog(config.wikiDir, filename, "ingest");
+
+      // Record source state for incremental compilation
+      const state = loadState(config.wikiDir);
+      recordIngest(state, filename, filepath, pagesFound);
+      saveState(config.wikiDir, state);
 
       // Usage + cost
       const usage = (result as any).usage ?? null;

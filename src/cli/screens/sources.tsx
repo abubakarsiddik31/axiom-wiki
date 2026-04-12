@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput, useApp } from 'ink'
 import { getConfig } from '../../config/index.js'
 import { listSources, getSource, removeSource, markForReingest, type SourceRecord } from '../../core/sources.js'
+import { loadState, saveState } from '../../core/state.js'
 
 type View = 'list' | 'viewing' | 'confirm-delete' | 'confirm-reingest' | 'loading'
 
@@ -81,6 +82,12 @@ export function SourcesScreen({ onExit }: Props) {
     if (!src) return
     try {
       await removeSource(config.wikiDir, src.filename)
+
+      // Remove from compilation state
+      const state = loadState(config.wikiDir)
+      delete state.sources[src.filename]
+      saveState(config.wikiDir, state)
+
       const updated = await listSources(config.wikiDir)
       setSources(updated)
       setSelected((s) => Math.min(s, Math.max(0, updated.length - 1)))
@@ -98,6 +105,14 @@ export function SourcesScreen({ onExit }: Props) {
     const src = sources[selected]
     if (!src) return
     await markForReingest(config.wikiDir, src.filename)
+
+    // Clear hash from state so next ingest picks it up as "changed"
+    const state = loadState(config.wikiDir)
+    if (state.sources[src.filename]) {
+      state.sources[src.filename].sha256 = ''
+      saveState(config.wikiDir, state)
+    }
+
     setMessage({ text: `Marked ${src.filename} for re-ingest`, color: 'green' })
     setTimeout(() => setMessage(null), 3000)
     setView('list')

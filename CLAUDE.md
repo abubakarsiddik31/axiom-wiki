@@ -39,6 +39,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 ### Core/Wiki Layer (`src/core/`)
 - **`wiki.ts`** — Atomic wiki I/O: `readPage`, `writePage`, `listPages`, `updateIndex`, `appendLog`, `getStatus`. Pages are Markdown with YAML frontmatter parsed by `gray-matter`.
+- **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `.axiom/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
 - **`files.ts`** — Normalizes source files into `SourceFile` objects. Supported: `.md`, `.txt`, `.pdf`, `.docx`, `.html`, `.png/.jpg/.jpeg/.webp`. PDF/images → base64; HTML → Markdown via `node-html-markdown`; DOCX → Markdown via `mammoth`.
 - **`search.ts`** — Full-text search over title, summary, tags, and content with ranked results.
 - **`sources.ts`** — Tracks ingested sources by parsing `wiki/log.md`.
@@ -61,15 +62,18 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 <wikiDir>/
 ├── raw/                    ← Source files to ingest
 │   └── .axiomignore
-└── wiki/
-    ├── pages/
-    │   ├── entities/       ← People, places, orgs
-    │   ├── concepts/       ← Ideas, theories
-    │   ├── sources/        ← One summary per source
-    │   └── analyses/       ← Comparisons, answers
-    ├── index.md
-    ├── log.md              ← Append-only operation log
-    └── schema.md
+├── wiki/
+│   ├── pages/
+│   │   ├── entities/       ← People, places, orgs
+│   │   ├── concepts/       ← Ideas, theories
+│   │   ├── sources/        ← One summary per source
+│   │   └── analyses/       ← Comparisons, answers
+│   ├── index.md
+│   ├── log.md              ← Append-only operation log
+│   └── schema.md
+└── .axiom/
+    ├── config.json         ← Local project config
+    └── state.json          ← Compilation state (SHA-256 hashes, concept mappings)
 ```
 
 **Page frontmatter schema:**
@@ -85,3 +89,33 @@ updatedAt: "YYYY-MM-DD"
 ```
 
 **LLM providers:** Google Gemini (recommended, has free tier), OpenAI, Anthropic, Ollama (local/offline). Provider is resolved in `src/agent/index.ts` using the AI SDK (`@ai-sdk/google`, `@ai-sdk/openai`, `@ai-sdk/anthropic`).
+
+## State Tracking Checklist
+
+Any code change that creates, modifies, or removes wiki content must keep these systems in sync. Forgetting one causes subtle bugs (stale state, missing log entries, broken incremental compilation).
+
+**After every source ingest** (ingest, watch, clip):
+1. `updateIndex(wikiDir)` — rebuild `wiki/index.md` from all pages
+2. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
+3. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `.axiom/state.json` with SHA-256 hash and concept mappings
+
+**After source deletion** (sources screen → delete):
+1. `removeSource(wikiDir, filename)` — delete summary page
+2. `delete state.sources[filename]` + `saveState()` — remove from compilation state
+
+**After marking for re-ingest** (sources screen → reingest):
+1. `markForReingest(wikiDir, filename)` — append to log
+2. `state.sources[filename].sha256 = ''` + `saveState()` — clear hash so next ingest detects it as "changed"
+
+**Commands that must track state:**
+| Command | log.md | index.md | state.json | usage.log |
+|---------|--------|----------|------------|-----------|
+| `ingest` | yes | yes | yes | yes |
+| `watch` | yes | yes | yes | yes |
+| `clip` (with ingest) | yes | yes | yes | yes |
+| `sources` → delete | no | no | yes (remove) | no |
+| `sources` → reingest | yes | no | yes (clear hash) | no |
+| `query` | yes | no | no | yes |
+| `map` / `sync` | yes | yes | no (own state) | yes |
+
+**Both config scopes work identically** — state always lives at `{wikiDir}/.axiom/state.json` and `wikiDir` is always an absolute path regardless of local vs global config.

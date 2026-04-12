@@ -48,6 +48,10 @@ interface FileResult {
   status: Status;
 }
 
+function isUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s);
+}
+
 function extractPages(text: string): string[] {
   const pages: string[] = [];
   const re = /wiki\/pages\/[\w/-]+\.md/g;
@@ -262,7 +266,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   async function continueAfterReingestConfirm() {
     if (!config || !currentFile) return;
     const agent = createAxiomAgent(config);
-    const filepath = file
+    const filepath = file && !isUrl(file)
       ? path.resolve(file)
       : path.join(config.rawDir, currentFile);
     setStep("running");
@@ -275,7 +279,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   async function continueInteractive(userInput: string) {
     if (!config || !currentFile) return;
     const agent = createAxiomAgent(config);
-    const filepath = file
+    const filepath = file && !isUrl(file)
       ? path.resolve(file)
       : path.join(config.rawDir, currentFile);
 
@@ -340,7 +344,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       await appendLog(config.wikiDir, currentFile, "ingest");
 
       // Record source state for incremental compilation
-      const filepath = file
+      const filepath = file && !isUrl(file)
         ? path.resolve(file)
         : path.join(config.rawDir, currentFile);
       const state = loadState(config.wikiDir);

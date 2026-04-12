@@ -37,9 +37,13 @@ export function saveMapState(wikiDir: string, state: MapState): void {
 
 export function loadMapState(wikiDir: string): MapState | null {
   const filePath = path.join(wikiDir, MAP_STATE_FILENAME)
+  // Fallback for v0.1.x wikis that stored map-state under .axiom/
+  const legacyPath = path.join(wikiDir, '.axiom', MAP_STATE_FILENAME)
+  const resolvedPath = fs.existsSync(filePath) ? filePath
+    : fs.existsSync(legacyPath) ? legacyPath : filePath
   try {
-    if (!fs.existsSync(filePath)) return null
-    const raw = fs.readFileSync(filePath, 'utf-8')
+    if (!fs.existsSync(resolvedPath)) return null
+    const raw = fs.readFileSync(resolvedPath, 'utf-8')
     const parsed = JSON.parse(raw)
     if (parsed?.version !== 1 || !Array.isArray(parsed?.pages)) return null
     return parsed as MapState

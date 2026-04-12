@@ -38,11 +38,11 @@ my-notes.pdf
 
 ## Incremental compilation
 
-Each source file is tracked by SHA-256 hash in `.axiom/state.json`. When you run `axiom-wiki ingest` without a file argument, only new or modified sources are processed — unchanged files are skipped automatically. This makes re-running ingest fast even on large wikis.
+Each source file is tracked by SHA-256 hash in `state.json`. When you run `axiom-wiki ingest` without a file argument, only new or modified sources are processed — unchanged files are skipped automatically. This makes re-running ingest fast even on large wikis.
 
 ## Compilation lock
 
-A PID-based lock (`.axiom/lock`) prevents concurrent ingest operations. If another ingest is already running, you'll see a "Compilation locked" message. Stale locks from crashed processes are automatically reclaimed.
+A PID-based lock prevents concurrent ingest operations. If another ingest is already running, you'll see a "Compilation locked" message. Stale locks from crashed processes are automatically reclaimed.
 
 ## Re-ingest
 

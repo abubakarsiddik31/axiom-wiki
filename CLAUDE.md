@@ -41,8 +41,8 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 ### Core/Wiki Layer (`src/core/`)
 - **`wiki.ts`** — Atomic wiki I/O: `readPage`, `writePage`, `listPages`, `updateIndex`, `appendLog`, `getStatus`. Pages are Markdown with YAML frontmatter parsed by `gray-matter`.
-- **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `.axiom/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
-- **`lock.ts`** — PID-based compilation lock (`.axiom/lock`). Prevents concurrent ingest/compile operations. Stale locks from dead processes are auto-reclaimed. Key functions: `acquireLock`, `releaseLock`, `getLockInfo`, `forceReleaseLock`.
+- **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `{wikiDir}/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
+- **`lock.ts`** — PID-based compilation lock (`{wikiDir}/lock`). Prevents concurrent ingest/compile operations. Stale locks from dead processes are auto-reclaimed. Key functions: `acquireLock`, `releaseLock`, `getLockInfo`, `forceReleaseLock`.
 - **`files.ts`** — Normalizes source files into `SourceFile` objects. Supported: `.md`, `.txt`, `.pdf`, `.docx`, `.html`, `.png/.jpg/.jpeg/.webp`. PDF/images → base64; HTML → Markdown via `node-html-markdown`; DOCX → Markdown via `mammoth`.
 - **`search.ts`** — Full-text search over title, summary, tags, and content with ranked results.
 - **`sources.ts`** — Tracks ingested sources by parsing `wiki/log.md`.
@@ -102,7 +102,7 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 1. `acquireLock(wikiDir)` — acquire compilation lock before any writes
 2. `updateIndex(wikiDir)` — rebuild `wiki/index.md` from all pages
 3. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
-4. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `.axiom/state.json` with SHA-256 hash and concept mappings
+4. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `state.json` with SHA-256 hash and concept mappings
 5. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
 
 **After source deletion** (sources screen → delete):
@@ -128,6 +128,6 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 | `sources` → delete | no | no | no | yes (remove) | no |
 | `sources` → reingest | no | yes | no | yes (clear hash) | no |
 | `query` | no | yes | no | no | yes |
-| `map` / `sync` | no | yes | yes | no (own state) | yes |
+| `autowiki` / `sync` | no | yes | yes | no (own state) | yes |
 
-**Both config scopes work identically** — state always lives at `{wikiDir}/.axiom/state.json` and `wikiDir` is always an absolute path regardless of local vs global config.
+**Both config scopes work identically** — state files live directly in `{wikiDir}/` (`state.json`, `lock`, `map-state.json`). For local wikis `wikiDir = .axiom`, for global wikis it's the user-chosen directory.

@@ -144,8 +144,13 @@ See [Installation docs](https://abubakarsiddik31.github.io/axiom-wiki/getting-st
 
 ## Wiki Structure
 
+For local wikis (inside a project), everything lives in `.axiom/`:
+
 ```
-my-wiki/
+.axiom/
+  config.json           Local config
+  state.json            Compilation state (source hashes)
+  map-state.json        Autowiki/sync state
   raw/                  Source files (PDF, MD, DOCX, images, HTML)
   wiki/
     pages/
@@ -156,10 +161,6 @@ my-wiki/
     index.md            Page catalog
     log.md              Operation history
     usage.log           Token usage and cost
-  .axiom/
-    config.json         Local config
-    state.json          Compilation state (source hashes)
-    map-state.json      Map/sync state
 ```
 
 ---

@@ -22,7 +22,7 @@ export interface CompilationState {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const STATE_FILENAME = '.axiom/state.json'
+const STATE_FILENAME = 'state.json'
 
 const EMPTY_STATE: CompilationState = {
   version: 1,

@@ -5,27 +5,51 @@ description: Directory layout and page frontmatter schema.
 
 ## Directory layout
 
+### Local wiki (inside a project)
+
 ```
-my-wiki/
-  raw/                  # Drop your source files here (PDF, MD, DOCX, images, HTML)
-    .axiomignore        # Patterns to exclude from watch/ingest
-    assets/             # Images and attachments
+my-project/
+  .axiom/                 # Everything lives here
+    config.json           # Local config (provider, model, paths)
+    state.json            # Compilation state (SHA-256 hashes per source)
+    map-state.json        # Autowiki/sync state (pages, git hash)
+    raw/                  # Source files to ingest
+      .axiomignore
+      assets/
+    wiki/
+      pages/
+        entities/         # People, places, organisations
+        concepts/         # Ideas, topics, theories
+        sources/          # One summary per source file
+        analyses/         # Filed answers, comparisons
+      index.md            # Page catalog
+      log.md              # Operation history
+      usage.log           # Token usage and cost
+      schema.md           # Wiki conventions
+```
+
+### Global wiki (personal knowledge base)
+
+```
+~/my-wiki/
+  state.json              # Compilation state
+  map-state.json          # Autowiki/sync state
+  raw/                    # Source files to ingest
+    .axiomignore
+    assets/
   wiki/
     pages/
-      entities/         # People, places, organisations
-      concepts/         # Ideas, topics, theories
-      sources/          # One summary page per source file
-      analyses/         # Filed answers and comparisons
-    index.md            # Catalog of all pages (agent reads this first)
-    log.md              # Append-only operation history
-    usage.log           # Token usage and cost per operation
-    schema.md           # Wiki conventions
-  .axiom/
-    config.json         # Local config (provider, model, paths)
-    state.json          # Compilation state (SHA-256 hashes per source, concept mappings)
-    lock                # PID-based lock file (present only during active ingest)
-    map-state.json      # Map/sync state (pages, git hash)
+      entities/
+      concepts/
+      sources/
+      analyses/
+    index.md
+    log.md
+    usage.log
+    schema.md
 ```
+
+Global config lives in your OS config directory (`~/.config/axiom-wiki/` on macOS/Linux).
 
 ## Page frontmatter
 

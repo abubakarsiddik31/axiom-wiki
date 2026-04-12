@@ -98,7 +98,6 @@ export async function scaffoldWiki(wikiDir: string): Promise<void> {
     'wiki/pages/concepts',
     'wiki/pages/sources',
     'wiki/pages/analyses',
-    '.axiom',
   ]
   for (const dir of dirs) {
     fs.mkdirSync(path.join(wikiDir, dir), { recursive: true })
@@ -119,12 +118,7 @@ export async function scaffoldWiki(wikiDir: string): Promise<void> {
     fs.writeFileSync(schemaPath, SCHEMA_MD)
   }
 
-  const axiomConfigPath = path.join(wikiDir, '.axiom/config.json')
-  if (!fs.existsSync(axiomConfigPath)) {
-    fs.writeFileSync(axiomConfigPath, '{}')
-  }
-
-  const stateJsonPath = path.join(wikiDir, '.axiom/state.json')
+  const stateJsonPath = path.join(wikiDir, 'state.json')
   if (!fs.existsSync(stateJsonPath)) {
     fs.writeFileSync(stateJsonPath, JSON.stringify({ version: 1, sources: {}, frozenSlugs: [] }, null, 2))
   }

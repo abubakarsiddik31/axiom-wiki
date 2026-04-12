@@ -60,23 +60,24 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 **Module system:** ESM (`"module": "NodeNext"` in tsconfig). Use `.js` extensions in relative imports even for `.ts` source files.
 
-**Wiki directory structure:**
+**Wiki directory structure** (wikiDir = `.axiom` for local, user-chosen for global):
 ```
 <wikiDir>/
+├── config.json             ← Local project config (local scope only)
+├── state.json              ← Compilation state (SHA-256 hashes, concept mappings)
+├── map-state.json          ← Autowiki/sync state
+├── lock                    ← PID-based lock (transient, present during ingest)
 ├── raw/                    ← Source files to ingest
 │   └── .axiomignore
-├── wiki/
-│   ├── pages/
-│   │   ├── entities/       ← People, places, orgs
-│   │   ├── concepts/       ← Ideas, theories
-│   │   ├── sources/        ← One summary per source
-│   │   └── analyses/       ← Comparisons, answers
-│   ├── index.md
-│   ├── log.md              ← Append-only operation log
-│   └── schema.md
-└── .axiom/
-    ├── config.json         ← Local project config
-    └── state.json          ← Compilation state (SHA-256 hashes, concept mappings)
+└── wiki/
+    ├── pages/
+    │   ├── entities/       ← People, places, orgs
+    │   ├── concepts/       ← Ideas, theories
+    │   ├── sources/        ← One summary per source
+    │   └── analyses/       ← Comparisons, answers
+    ├── index.md
+    ├── log.md              ← Append-only operation log
+    └── schema.md
 ```
 
 **Page frontmatter schema:**

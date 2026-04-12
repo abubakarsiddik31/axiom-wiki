@@ -56,7 +56,7 @@ export function InitScreen() {
 
   useEffect(() => {
     if (scope === 'local') {
-      setWikiDir(path.join(process.cwd(), '.axiom/wiki'))
+      setWikiDir(path.join(process.cwd(), '.axiom'))
       setRawDir(path.join(process.cwd(), '.axiom/raw'))
     } else if (scope === 'global') {
       setWikiDir(path.join(os.homedir(), 'my-wiki'))

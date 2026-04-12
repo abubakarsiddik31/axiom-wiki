@@ -42,8 +42,8 @@ describe('state management', () => {
   // ── statePath ──────────────────────────────────────────────────────────
 
   describe('statePath', () => {
-    it('returns .axiom/state.json inside wikiDir', () => {
-      expect(statePath(wikiDir)).toBe(path.join(wikiDir, '.axiom/state.json'));
+    it('returns state.json inside wikiDir', () => {
+      expect(statePath(wikiDir)).toBe(path.join(wikiDir, 'state.json'));
     });
   });
 

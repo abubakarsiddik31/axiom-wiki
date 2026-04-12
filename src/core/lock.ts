@@ -10,7 +10,7 @@ export interface LockInfo {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const LOCK_FILENAME = '.axiom/lock'
+const LOCK_FILENAME = 'lock'
 
 // ── Core Functions ──────────────────────────────────────────────────────────
 

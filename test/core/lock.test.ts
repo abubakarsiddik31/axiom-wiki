@@ -34,7 +34,7 @@ describe('compilation lock', () => {
 
     it('creates lock file with PID', () => {
       acquireLock(wikiDir);
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       expect(fs.existsSync(lockFile)).toBe(true);
 
       const data = JSON.parse(fs.readFileSync(lockFile, 'utf-8'));
@@ -44,7 +44,7 @@ describe('compilation lock', () => {
 
     it('reclaims stale lock from dead process', () => {
       // Write a lock file with a PID that definitely doesn't exist
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, acquiredAt: '2024-01-01T00:00:00Z' }));
 
       expect(acquireLock(wikiDir)).toBe(true);
@@ -53,10 +53,10 @@ describe('compilation lock', () => {
       expect(data.pid).toBe(process.pid);
     });
 
-    it('creates .axiom directory if missing', () => {
+    it('creates lock in fresh directory', () => {
       const freshDir = makeTmpDir();
       expect(acquireLock(freshDir)).toBe(true);
-      expect(fs.existsSync(path.join(freshDir, '.axiom/lock'))).toBe(true);
+      expect(fs.existsSync(path.join(freshDir, 'lock'))).toBe(true);
       fs.rmSync(freshDir, { recursive: true, force: true });
     });
   });
@@ -66,7 +66,7 @@ describe('compilation lock', () => {
       acquireLock(wikiDir);
       releaseLock(wikiDir);
 
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       expect(fs.existsSync(lockFile)).toBe(false);
     });
 
@@ -75,7 +75,7 @@ describe('compilation lock', () => {
     });
 
     it('does not release lock held by another PID', () => {
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, acquiredAt: '2024-01-01' }));
 
       releaseLock(wikiDir);
@@ -102,7 +102,7 @@ describe('compilation lock', () => {
     });
 
     it('detects stale lock from dead PID', () => {
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, acquiredAt: '2024-01-01' }));
 
       const info = getLockInfo(wikiDir);
@@ -114,7 +114,7 @@ describe('compilation lock', () => {
 
   describe('forceReleaseLock', () => {
     it('removes any lock regardless of PID', () => {
-      const lockFile = path.join(wikiDir, '.axiom/lock');
+      const lockFile = path.join(wikiDir, 'lock');
       fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, acquiredAt: '2024-01-01' }));
 
       forceReleaseLock(wikiDir);

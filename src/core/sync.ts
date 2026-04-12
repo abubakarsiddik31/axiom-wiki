@@ -27,7 +27,7 @@ export interface SyncAnalysis {
   unchangedPages: MapPageEntry[]
 }
 
-const MAP_STATE_FILENAME = '.axiom/map-state.json'
+const MAP_STATE_FILENAME = 'map-state.json'
 
 export function saveMapState(wikiDir: string, state: MapState): void {
   const filePath = path.join(wikiDir, MAP_STATE_FILENAME)

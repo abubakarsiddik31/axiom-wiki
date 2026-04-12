@@ -10,6 +10,7 @@ import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest, computeHash, statePath, migrateFromLog } from '../../core/state.js'
 import { acquireLock, releaseLock } from '../../core/lock.js'
+import { withRetry } from '../../core/retry.js'
 import type { FSWatcher } from 'chokidar'
 
 interface WatchLogEntry {
@@ -95,7 +96,7 @@ export function WatchScreen({ onExit }: Props) {
 
         try {
           const message = await buildIngestMessage(filepath, !!prev, '', config)
-          const result = await agent.generate([message])
+          const result = await withRetry(() => agent.generate([message]))
 
           await updateIndex(wikiDir)
           await appendLog(wikiDir, filename, 'ingest')

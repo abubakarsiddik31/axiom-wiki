@@ -9,6 +9,7 @@ import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest } from '../../core/state.js'
 import { acquireLock, releaseLock } from '../../core/lock.js'
+import { withRetry } from '../../core/retry.js'
 
 interface Props {
   url?: string
@@ -86,26 +87,25 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
 
       try {
         const message = await buildIngestMessage(clipResult.filepath, false, '', config)
-        const result = await agent.generate([message], {
-          onStepFinish: (s: any) => {
-            try {
-              for (const call of s.toolCalls ?? []) {
-                const toolName = call.toolName ?? call.payload?.toolName ?? 'tool'
-                const args = JSON.stringify(call.args ?? call.payload?.args ?? {})
-                pushLine({
-                  text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? '…' : ''})`,
-                  color: 'yellow',
-                })
+        const stepFinish = (s: any) => {
+          try {
+            for (const call of s.toolCalls ?? []) {
+              const toolName = call.toolName ?? call.payload?.toolName ?? 'tool'
+              const args = JSON.stringify(call.args ?? call.payload?.args ?? {})
+              pushLine({
+                text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? '…' : ''})`,
+                color: 'yellow',
+              })
+            }
+            for (const res of s.toolResults ?? []) {
+              const r = res.result ?? res.payload?.result
+              if (r && typeof r === 'string' && r.length < 120) {
+                pushLine({ text: `  → ${r}`, color: 'gray' })
               }
-              for (const res of s.toolResults ?? []) {
-                const r = res.result ?? res.payload?.result
-                if (r && typeof r === 'string' && r.length < 120) {
-                  pushLine({ text: `  → ${r}`, color: 'gray' })
-                }
-              }
-            } catch { /* never crash the agent loop */ }
-          },
-        })
+            }
+          } catch { /* never crash the agent loop */ }
+        }
+        const result = await withRetry(() => agent.generate([message], { onStepFinish: stepFinish }))
 
         await updateIndex(config.wikiDir)
         await appendLog(config.wikiDir, clipResult.filename, 'ingest')

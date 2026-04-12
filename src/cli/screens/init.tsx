@@ -8,6 +8,7 @@ import fs from 'fs'
 import { execSync } from 'child_process'
 import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
+import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
 
@@ -125,7 +126,7 @@ export function InitScreen() {
             const filepath = path.join(expandedRaw, file)
             addLog(`  → ingesting ${file}`)
             try {
-              await agent.generate([{ role: 'user', content: `Ingest this source file into the wiki: ${filepath}` }])
+              await withRetry(() => agent.generate([{ role: 'user', content: `Ingest this source file into the wiki: ${filepath}` }]))
             } catch {
               addLog(`  ⚠ Failed to ingest ${file}`)
             }

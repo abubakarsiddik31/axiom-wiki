@@ -16,6 +16,7 @@ import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
 import { loadState, saveState, detectChanges, recordIngest, migrateFromLog, statePath } from "../../core/state.js";
 import { acquireLock, releaseLock, getLockInfo } from "../../core/lock.js";
+import { withRetry } from "../../core/retry.js";
 import ignore from "ignore";
 
 interface Props {
@@ -242,7 +243,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
                     ...(firstMessage.content as any[]),
                   ],
           };
-          const firstResult = await agent.generate([interactiveMsg]);
+          const firstResult = await withRetry(() => agent.generate([interactiveMsg]));
           setInteractivePrompt(firstResult.text);
           setStep("interactive-reply");
           return; // lock released in finaliseInteractive or useInput "n" handler
@@ -289,27 +290,26 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
     try {
       const message = await buildIngestMessage(filepath, isReingest, userInput, config);
-      const result = await agent.generate([message], {
-        onStepFinish: (step: any) => {
-          try {
-            for (const call of step.toolCalls ?? []) {
-              const toolName =
-                call.toolName ?? call.payload?.toolName ?? "tool";
-              const args = JSON.stringify(
-                call.args ?? call.payload?.args ?? {},
-              );
-              const entry = {
-                text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? "…" : ""})`,
-                color: "yellow" as string | undefined,
-              };
-              lines.push(entry);
-              setLiveLines((prev) => [...prev, entry].slice(-20));
-            }
-          } catch {
-            /* never crash the agent loop */
+      const stepFinish = (step: any) => {
+        try {
+          for (const call of step.toolCalls ?? []) {
+            const toolName =
+              call.toolName ?? call.payload?.toolName ?? "tool";
+            const args = JSON.stringify(
+              call.args ?? call.payload?.args ?? {},
+            );
+            const entry = {
+              text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? "…" : ""})`,
+              color: "yellow" as string | undefined,
+            };
+            lines.push(entry);
+            setLiveLines((prev) => [...prev, entry].slice(-20));
           }
-        },
-      });
+        } catch {
+          /* never crash the agent loop */
+        }
+      };
+      const result = await withRetry(() => agent.generate([message], { onStepFinish: stepFinish }));
 
       const pagesFound = extractPages(result.text ?? "");
       setCurrentPages(pagesFound);
@@ -374,38 +374,37 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
     try {
       const message = await buildIngestMessage(filepath, reingest, userContext, config);
-      const result = await agent.generate([message], {
-        onStepFinish: (step: any) => {
-          try {
-            for (const call of step.toolCalls ?? []) {
-              const toolName =
-                call.toolName ?? call.payload?.toolName ?? "tool";
-              const args = JSON.stringify(
-                call.args ?? call.payload?.args ?? {},
-              );
+      const stepFinish = (step: any) => {
+        try {
+          for (const call of step.toolCalls ?? []) {
+            const toolName =
+              call.toolName ?? call.payload?.toolName ?? "tool";
+            const args = JSON.stringify(
+              call.args ?? call.payload?.args ?? {},
+            );
+            const entry = {
+              text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? "…" : ""})`,
+              color: "yellow" as string | undefined,
+            };
+            lines.push(entry);
+            setLiveLines((prev) => [...prev, entry].slice(-20));
+          }
+          for (const res of step.toolResults ?? []) {
+            const r = res.result ?? res.payload?.result;
+            if (r && typeof r === "string" && r.length < 120) {
               const entry = {
-                text: `⚙ ${toolName}(${args.slice(0, 80)}${args.length > 80 ? "…" : ""})`,
-                color: "yellow" as string | undefined,
+                text: `  → ${r}`,
+                color: "gray" as string | undefined,
               };
               lines.push(entry);
               setLiveLines((prev) => [...prev, entry].slice(-20));
             }
-            for (const res of step.toolResults ?? []) {
-              const r = res.result ?? res.payload?.result;
-              if (r && typeof r === "string" && r.length < 120) {
-                const entry = {
-                  text: `  → ${r}`,
-                  color: "gray" as string | undefined,
-                };
-                lines.push(entry);
-                setLiveLines((prev) => [...prev, entry].slice(-20));
-              }
-            }
-          } catch {
-            /* never crash the agent loop */
           }
-        },
-      });
+        } catch {
+          /* never crash the agent loop */
+        }
+      };
+      const result = await withRetry(() => agent.generate([message], { onStepFinish: stepFinish }));
 
       // Extract pages from agent's final text
       const pagesFound = extractPages(result.text ?? "");

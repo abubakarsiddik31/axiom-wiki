@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { listPages, readPage, writePage } from '../../core/wiki.js'
+import { withRetry } from '../../core/retry.js'
 
 interface ContradictionPage {
   path: string
@@ -80,10 +81,10 @@ export function ReviewScreen({ onExit }: Props) {
     const content = await readPage(config.wikiDir, page.path)
 
     try {
-      const result = await agent.generate([{
+      const result = await withRetry(() => agent.generate([{
         role: 'user',
         content: `Review this contradiction on page "${page.path}" and recommend a resolution.\n\nPage content:\n${content.slice(0, 3000)}`,
-      }])
+      }]))
       setRecommendation(result.text)
     } catch (err) {
       setRecommendation(`Could not get recommendation: ${err instanceof Error ? err.message : String(err)}`)

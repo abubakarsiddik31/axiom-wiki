@@ -7,6 +7,7 @@ import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { updateIndex, appendLog } from '../../core/wiki.js'
 import { walkProject, findProjectRoot, gatherFilesForPaths, buildProjectSummary, buildCompactSummary, topLanguages, type ProjectSnapshot } from '../../core/mapper.js'
 import { saveMapState, getGitHeadHash, type MapState } from '../../core/sync.js'
+import { withRetry } from '../../core/retry.js'
 
 interface Props {
   onExit?: () => void
@@ -166,7 +167,7 @@ Rules:
 Output the JSON array now:`
 
       try {
-        const result = await agent.generate([{ role: 'user', content: prompt }])
+        const result = await withRetry(() => agent.generate([{ role: 'user', content: prompt }]))
         if (!mountedRef.current) return
 
         const usage = (result as any).usage ?? null
@@ -254,20 +255,19 @@ updatedAt: "${today}"
 Write thorough, accurate content based on the actual code shown above. For cross-references to other wiki pages, use the [[category/slug]] syntax matching the paths listed above. Do not invent content that isn't supported by the code.`
 
         try {
-          const result = await agent.generate(
+          const stepFinish = (step: any) => {
+            try {
+              if (step?.toolResults?.length > 0) {
+                if (mountedRef.current) {
+                  setLog((prev) => [...prev, `  saved ${page.category}/${slug}.md`])
+                }
+              }
+            } catch { /* never crash the agent loop */ }
+          }
+          const result = await withRetry(() => agent.generate(
             [{ role: 'user', content: prompt }],
-            {
-              onStepFinish: (step: any) => {
-                try {
-                  if (step?.toolResults?.length > 0) {
-                    if (mountedRef.current) {
-                      setLog((prev) => [...prev, `  saved ${page.category}/${slug}.md`])
-                    }
-                  }
-                } catch { /* never crash the agent loop */ }
-              },
-            } as any,
-          )
+            { onStepFinish: stepFinish } as any,
+          ))
           if (!mountedRef.current) return
 
           const usage = (result as any).usage ?? null

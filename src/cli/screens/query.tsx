@@ -5,6 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
+import { withRetry } from '../../core/retry.js'
 import { writePage, appendLog, listPages } from '../../core/wiki.js'
 
 type QueryState = 'idle' | 'thinking' | 'filing_prompt' | 'filing_title' | 'filing'
@@ -95,7 +96,7 @@ export function QueryScreen({ onExit, prefill }: Props) {
     contextMessages.push({ role: 'user', content: q })
 
     try {
-      const stream = await agent.stream(contextMessages)
+      const stream = await withRetry(() => agent.stream(contextMessages))
       let fullAnswer = ''
 
       for await (const chunk of stream.textStream) {

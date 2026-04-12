@@ -48,7 +48,7 @@ The setup wizard configures your LLM provider, wiki directory, and source folder
 axiom-wiki ingest
 ```
 
-Or auto-wiki an entire codebase:
+Or auto-wiki a project folder:
 
 ```bash
 axiom-wiki autowiki
@@ -82,8 +82,8 @@ axiom-wiki                    Launch interactive shell
 axiom-wiki init               First-time setup wizard
 axiom-wiki ingest [file|url]  Ingest a file, URL, or scan raw/
 axiom-wiki query              Chat against your wiki
-axiom-wiki autowiki           Auto-generate wiki from a project folder
-axiom-wiki sync               Update wiki pages for codebase changes
+axiom-wiki autowiki           Agent explores and builds a wiki
+axiom-wiki sync               Agent updates stale wiki pages
 axiom-wiki watch              Auto-ingest new files in raw/
 axiom-wiki clip [url]         Clip a URL to raw/
 axiom-wiki sources            Manage ingested sources
@@ -102,11 +102,11 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 
 **Ingest documents** — Drop PDFs, markdown, images, DOCX, or HTML into `raw/`. The agent extracts entities, concepts, and creates cross-linked wiki pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/ingest/)
 
-**Auto-wiki a codebase** — `axiom-wiki autowiki` scans your project, plans wiki pages with one LLM call, then generates thorough documentation with cost estimates before execution. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
+**Auto-wiki anything** — `axiom-wiki autowiki` lets an AI agent autonomously explore your project or document folder, decide what pages to create, and build a comprehensive wiki in batches. Works on codebases, company docs, personal notes — the agent adapts to the content. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
 
 **Incremental compilation** — Source files are tracked by SHA-256 hash. Re-running `axiom-wiki ingest` skips unchanged files and only processes new or modified sources — fast even on large wikis.
 
-**Incremental sync** — `axiom-wiki sync` uses `git diff` to detect changes and re-generates only affected pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
+**Incremental sync** — `axiom-wiki sync` detects changes and lets the agent update stale pages and document new areas. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
 
 **Local project wikis** — Scope a wiki to a single project inside `.axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 

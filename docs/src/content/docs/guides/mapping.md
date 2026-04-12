@@ -1,9 +1,9 @@
 ---
 title: Codebase Mapping
-description: Automatically generate wiki pages from your project's source code.
+description: Automatically generate wiki pages from your project's source code or document collection.
 ---
 
-The `autowiki` and `sync` commands turn any codebase into structured wiki documentation.
+The `autowiki` and `sync` commands turn any folder into structured wiki documentation — codebases, company docs, personal notes, or research papers.
 
 ## Initial mapping
 
@@ -13,48 +13,51 @@ axiom-wiki autowiki
 
 Autowiki works in three phases:
 
-### 1. Walk
+### 1. Scan
 
-Scans the filesystem without any LLM calls. Respects `.gitignore` and standard ignores (node_modules, dist, build, etc.). Builds a directory tree, collects file stats, and reads key files (README, package.json, config files).
+Walks the filesystem without any LLM calls. Respects `.gitignore` and standard ignores (node_modules, dist, build, etc.). Builds a directory tree and collects file stats.
 
-### 2. Plan
+### 2. Confirm
 
-One LLM call analyzes the tree and proposes 4-8 wiki pages:
+Shows project stats and a cost estimate before any LLM work begins:
 
 ```
-Analysis complete — here's the plan:
+Project scanned
 
-  Pages to create (6):
-    1. [analyses] Codebase Overview
-    2. [entities] Core Module            (src/core/)
-    3. [entities] CLI Layer              (src/cli/)
-    4. [entities] Agent Layer            (src/agent/)
-    5. [concepts] Configuration System   (src/config/)
-    6. [concepts] Tech Stack
+  234 files · 1.2MB · ~250,000 words
+  .ts (89), .tsx (42), .md (15), .json (8)
 
-  Planning: in=4821 out=312 cost=$0.0012
-  Estimated total: ~$0.021
+The agent will explore this codebase and build a wiki autonomously.
+It will survey the project structure, read key files, and create
+wiki pages in batches (up to 10 batches, max $5.00).
 
-  Press Enter to proceed · Ctrl+C to cancel
+Press Enter to proceed · Ctrl+C to cancel
 ```
 
-You see the cost estimate before anything is written. Ctrl+C cancels cleanly.
+### 3. Explore & Write
 
-### 3. Execute
+The agent autonomously explores the project using tools:
 
-One LLM call per page. Each page gets the relevant source files (truncated to fit context), a project summary for context, and the list of other pages for cross-references.
+- **`get_project_overview`** — see the directory tree, key files, language stats
+- **`read_project_file`** — read any file on demand
+- **`list_project_dir`** — list directory contents
+- **`search_project`** — grep across the project
 
-Pages are saved to `wiki/pages/` with proper frontmatter, cross-links, and accurate content based on the actual code.
+It reads files, decides what pages to create, writes them using wiki tools, and signals when it's done. Large projects are processed in multiple batches — each batch starts fresh, but the wiki carries state between them.
+
+The agent adapts to the content:
+- **Code folders** — documents architecture, modules, patterns, design decisions
+- **Document folders** — extracts entities, concepts, themes; creates synthesis pages
 
 ## Keeping pages current
 
-After the initial autowiki, use sync to update only what changed:
+After the initial autowiki, use sync to update what changed:
 
 ```bash
 axiom-wiki sync
 ```
 
-Sync uses `git diff` to detect changed files since the last autowiki/sync, matches them to wiki pages, and re-generates only the affected pages. The overview page is always refreshed.
+Sync detects changed files via `git diff` and lets the agent decide which wiki pages need updating:
 
 ```
 Changes detected since last sync:
@@ -63,22 +66,24 @@ Changes detected since last sync:
     src/core/    5 files
     src/cli/     6 files
 
-  Pages to update (3 of 6):
-    1. [entities] Core Module         (5 changed files)
-    2. [entities] CLI Layer           (6 changed files)
-    3. [analyses] Codebase Overview   (always refreshed)
+The agent will read existing wiki pages and the changed code,
+then update stale pages and create new ones as needed.
 
-  Unchanged: Agent Layer, Config System, Tech Stack
+Press Enter to proceed · Ctrl+C to cancel
 ```
 
-Sync also detects:
-- **Stale pages** — where all source directories have been removed
-- **New directories** — not covered by any existing page (run `/autowiki` again to add them)
+The agent reads existing pages, checks the changed files, and only rewrites what's actually stale.
 
 ## Re-running autowiki
 
-Running `autowiki` again overwrites all existing pages with fresh content. Use this when the project structure has changed significantly.
+Running `autowiki` again creates fresh pages from scratch. Use this when the project structure has changed significantly.
 
 ## How it works under the hood
 
-Autowiki saves its state to `.axiom/map-state.json` — this tracks which pages cover which source paths and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.
+Autowiki saves its state to `.axiom/map-state.json` — this tracks which pages were created and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.
+
+The agent runs in batches. Each batch is a fresh LLM call with a clean context window. Between batches, the wiki itself serves as the agent's memory — it reads `wiki/index.md` to see what it's already documented, then focuses on uncovered areas. This means:
+
+- A crash mid-batch doesn't lose work from previous batches
+- Cost is tracked per batch with a safety ceiling
+- Context doesn't degrade on large projects

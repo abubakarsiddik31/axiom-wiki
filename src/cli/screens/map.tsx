@@ -7,7 +7,8 @@ import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { updateIndex, appendLog } from '../../core/wiki.js'
 import { walkProject, findProjectRoot, gatherFilesForPaths, buildProjectSummary, buildCompactSummary, topLanguages, type ProjectSnapshot } from '../../core/mapper.js'
 import { saveMapState, getGitHeadHash, type MapState } from '../../core/sync.js'
-import { withRetry } from '../../core/retry.js'
+import { withRetry, classifyError, friendlyErrorMessage } from '../../core/retry.js'
+import { getContextWindow, estimateTokens } from '../../config/models.js'
 
 interface Props {
   onExit?: () => void
@@ -104,6 +105,8 @@ export function MapScreen({ onExit }: Props) {
   const [errorMessage, setErrorMessage] = useState('')
   const [spinnerTick, setSpinnerTick] = useState(0)
   const [log, setLog] = useState<string[]>([])
+  const [usedFallback, setUsedFallback] = useState(false)
+  const [failedPages, setFailedPages] = useState<Array<{ title: string; reason: string }>>([])
   const startTime = useRef(Date.now())
   const projectRoot = useRef(findProjectRoot())
 
@@ -180,7 +183,13 @@ Output the JSON array now:`
         setPlanCost(cost)
 
         const parsed = parsePlan(result.text ?? '')
-        setPlan(parsed && parsed.length > 0 ? parsed : fallbackPlan())
+        if (parsed && parsed.length > 0) {
+          setPlan(parsed)
+        } else {
+          setPlan(fallbackPlan())
+          setUsedFallback(true)
+          setLog((prev) => [...prev, 'LLM returned invalid plan JSON, using fallback plan'])
+        }
         setMapState('confirming')
       } catch (err: unknown) {
         if (!mountedRef.current) return
@@ -220,11 +229,22 @@ Output the JSON array now:`
         setLog((prev) => [...prev, `[${i + 1}/${plan.length}] Writing "${page.title}"...`])
 
         const isOverview = page.paths.length === 0
+
+        // Calculate available token budget for file content
+        const contextWindow = getContextWindow(config.provider, config.model)
+        const systemPromptTokens = 3000
+        const templateTokens = 500
+        const compactSummaryTokens = estimateTokens(compactSummary)
+        const listingTokens = estimateTokens(allPagesListing)
+        const responseReserve = 4000
+        const availableTokens = contextWindow - systemPromptTokens - templateTokens - compactSummaryTokens - listingTokens - responseReserve
+        const maxContentBytes = Math.max(4096, Math.floor(availableTokens * 3.5))
+
         let fileSection: string
         if (isOverview) {
           fileSection = `## Project Context\n${buildProjectSummary(snapshot)}`
         } else {
-          const gathered = gatherFilesForPaths(snapshot, page.paths)
+          const gathered = gatherFilesForPaths(snapshot, page.paths, maxContentBytes)
           fileSection = gathered.length > 0
             ? gathered.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
             : '(no matching files found for the specified paths)'
@@ -296,10 +316,69 @@ Write thorough, accurate content based on the actual code shown above. For cross
             })
           } catch { /* non-fatal */ }
         } catch (err: unknown) {
+          const errorClass = classifyError(err)
+
+          // Context limit: retry once with halved content budget
+          if (errorClass === 'context_limit' && !isOverview) {
+            try {
+              const halvedBytes = Math.max(2048, Math.floor(maxContentBytes / 2))
+              const gathered = gatherFilesForPaths(snapshot, page.paths, halvedBytes)
+              const reducedFileSection = gathered.length > 0
+                ? gathered.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
+                : '(no matching files found for the specified paths)'
+              const reducedPrompt = prompt.replace(fileSection, reducedFileSection)
+              setLog((prev) => [...prev, `  context limit — retrying with reduced content...`])
+              const stepFinish2 = (step: any) => {
+                try {
+                  if (step?.toolResults?.length > 0 && mountedRef.current) {
+                    setLog((prev) => [...prev, `  saved ${page.category}/${slug}.md`])
+                  }
+                } catch { /* never crash */ }
+              }
+              const retryResult = await withRetry(() => agent.generate(
+                [{ role: 'user', content: reducedPrompt }],
+                { onStepFinish: stepFinish2 } as any,
+              ))
+              if (!mountedRef.current) return
+
+              const retryUsage = (retryResult as any).usage ?? null
+              const retryIn = retryUsage?.inputTokens ?? retryUsage?.promptTokens ?? 0
+              const retryOut = retryUsage?.outputTokens ?? retryUsage?.completionTokens ?? 0
+              const retryCost = calcCost(config.provider, config.model, retryIn, retryOut)
+              if (retryCost !== null) runningCost += retryCost
+              runningInputTokens += retryIn
+              runningOutputTokens += retryOut
+              setTotalCostUsd(runningCost)
+              setTotalInputTokens(runningInputTokens)
+              setTotalOutputTokens(runningOutputTokens)
+              setPagesCreated((prev) => [...prev, `${page.category}/${slug}.md`])
+              // Skip the failure path below
+              continue
+            } catch {
+              // Retry also failed — fall through to failure handling
+            }
+          }
+
+          // Auth/billing: abort entire loop
+          if (errorClass === 'auth' || errorClass === 'billing') {
+            failed++
+            const reason = friendlyErrorMessage(errorClass)
+            if (mountedRef.current) {
+              setPagesFailed(failed)
+              setFailedPages((prev) => [...prev, { title: page.title, reason }])
+              setLog((prev) => [...prev, `  failed: ${reason}`, 'Aborting — fix your API key or billing to continue.'])
+            }
+            break
+          }
+
           failed++
+          const reason = errorClass !== 'unknown'
+            ? friendlyErrorMessage(errorClass)
+            : (err instanceof Error ? err.message : String(err))
           if (mountedRef.current) {
             setPagesFailed(failed)
-            setLog((prev) => [...prev, `  failed: ${err instanceof Error ? err.message : String(err)}`])
+            setFailedPages((prev) => [...prev, { title: page.title, reason }])
+            setLog((prev) => [...prev, `  failed: ${reason}`])
           }
         }
       }
@@ -398,6 +477,9 @@ Write thorough, accurate content based on the actual code shown above. For cross
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="green">Analysis complete — here's the plan:</Text>
+        {usedFallback && (
+          <Text color="yellow">⚠ LLM returned invalid plan — using fallback. Cancel and retry for a better plan.</Text>
+        )}
 
         <Box marginTop={1} flexDirection="column">
           <Text bold>Pages to create ({plan.length}):</Text>
@@ -456,9 +538,17 @@ Write thorough, accurate content based on the actual code shown above. For cross
         </Box>
         <Box marginTop={1} flexDirection="column">
           {pagesCreated.map((p, i) => (
-            <Text key={i} color="gray">  {p}</Text>
+            <Text key={i} color="green">  + {p}</Text>
+          ))}
+          {failedPages.map((p, i) => (
+            <Text key={`f-${i}`} color="red">  ✗ {p.title}: {p.reason}</Text>
           ))}
         </Box>
+        {failedPages.length > 0 && (
+          <Box marginTop={1}>
+            <Text color="yellow" dimColor>Run <Text color="cyan">axiom-wiki autowiki</Text> again to retry failed pages.</Text>
+          </Box>
+        )}
         <Box marginTop={1}>
           <Text color="gray">Start with: <Text color="cyan">axiom-wiki query "how does this codebase work?"</Text></Text>
         </Box>

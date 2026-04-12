@@ -3,6 +3,8 @@ import path from 'path'
 import { NodeHtmlMarkdown } from 'node-html-markdown'
 import mammoth from 'mammoth'
 import type { CoreMessage } from '../agent/types.js'
+import { classifyError, friendlyErrorMessage } from './retry.js'
+import { getContextWindow, estimateTokens, type ProviderId } from '../config/models.js'
 
 export interface SourceFile {
   content: string
@@ -14,6 +16,80 @@ export interface SourceFile {
 }
 
 export const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
+
+const MAX_FILE_SIZE_TEXT = 100 * 1024 * 1024    // 100 MB
+const MAX_FILE_SIZE_BINARY = 200 * 1024 * 1024  // 200 MB
+
+// Overhead budget (tokens): system prompt + tool definitions + response reserve
+const OVERHEAD_TOKENS = 8_000
+
+export class ConversionError extends Error {
+  constructor(public filename: string, public reason: string) {
+    super(`Conversion failed for ${filename}: ${reason}`)
+    this.name = 'ConversionError'
+  }
+}
+
+export interface FileSizeCheck {
+  ok: boolean
+  sizeBytes: number
+  sizeMB: string
+  warning?: string
+}
+
+export function checkFileSize(filepath: string): FileSizeCheck {
+  const sizeBytes = fs.statSync(filepath).size
+  const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1)
+  const ext = path.extname(filepath).toLowerCase()
+  const isBinary = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'].includes(ext)
+  const limit = isBinary ? MAX_FILE_SIZE_BINARY : MAX_FILE_SIZE_TEXT
+
+  if (sizeBytes > limit) {
+    return { ok: false, sizeBytes, sizeMB, warning: `File is ${sizeMB} MB, maximum is ${(limit / (1024 * 1024)).toFixed(0)} MB for ${isBinary ? 'binary' : 'text'} files.` }
+  }
+  if (sizeBytes > limit * 0.8) {
+    return { ok: true, sizeBytes, sizeMB, warning: `File is ${sizeMB} MB — close to the ${(limit / (1024 * 1024)).toFixed(0)} MB limit.` }
+  }
+  return { ok: true, sizeBytes, sizeMB }
+}
+
+export function estimateContentTokens(src: SourceFile, provider: string): number {
+  if (src.isBase64) {
+    // Google Files API uploads don't consume context tokens
+    if (provider === 'google') return 0
+    // Base64 expands ~1.37x, then tokenized at ~3.5 chars/token
+    return Math.ceil(src.sizeBytes * 1.37 / 3.5)
+  }
+  return estimateTokens(src.content)
+}
+
+export interface ContextBudgetCheck {
+  fits: boolean
+  estimatedTokens: number
+  contextWindow: number
+  message?: string
+}
+
+export function checkContextBudget(
+  src: SourceFile,
+  provider: ProviderId,
+  modelId: string,
+): ContextBudgetCheck {
+  const contextWindow = getContextWindow(provider, modelId)
+  const contentTokens = estimateContentTokens(src, provider)
+  const totalNeeded = contentTokens + OVERHEAD_TOKENS
+  const fits = totalNeeded < contextWindow * 0.95 // 5% safety margin
+
+  if (!fits) {
+    return {
+      fits: false,
+      estimatedTokens: contentTokens,
+      contextWindow,
+      message: `File is ~${(contentTokens / 1000).toFixed(0)}K tokens, model context is ${(contextWindow / 1000).toFixed(0)}K tokens. Try a model with a larger context window.`,
+    }
+  }
+  return { fits: true, estimatedTokens: contentTokens, contextWindow }
+}
 
 export async function readSourceFile(filepath: string): Promise<SourceFile> {
   if (!fs.existsSync(filepath)) {
@@ -30,12 +106,22 @@ export async function readSourceFile(filepath: string): Promise<SourceFile> {
     )
   }
 
+  // Pre-flight size check
+  const sizeCheck = checkFileSize(filepath)
+  if (!sizeCheck.ok) {
+    throw new Error(sizeCheck.warning!)
+  }
+
   if (ext === '.md' || ext === '.txt') {
     return { content: fs.readFileSync(filepath, 'utf-8'), mimeType: 'text/plain', isBase64: false, filename, extension: ext.slice(1), sizeBytes }
   }
 
   if (ext === '.pdf') {
-    return { content: fs.readFileSync(filepath).toString('base64'), mimeType: 'application/pdf', isBase64: true, filename, extension: 'pdf', sizeBytes }
+    try {
+      return { content: fs.readFileSync(filepath).toString('base64'), mimeType: 'application/pdf', isBase64: true, filename, extension: 'pdf', sizeBytes }
+    } catch (err) {
+      throw new ConversionError(filename, `PDF read failed: ${err instanceof Error ? err.message : String(err)}. File may be encrypted or corrupted.`)
+    }
   }
 
   if (ext === '.png' || ext === '.jpg' || ext === '.jpeg' || ext === '.webp') {
@@ -44,15 +130,24 @@ export async function readSourceFile(filepath: string): Promise<SourceFile> {
   }
 
   if (ext === '.html') {
-    const markdown = NodeHtmlMarkdown.translate(fs.readFileSync(filepath, 'utf-8'))
-    return { content: markdown, mimeType: 'text/plain', isBase64: false, filename, extension: 'html', sizeBytes }
+    try {
+      const markdown = NodeHtmlMarkdown.translate(fs.readFileSync(filepath, 'utf-8'))
+      return { content: markdown, mimeType: 'text/plain', isBase64: false, filename, extension: 'html', sizeBytes }
+    } catch (err) {
+      throw new ConversionError(filename, `HTML conversion failed: ${err instanceof Error ? err.message : String(err)}.`)
+    }
   }
 
   if (ext === '.docx') {
-    const mammothAny = mammoth as unknown as { convertToMarkdown: (opts: { path: string }) => Promise<{ value: string; messages: Array<{ message: string }> }> }
-    const result = await mammothAny.convertToMarkdown({ path: filepath })
-    for (const msg of result.messages) process.stderr.write(`[mammoth] ${msg.message}\n`)
-    return { content: result.value, mimeType: 'text/plain', isBase64: false, filename, extension: 'docx', sizeBytes }
+    try {
+      const mammothAny = mammoth as unknown as { convertToMarkdown: (opts: { path: string }) => Promise<{ value: string; messages: Array<{ message: string }> }> }
+      const result = await mammothAny.convertToMarkdown({ path: filepath })
+      for (const msg of result.messages) process.stderr.write(`[mammoth] ${msg.message}\n`)
+      return { content: result.value, mimeType: 'text/plain', isBase64: false, filename, extension: 'docx', sizeBytes }
+    } catch (err) {
+      if (err instanceof ConversionError) throw err
+      throw new ConversionError(filename, `DOCX conversion failed: ${err instanceof Error ? err.message : String(err)}. File may be corrupted or password-protected.`)
+    }
   }
 
   throw new Error(`Unsupported file type: ${ext}`)
@@ -153,11 +248,12 @@ export async function buildIngestMessage(
   }
 }
 
-/** Returns a friendly message if the error is a model context-limit rejection. */
+/** Returns a friendly message if the error is a known provider error class. */
 export function contextLimitMessage(err: unknown): string | null {
-  const msg = err instanceof Error ? err.message : String(err)
-  if (msg.includes('token count exceeds') || msg.includes('context length') || msg.includes('tokens allowed')) {
-    return 'File too large for model context window. Try a smaller file or switch to a model with a larger context limit.'
-  }
+  const errorClass = classifyError(err)
+  if (errorClass === 'context_limit') return friendlyErrorMessage('context_limit')
+  if (errorClass === 'auth') return friendlyErrorMessage('auth')
+  if (errorClass === 'billing') return friendlyErrorMessage('billing')
+  if (errorClass === 'not_found') return friendlyErrorMessage('not_found')
   return null
 }

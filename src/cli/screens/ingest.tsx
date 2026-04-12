@@ -7,7 +7,7 @@ import fs from "fs";
 import { getConfig } from "../../config/index.js";
 import { createAxiomAgent } from "../../agent/index.js";
 import { INTERACTIVE_INGEST_PREFIX } from "../../agent/prompts.js";
-import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage } from "../../core/files.js";
+import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage, checkFileSize, checkContextBudget, ConversionError } from "../../core/files.js";
 import { clipUrl } from "../../core/clip.js";
 import type { CoreMessage } from "../../agent/types.js";
 import { updateIndex, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
@@ -16,7 +16,7 @@ import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
 import { loadState, saveState, detectChanges, recordIngest, migrateFromLog, statePath } from "../../core/state.js";
 import { acquireLock, releaseLock, getLockInfo } from "../../core/lock.js";
-import { withRetry } from "../../core/retry.js";
+import { withRetry, classifyError, friendlyErrorMessage } from "../../core/retry.js";
 import ignore from "ignore";
 
 interface Props {
@@ -47,6 +47,7 @@ interface FileResult {
     costUsd: number | null;
   } | null;
   status: Status;
+  errorReason?: 'context_limit' | 'conversion' | 'auth' | 'billing' | 'network' | 'unknown';
 }
 
 function isUrl(s: string): boolean {
@@ -226,8 +227,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
         // If a specific file was passed and it's already ingested, ask the user
         if (file && reingest) {
+          releaseLock(wikiDir); // release while waiting for user input
           setStep("reingest-confirm");
-          return; // lock released in continueAfterReingestConfirm or useInput "n" handler
+          return;
         }
 
         // Interactive mode: first pass — get topics
@@ -244,14 +246,17 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
                   ],
           };
           const firstResult = await withRetry(() => agent.generate([interactiveMsg]));
+          releaseLock(wikiDir); // release while waiting for user input
           setInteractivePrompt(firstResult.text);
           setStep("interactive-reply");
-          return; // lock released in finaliseInteractive or useInput "n" handler
+          return;
         }
 
         setStep("running");
-        const ok = await runIngest(agent, filepath, filename, reingest, "");
-        if (!ok) break;
+        const errorReason = await runIngest(agent, filepath, filename, reingest, "");
+        // Abort entire batch on auth/billing (no point continuing)
+        if (errorReason === 'auth' || errorReason === 'billing') break;
+        // Other failures: continue to next file
       }
 
       releaseLock(wikiDir);
@@ -266,12 +271,19 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   async function continueAfterReingestConfirm() {
     if (!config || !currentFile) return;
+    // Reacquire lock after user confirmed
+    if (!acquireLock(config.wikiDir)) {
+      const { info } = getLockInfo(config.wikiDir);
+      setLockMessage(`Another ingest started while waiting (PID ${info?.pid ?? '?'})`);
+      setStep("locked");
+      return;
+    }
     const agent = createAxiomAgent(config);
     const filepath = file && !isUrl(file)
       ? path.resolve(file)
       : path.join(config.rawDir, currentFile);
     setStep("running");
-    await runIngest(agent, filepath, currentFile, true, ""); // single file — no loop, stop regardless
+    await runIngest(agent, filepath, currentFile, true, "");
     releaseLock(config.wikiDir);
     setCurrentFile(null);
     setStep("done");
@@ -279,6 +291,13 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   async function continueInteractive(userInput: string) {
     if (!config || !currentFile) return;
+    // Reacquire lock after user provided input
+    if (!acquireLock(config.wikiDir)) {
+      const { info } = getLockInfo(config.wikiDir);
+      setLockMessage(`Another ingest started while waiting (PID ${info?.pid ?? '?'})`);
+      setStep("locked");
+      return;
+    }
     const agent = createAxiomAgent(config);
     const filepath = file && !isUrl(file)
       ? path.resolve(file)
@@ -321,6 +340,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           .map((p) => `  · ${p}`)
           .join("\n")}`,
       );
+      releaseLock(config.wikiDir); // release while waiting for user confirm
       setStep("interactive-confirm");
     } catch (err: unknown) {
       const friendly = contextLimitMessage(err);
@@ -337,6 +357,14 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
 
   async function finaliseInteractive() {
     if (!config || !currentFile) return;
+
+    // Reacquire lock to finalise
+    if (!acquireLock(config.wikiDir)) {
+      const { info } = getLockInfo(config.wikiDir);
+      setLockMessage(`Another ingest started while waiting (PID ${info?.pid ?? '?'})`);
+      setStep("locked");
+      return;
+    }
 
     setStep("running");
     try {
@@ -367,10 +395,47 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     filename: string,
     reingest: boolean,
     userContext: string,
-  ): Promise<boolean> {
-    if (!config) return false;
+  ): Promise<FileResult['errorReason'] | undefined> {
+    if (!config) return 'unknown';
     const lines: Array<{ text: string; color?: string }> = [];
     const before = snapshotWiki(config.wikiDir);
+
+    // Pre-flight: file size check
+    try {
+      const sizeCheck = checkFileSize(filepath);
+      if (!sizeCheck.ok) {
+        lines.push({ text: `✗ ${sizeCheck.warning}`, color: "red" });
+        addResult(filename, lines, [], [], null, "error", 'context_limit');
+        return 'context_limit';
+      }
+      if (sizeCheck.warning) {
+        lines.push({ text: `⚠ ${sizeCheck.warning}`, color: "yellow" });
+        setLiveLines((prev) => [...prev, { text: `⚠ ${sizeCheck.warning}`, color: "yellow" }]);
+      }
+    } catch {
+      // stat failed — let buildIngestMessage handle it
+    }
+
+    // Pre-flight: context budget check (for text files we can estimate)
+    try {
+      const ext = filepath.split('.').pop()?.toLowerCase() ?? '';
+      if (['md', 'txt', 'html', 'docx'].includes(ext)) {
+        const sizeBytes = fs.statSync(filepath).size;
+        // Rough estimate for text files
+        const estimatedTokens = Math.ceil(sizeBytes / 3.5);
+        const { getContextWindow } = await import("../../config/models.js");
+        const contextWindow = getContextWindow(config.provider, config.model);
+        const overhead = 8_000;
+        if (estimatedTokens + overhead > contextWindow * 0.95) {
+          const msg = `File is ~${(estimatedTokens / 1000).toFixed(0)}K tokens, model context is ${(contextWindow / 1000).toFixed(0)}K. Try a model with a larger context window.`;
+          lines.push({ text: `✗ ${msg}`, color: "red" });
+          addResult(filename, lines, [], [], null, "error", 'context_limit');
+          return 'context_limit';
+        }
+      }
+    } catch {
+      // estimation failed — proceed and let LLM reject if needed
+    }
 
     try {
       const message = await buildIngestMessage(filepath, reingest, userContext, config);
@@ -451,16 +516,33 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         { inputTokens, outputTokens, costUsd },
         "done",
       );
-      return true;
+      return undefined; // success
     } catch (err: unknown) {
       const changes = diffWiki(before, config.wikiDir);
-      const friendly = contextLimitMessage(err);
-      lines.push({
-        text: `✗ ${friendly ?? (err instanceof Error ? err.message : String(err))}`,
-        color: "red",
-      });
-      addResult(filename, lines, [], changes, null, "error");
-      return false;
+      const errorClass = classifyError(err);
+
+      // Use friendly message for known error classes, raw message otherwise
+      let errorMsg: string;
+      if (err instanceof ConversionError) {
+        errorMsg = err.message;
+      } else if (errorClass !== 'unknown') {
+        errorMsg = friendlyErrorMessage(errorClass);
+      } else {
+        errorMsg = err instanceof Error ? err.message : String(err);
+      }
+
+      lines.push({ text: `✗ ${errorMsg}`, color: "red" });
+
+      const reason: FileResult['errorReason'] =
+        err instanceof ConversionError ? 'conversion'
+        : errorClass === 'context_limit' ? 'context_limit'
+        : errorClass === 'auth' ? 'auth'
+        : errorClass === 'billing' ? 'billing'
+        : errorClass === 'transient' ? 'network'
+        : 'unknown';
+
+      addResult(filename, lines, [], changes, null, "error", reason);
+      return reason;
     }
   }
 
@@ -471,10 +553,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     changes: FileResult["changes"],
     usage: FileResult["usage"],
     status: Status,
+    errorReason?: FileResult['errorReason'],
   ) {
     setResults((prev) => [
       ...prev,
-      { filename, lines, pagesCreated, changes, usage, status },
+      { filename, lines, pagesCreated, changes, usage, status, errorReason },
     ]);
   }
 
@@ -488,7 +571,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (input === "y" || input === "Y" || key.return)
         void continueAfterReingestConfirm();
       if (input === "n" || input === "N") {
-        if (config) releaseLock(config.wikiDir);
+        // Lock already released before entering user-input step
         setCurrentFile(null);
         setStep("done");
       }
@@ -497,7 +580,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       if (input === "y" || input === "Y" || key.return)
         void finaliseInteractive();
       if (input === "n" || input === "N") {
-        if (config) releaseLock(config.wikiDir);
+        // Lock already released before entering user-input step
         setCurrentFile(null);
         setStep("done");
       }
@@ -727,11 +810,31 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           {(() => {
             const succeeded = results.filter((r) => r.status === "done").length;
             const failed = results.filter((r) => r.status === "error").length;
+            const hasContextLimit = results.some((r) => r.errorReason === 'context_limit');
+            const hasConversion = results.some((r) => r.errorReason === 'conversion');
+            const hasAuth = results.some((r) => r.errorReason === 'auth' || r.errorReason === 'billing');
             return (
-              <Text color={failed > 0 ? "red" : "green"} bold>
-                {failed > 0 ? "✗" : "✓"} Ingest complete — {succeeded}{" "}
-                succeeded, {failed} failed
-              </Text>
+              <Box flexDirection="column">
+                <Text color={failed > 0 ? "red" : "green"} bold>
+                  {failed > 0 ? "✗" : "✓"} Ingest complete — {succeeded}{" "}
+                  succeeded, {failed} failed
+                </Text>
+                {hasContextLimit && (
+                  <Text color="yellow" dimColor>
+                    Tip: Try <Text color="cyan">axiom-wiki model</Text> to switch to a model with a larger context window.
+                  </Text>
+                )}
+                {hasConversion && (
+                  <Text color="yellow" dimColor>
+                    Tip: Some files failed to convert. Check if they are corrupted or password-protected.
+                  </Text>
+                )}
+                {hasAuth && (
+                  <Text color="yellow" dimColor>
+                    Tip: Check your API key with <Text color="cyan">axiom-wiki model</Text>.
+                  </Text>
+                )}
+              </Box>
             );
           })()}
           <Box marginTop={1}>

@@ -20,6 +20,7 @@ Run [`autowiki`](/axiom-wiki/commands/map/) first. Sync reads the map state (`.a
 3. The agent reads existing wiki pages and the changed files
 4. Updates pages that are stale, creates pages for new areas
 5. Only rewrites pages where content has actually changed
+6. Rebuilds the index and Map of Content (`moc.md`)
 
 The agent has the same tools as autowiki — it can read any project file, search code, and navigate the wiki to decide what needs updating.
 

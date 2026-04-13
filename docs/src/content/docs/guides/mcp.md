@@ -45,6 +45,7 @@ Or with npx (no global install required):
 | `get_status` | Wiki statistics |
 | `lint_wiki` | Health check data |
 | `update_index` | Rebuild the wiki index |
+| `update_moc` | Rebuild the tag-grouped Map of Content |
 | `append_log` | Add a log entry |
 | `list_sources` | All ingested sources with dates |
 | `get_source` | Read a source's wiki summary |

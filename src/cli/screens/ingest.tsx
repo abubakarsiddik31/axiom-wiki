@@ -10,11 +10,12 @@ import { INTERACTIVE_INGEST_PREFIX } from "../../agent/prompts.js";
 import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage, checkFileSize, checkContextBudget, ConversionError } from "../../core/files.js";
 import { clipUrl } from "../../core/clip.js";
 import type { CoreMessage } from "../../agent/types.js";
-import { updateIndex, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
+import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
 import { getIngestedFromLog } from "../../core/sources.js";
 import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
 import { loadState, saveState, detectChanges, recordIngest, migrateFromLog, statePath } from "../../core/state.js";
+import { buildRecompilationPlan } from "../../core/compiler.js";
 import { acquireLock, releaseLock, getLockInfo } from "../../core/lock.js";
 import { withRetry, classifyError, friendlyErrorMessage } from "../../core/retry.js";
 import ignore from "ignore";
@@ -86,6 +87,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   const [currentPages, setCurrentPages] = useState<string[]>([]);
   const [isReingest, setIsReingest] = useState(false);
   const [lockMessage, setLockMessage] = useState("");
+  const [planSummary, setPlanSummary] = useState<string | null>(null);
   const [spinnerTick, setSpinnerTick] = useState(0);
   const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -211,9 +213,15 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           : migrateFromLog(wikiDir, rawDir);
 
         const changes = detectChanges(rawDir, allRaw, state);
-        const toProcess = changes.filter((c) => c.kind !== "unchanged");
-        filesToProcess = toProcess.map((c) => c.filepath);
-        debug('file scan', { allRawCount: allRaw.length, allRaw, changesCount: changes.length, changes: changes.map(c => ({ file: c.filename, kind: c.kind })), toProcessCount: toProcess.length, filesToProcess });
+        const plan = buildRecompilationPlan(state, changes);
+        filesToProcess = [
+          ...plan.directSources.map((c) => c.filepath),
+          ...plan.additionalSources.map((f) => path.join(rawDir, f)),
+        ];
+        if (plan.affectedConcepts.length > 0) {
+          setPlanSummary(plan.summary);
+        }
+        debug('file scan', { allRawCount: allRaw.length, allRaw, changesCount: changes.length, changes: changes.map(c => ({ file: c.filename, kind: c.kind })), toProcessCount: plan.directSources.length, additionalSources: plan.additionalSources, filesToProcess });
 
         if (filesToProcess.length === 0) {
           releaseLock(wikiDir);
@@ -379,6 +387,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     setStep("running");
     try {
       await updateIndex(config.wikiDir);
+      await updateMOC(config.wikiDir);
       await appendLog(config.wikiDir, currentFile, "ingest");
 
       // Record source state for incremental compilation
@@ -488,8 +497,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       const pagesFound = extractPages(result.text ?? "");
       setCurrentPages(pagesFound);
 
-      // Always write index + log ourselves — don't rely on the agent
+      // Always write index + log + moc ourselves — don't rely on the agent
       await updateIndex(config.wikiDir);
+      await updateMOC(config.wikiDir);
       await appendLog(config.wikiDir, filename, "ingest");
 
       // Record source state for incremental compilation
@@ -663,6 +673,11 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         Axiom Wiki — Ingest
         {interactive ? <Text color="cyan"> [interactive]</Text> : null}
       </Text>
+
+      {/* Recompilation plan summary */}
+      {planSummary && (
+        <Text color="yellow" dimColor>{planSummary}</Text>
+      )}
 
       {/* Completed results */}
       {results.map((result, i) => (

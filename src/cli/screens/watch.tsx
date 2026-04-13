@@ -6,7 +6,7 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { startWatcher, loadIgnorePatterns } from '../../core/watcher.js'
 import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
-import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
+import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest, computeHash, statePath, migrateFromLog } from '../../core/state.js'
 import { acquireLock, releaseLock } from '../../core/lock.js'
@@ -99,6 +99,7 @@ export function WatchScreen({ onExit }: Props) {
           const result = await withRetry(() => agent.generate([message]))
 
           await updateIndex(wikiDir)
+          await updateMOC(wikiDir)
           await appendLog(wikiDir, filename, 'ingest')
 
           // Record source state for incremental compilation

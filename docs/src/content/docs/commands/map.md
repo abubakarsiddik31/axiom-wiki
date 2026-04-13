@@ -47,6 +47,8 @@ Pages are created in `wiki/pages/` with categories:
 
 Each page has YAML frontmatter, cross-references to other pages, and content based on the actual files.
 
+A `wiki/moc.md` (Map of Content) is also generated — a tag-grouped index that organizes all pages by their tags, complementing the category-based `index.md`.
+
 ## Re-running
 
 Running `autowiki` again overwrites existing pages with fresh content. Use this when the project has changed significantly. For incremental updates, use [`sync`](/axiom-wiki/commands/sync/) instead.

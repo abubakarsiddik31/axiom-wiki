@@ -101,9 +101,10 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 **After every source ingest** (ingest, watch, clip):
 1. `acquireLock(wikiDir)` — acquire compilation lock before any writes
 2. `updateIndex(wikiDir)` — rebuild `wiki/index.md` from all pages
-3. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
-4. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `state.json` with SHA-256 hash and concept mappings
-5. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
+3. `updateMOC(wikiDir)` — rebuild `wiki/moc.md` (tag-grouped Map of Content)
+4. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
+5. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `state.json` with SHA-256 hash and concept mappings
+6. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
 
 **After source deletion** (sources screen → delete):
 1. `removeSource(wikiDir, filename)` — delete summary page
@@ -120,14 +121,14 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 - The `ingest` screen has multiple async pause points (reingest-confirm, interactive-reply, interactive-confirm) where the lock stays held until the user responds — release on both "y" and "n" paths.
 
 **Commands that must track state:**
-| Command | lock | log.md | index.md | state.json | usage.log |
-|---------|------|--------|----------|------------|-----------|
-| `ingest` | yes | yes | yes | yes | yes |
-| `watch` | yes | yes | yes | yes | yes |
-| `clip` (with ingest) | yes | yes | yes | yes | yes |
-| `sources` → delete | no | no | no | yes (remove) | no |
-| `sources` → reingest | no | yes | no | yes (clear hash) | no |
-| `query` | no | yes | no | no | yes |
-| `autowiki` / `sync` | no | yes | yes | no (own state) | yes |
+| Command | lock | log.md | index.md | moc.md | state.json | usage.log |
+|---------|------|--------|----------|--------|------------|-----------|
+| `ingest` | yes | yes | yes | yes | yes | yes |
+| `watch` | yes | yes | yes | yes | yes | yes |
+| `clip` (with ingest) | yes | yes | yes | yes | yes | yes |
+| `sources` → delete | no | no | no | no | yes (remove) | no |
+| `sources` → reingest | no | yes | no | no | yes (clear hash) | no |
+| `query` | no | yes | no | no | no | yes |
+| `autowiki` / `sync` | no | yes | yes | yes | no (own state) | yes |
 
 **Both config scopes work identically** — state files live directly in `{wikiDir}/` (`state.json`, `lock`, `map-state.json`). For local wikis `wikiDir = .axiom`, for global wikis it's the user-chosen directory.

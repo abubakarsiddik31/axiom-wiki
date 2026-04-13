@@ -87,3 +87,5 @@ The agent runs in batches. Each batch is a fresh LLM call with a clean context w
 - A crash mid-batch doesn't lose work from previous batches
 - Cost is tracked per batch with a safety ceiling
 - Context doesn't degrade on large projects
+
+After all batches complete, Axiom rebuilds both `wiki/index.md` (category-grouped) and `wiki/moc.md` (tag-grouped Map of Content). The MOC provides an alternative navigation view — pages appear under every tag they have, making it easy to browse by topic rather than category.

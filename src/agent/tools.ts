@@ -166,6 +166,16 @@ export function createAxiomTools(config: AxiomConfig) {
     },
   })
 
+  const update_moc = createTool({
+    id: 'update_moc',
+    description: 'Rebuild wiki/moc.md — a tag-grouped Map of Content. Call after writing new pages.',
+    inputSchema: z.object({}),
+    execute: async () => {
+      await wiki.updateMOC(wikiDir)
+      return 'moc updated'
+    },
+  })
+
   const analyze_graph = createTool({
     id: 'analyze_graph',
     description:
@@ -197,6 +207,7 @@ export function createAxiomTools(config: AxiomConfig) {
     remove_source,
     get_contradictions,
     resolve_contradiction,
+    update_moc,
     analyze_graph,
   }
 }

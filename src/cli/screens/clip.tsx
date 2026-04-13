@@ -5,7 +5,7 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { clipUrl, type ClipResult } from '../../core/clip.js'
 import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
-import { updateIndex, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
+import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
 import { loadState, saveState, recordIngest } from '../../core/state.js'
 import { acquireLock, releaseLock } from '../../core/lock.js'
@@ -108,6 +108,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
         const result = await withRetry(() => agent.generate([message], { onStepFinish: stepFinish }))
 
         await updateIndex(config.wikiDir)
+        await updateMOC(config.wikiDir)
         await appendLog(config.wikiDir, clipResult.filename, 'ingest')
 
         // Record source state for incremental compilation

@@ -22,7 +22,8 @@ my-project/
         concepts/         # Ideas, topics, theories
         sources/          # One summary per source file
         analyses/         # Filed answers, comparisons
-      index.md            # Page catalog
+      index.md            # Page catalog (by category)
+      moc.md              # Map of Content (by tag)
       log.md              # Operation history
       usage.log           # Token usage and cost
       schema.md           # Wiki conventions
@@ -44,6 +45,7 @@ my-project/
       sources/
       analyses/
     index.md
+    moc.md
     log.md
     usage.log
     schema.md
@@ -83,6 +85,34 @@ Internal links use wiki-link syntax:
 [[entities/alan-turing]]
 [[concepts/turing-completeness]]
 ```
+
+## Source citations
+
+Wiki pages use paragraph-level citations to trace information back to source files:
+
+```
+Alan Turing was a British mathematician who made foundational contributions
+to computer science and artificial intelligence. ^[turing-biography.pdf]
+
+His work at Bletchley Park was instrumental in breaking the Enigma code. ^[turing-biography.pdf] ^[intelligence-trap.md]
+```
+
+Every factual paragraph cites the source file(s) it was derived from.
+
+## Map of Content (moc.md)
+
+The `moc.md` file is an auto-generated tag-grouped index. While `index.md` organizes pages by category, `moc.md` groups them by tag — each page appears under every tag it has:
+
+```markdown
+## machine-learning
+- [[pages/concepts/gradient-descent]] — Gradient Descent
+- [[pages/concepts/neural-networks]] — Neural Networks
+
+## history
+- [[pages/entities/alan-turing]] — Alan Turing
+```
+
+It is rebuilt automatically after every ingest, watch, clip, and autowiki operation.
 
 ## Index and log
 

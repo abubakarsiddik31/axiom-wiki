@@ -118,6 +118,11 @@ export async function scaffoldWiki(wikiDir: string): Promise<void> {
     fs.writeFileSync(schemaPath, SCHEMA_MD)
   }
 
+  const mocPath = path.join(wikiDir, 'wiki/moc.md')
+  if (!fs.existsSync(mocPath)) {
+    fs.writeFileSync(mocPath, '# Map of Content\n\n_Auto-generated tag index._\n')
+  }
+
   const stateJsonPath = path.join(wikiDir, 'state.json')
   if (!fs.existsSync(stateJsonPath)) {
     fs.writeFileSync(stateJsonPath, JSON.stringify({ version: 1, sources: {}, frozenSlugs: [] }, null, 2))
@@ -267,6 +272,43 @@ export async function updateIndex(wikiDir: string): Promise<void> {
   const pages = await listPages(wikiDir)
   const content = buildIndex(pages)
   await writePage(wikiDir, 'wiki/index.md', content)
+}
+
+export function buildMOC(pages: PageMeta[]): string {
+  const tagMap = new Map<string, PageMeta[]>()
+
+  for (const p of pages) {
+    for (const tag of p.tags) {
+      const list = tagMap.get(tag) ?? []
+      list.push(p)
+      tagMap.set(tag, list)
+    }
+  }
+
+  const lines: string[] = [`# Map of Content`, `_Last updated: ${today()}_`, '']
+
+  const sortedTags = [...tagMap.keys()].sort()
+  for (const tag of sortedTags) {
+    lines.push(`## ${tag}`)
+    const entries = tagMap.get(tag)!
+    for (const e of entries) {
+      const linkPath = e.path.replace(/^wiki\//, '').replace(/\.md$/, '')
+      lines.push(`- [[${linkPath}]] — ${e.title}`)
+    }
+    lines.push('')
+  }
+
+  if (sortedTags.length === 0) {
+    lines.push('_No tagged pages yet._', '')
+  }
+
+  return lines.join('\n')
+}
+
+export async function updateMOC(wikiDir: string): Promise<void> {
+  const pages = await listPages(wikiDir)
+  const content = buildMOC(pages)
+  await writePage(wikiDir, 'wiki/moc.md', content)
 }
 
 export async function appendLog(

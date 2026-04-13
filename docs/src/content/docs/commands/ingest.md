@@ -40,6 +40,20 @@ my-notes.pdf
 
 Each source file is tracked by SHA-256 hash in `state.json`. When you run `axiom-wiki ingest` without a file argument, only new or modified sources are processed — unchanged files are skipped automatically. This makes re-running ingest fast even on large wikis.
 
+## Semantic dependency tracking
+
+When a source changes, Axiom checks if it shares wiki pages (concepts, entities) with other sources. If it does, those shared pages are flagged for recompilation — and the unchanged sources that contributed to them are pulled back in so the agent can reconcile all information.
+
+For example, if `paper-a.pdf` and `paper-b.pdf` both contributed to the "gradient descent" concept page and `paper-a.pdf` is modified, Axiom will re-process both sources for that shared concept. The terminal shows a summary:
+
+```
+3 sources changed, 5 shared concepts need recompilation, pulling in 2 additional sources
+```
+
+## Source citations
+
+Generated wiki pages include paragraph-level source citations using the `^[filename]` format. Each factual paragraph cites the source file(s) it was derived from, making it easy to trace claims back to their origin.
+
 ## Compilation lock
 
 A PID-based lock prevents concurrent ingest operations. If another ingest is already running, you'll see a "Compilation locked" message. Stale locks from crashed processes are automatically reclaimed.

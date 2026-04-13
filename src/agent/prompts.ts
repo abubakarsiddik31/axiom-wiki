@@ -69,6 +69,17 @@ updatedAt: "2026-04-10"
 
 ---
 
+## Citation Style
+
+When writing wiki page content, append inline source citations at the end of each paragraph:
+- Single source: \`^[source-filename.ext]\`
+- Multiple sources: \`^[source-a.pdf] ^[source-b.md]\`
+- Place citations after the final period, before the blank line between paragraphs.
+- Every factual paragraph must cite at least one source.
+- Do not cite sources in the frontmatter — only in body text.
+
+---
+
 ## Ingestion Behavior
 
 When ingesting a source file, you MUST follow this sequence exactly:
@@ -86,7 +97,7 @@ When ingesting a source file, you MUST follow this sequence exactly:
    \`\`\`
    > ⚠️ Contradiction: [source-name] claims X, but [other-source] claims Y. Needs resolution.
    \`\`\`
-7. Call \`update_index\` to rebuild \`wiki/index.md\` with all new and modified pages
+7. Call \`update_index\` to rebuild \`wiki/index.md\`, then call \`update_moc\` to rebuild \`wiki/moc.md\`
 8. Call \`append_log\` with type \`ingest\` and a brief description of what was processed
 9. Report a summary: pages created, pages updated, contradictions found, key entities extracted
 
@@ -204,6 +215,18 @@ When re-ingesting a source that already has a summary page:
 4. Update only the pages affected by new/changed information
 5. Do not recreate pages that are already accurate
 6. Append a re-ingest log entry: \`## [DATE] reingest | <filename> (X pages updated)\`
+
+---
+
+## Shared Concept Recompilation
+
+When re-ingesting a source that shares wiki pages with other sources, you will receive
+a list of affected concept pages and the other sources that contribute to them.
+For each affected concept page:
+1. Read the existing page content
+2. Read all sources listed in the page's \`sources\` frontmatter
+3. Update the page to reflect the latest information from all contributing sources
+4. Preserve information from unchanged sources — only update what the changed source affects
 `.trim()
 
 

@@ -8,6 +8,7 @@ export default defineConfig({
     starlight({
       title: 'Axiom Wiki',
       description: 'The wiki that maintains itself.',
+      customCss: ['./src/styles/custom.css'],
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/abubakarsiddik31/axiom-wiki' },
       ],

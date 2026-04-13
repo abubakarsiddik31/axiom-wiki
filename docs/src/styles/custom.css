@@ -1,0 +1,7 @@
+/* Reduce heading sizes — default Starlight headings are too large for short docs pages */
+:root {
+  --sl-text-h1: var(--sl-text-2xl);
+  --sl-text-h2: var(--sl-text-xl);
+  --sl-text-h3: var(--sl-text-lg);
+  --sl-text-h4: var(--sl-text-base);
+}

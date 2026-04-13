@@ -19,6 +19,11 @@ import { acquireLock, releaseLock, getLockInfo } from "../../core/lock.js";
 import { withRetry, classifyError, friendlyErrorMessage } from "../../core/retry.js";
 import ignore from "ignore";
 
+const DEBUG = process.env['AXIOM_DEBUG'] === '1'
+function debug(...args: unknown[]) {
+  if (DEBUG) console.error('[ingest]', ...args)
+}
+
 interface Props {
   file?: string;
   interactive?: boolean;
@@ -99,6 +104,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
   async function startIngest() {
     if (!config) return;
     const { wikiDir, rawDir } = config;
+    debug('startIngest called', { provider: config.provider, model: config.model, wikiDir, rawDir, ollamaBaseUrl: config.ollamaBaseUrl });
 
     // Acquire compilation lock
     if (!acquireLock(wikiDir)) {
@@ -111,7 +117,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     }
 
     try {
+      debug('creating agent...');
       const agent = createAxiomAgent(config);
+      debug('agent created');
       const logPath = path.join(wikiDir, "wiki/log.md");
 
       // Resolve file list
@@ -205,6 +213,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         const changes = detectChanges(rawDir, allRaw, state);
         const toProcess = changes.filter((c) => c.kind !== "unchanged");
         filesToProcess = toProcess.map((c) => c.filepath);
+        debug('file scan', { allRawCount: allRaw.length, allRaw, changesCount: changes.length, changes: changes.map(c => ({ file: c.filename, kind: c.kind })), toProcessCount: toProcess.length, filesToProcess });
 
         if (filesToProcess.length === 0) {
           releaseLock(wikiDir);
@@ -213,6 +222,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         }
       }
 
+      debug('processing', filesToProcess.length, 'files');
       // Process files sequentially
       for (const filepath of filesToProcess) {
         const filename = path.basename(filepath);
@@ -397,6 +407,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     userContext: string,
   ): Promise<FileResult['errorReason'] | undefined> {
     if (!config) return 'unknown';
+    debug('runIngest', { filepath, filename, reingest });
     const lines: Array<{ text: string; color?: string }> = [];
     const before = snapshotWiki(config.wikiDir);
 
@@ -469,7 +480,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           /* never crash the agent loop */
         }
       };
+      debug('calling LLM for', filename);
       const result = await withRetry(() => agent.generate([message], { onStepFinish: stepFinish }));
+      debug('LLM result text length:', result.text?.length, 'usage:', (result as any).usage);
 
       // Extract pages from agent's final text
       const pagesFound = extractPages(result.text ?? "");
@@ -518,6 +531,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       );
       return undefined; // success
     } catch (err: unknown) {
+      debug('runIngest error:', err);
       const changes = diffWiki(before, config.wikiDir);
       const errorClass = classifyError(err);
 

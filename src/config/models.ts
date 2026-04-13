@@ -101,10 +101,18 @@ export function listProviders(): ProviderDef[] {
 }
 
 const DEFAULT_CONTEXT_WINDOW = 128_000
+const DEFAULT_OLLAMA_CONTEXT_WINDOW = 65_536
 
 export function getContextWindow(providerId: ProviderId, modelId: string): number {
   const model = getModel(providerId, modelId)
+  if (providerId === 'ollama') return model?.contextWindow ?? DEFAULT_OLLAMA_CONTEXT_WINDOW
   return model?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
+}
+
+export function getOllamaNumCtx(modelId: string, configOverride?: number): number {
+  if (configOverride !== undefined) return configOverride
+  const model = getModel('ollama', modelId)
+  return model?.contextWindow ?? DEFAULT_OLLAMA_CONTEXT_WINDOW
 }
 
 /** Rough token estimate from text length. ~3.5 chars per token on average. */

@@ -9,6 +9,8 @@ export interface AxiomConfig {
   wikiDir: string
   rawDir: string
   ollamaBaseUrl?: string
+  /** Override Ollama num_ctx (context window tokens). Default: 65536. */
+  ollamaNumCtx?: number
 }
 
 export type ConfigScope = 'local' | 'global'
@@ -32,7 +34,8 @@ function getGlobalConfig(): AxiomConfig | null {
     store.get('ollamaBaseUrl') ||
     'http://localhost:11434/v1'
 
-  return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl }
+  const ollamaNumCtx = store.get('ollamaNumCtx')
+  return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx }
 }
 
 let _cachedLocalConfigPath: string | null | undefined = undefined
@@ -65,13 +68,14 @@ interface LocalConfigFile {
   wikiDir?: string
   rawDir?: string
   ollamaBaseUrl?: string
+  ollamaNumCtx?: number
 }
 
 function readLocalConfig(configPath: string): AxiomConfig | null {
   try {
     const raw = fs.readFileSync(configPath, 'utf-8')
     const parsed: LocalConfigFile = JSON.parse(raw)
-    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl } = parsed
+    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx } = parsed
 
     if (!provider || !model || !wikiDir || !rawDir) return null
     if (provider !== 'ollama' && !apiKey) return null
@@ -86,6 +90,7 @@ function readLocalConfig(configPath: string): AxiomConfig | null {
       wikiDir,
       rawDir,
       ollamaBaseUrl: resolvedOllamaUrl,
+      ollamaNumCtx,
     }
   } catch {
     return null

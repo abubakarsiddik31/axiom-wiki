@@ -1,4 +1,21 @@
-export const SYSTEM_PROMPT = `
+export function buildSystemPrompt(opts?: { obsidianCompat?: boolean }): string {
+  const obsidian = opts?.obsidianCompat ?? false
+  const linkStyle = obsidian
+    ? `- Internal links: \`[[page-name]]\` (Obsidian-compatible, no category prefix)
+- Example: \`[[alan-turing]]\`, \`[[cognitive-bias]]\``
+    : `- Internal links: \`[[category/page-name]]\`
+- Example: \`[[entities/alan-turing]]\`, \`[[concepts/cognitive-bias]]\``
+
+  const citationStyle = obsidian
+    ? `- Source citations in answers: \`(→ [[alan-turing]], source: turing-biography.pdf)\``
+    : `- Source citations in answers: \`(→ [[entities/alan-turing]], source: turing-biography.pdf)\``
+
+  return SYSTEM_PROMPT_TEMPLATE
+    .replace('{{LINK_STYLE}}', linkStyle)
+    .replace('{{CITATION_STYLE}}', citationStyle)
+}
+
+const SYSTEM_PROMPT_TEMPLATE = `
 You are Axiom, a meticulous knowledge base maintainer. You are not a generic chatbot — you own and maintain a structured wiki of markdown pages. Your job is to ingest sources, answer questions from the wiki, and keep the wiki healthy and consistent.
 
 You are disciplined: you always follow conventions, always update indexes, always check for contradictions, and never cut corners.
@@ -63,8 +80,8 @@ updatedAt: "2026-04-10"
 
 ## Cross-Reference Style
 
-- Internal links: \`[[entities/alan-turing]]\`, \`[[concepts/cognitive-bias]]\`
-- Source citations in answers: \`(→ [[sources/intelligence-trap]], source: intelligence-trap.pdf)\`
+{{LINK_STYLE}}
+{{CITATION_STYLE}}
 - Be generous with cross-references — link every mention of an entity or concept that has a page
 
 ---
@@ -109,12 +126,13 @@ Do not be conservative — if a source mentions 15 entities, create or update 15
 
 When the user asks a question:
 
-1. Call \`read_page\` on \`wiki/index.md\` to find relevant pages
-2. Call \`read_page\` on each relevant page to read its full content
-3. Synthesize a clear, thorough answer
-4. Cite sources explicitly: \`(→ [[entities/alan-turing]], source: turing-biography.pdf)\`
-5. After answering, always ask: "Would you like me to file this as an analysis page in \`wiki/pages/analyses/\`?"
-6. If the user says yes: create the analysis page with full frontmatter, call \`update_index\`, call \`append_log\` with type \`query\`
+1. **Check analyses first.** Call \`search_wiki\` with \`category: "analyses"\` to check if this question (or a similar one) has already been answered and filed. If a relevant analysis exists, use it as a starting point.
+2. Call \`read_page\` on \`wiki/index.md\` to find relevant pages
+3. Call \`read_page\` on each relevant page to read its full content
+4. Synthesize a clear, thorough answer
+5. Cite sources explicitly
+6. After answering, always ask: "Would you like me to file this as an analysis page in \`wiki/pages/analyses/\`?"
+7. If the user says yes: create the analysis page with full frontmatter, call \`update_index\`, call \`append_log\` with type \`query\`
 
 If the wiki does not contain enough information to answer the question, say so clearly and suggest what sources would help.
 
@@ -233,7 +251,8 @@ For each affected concept page:
 export const INTERACTIVE_INGEST_PREFIX = `[INTERACTIVE MODE] Before writing any pages, read the source and present your findings to the user first.`
 
 
-export function buildAutowikiSystemPrompt(contentType: 'code' | 'docs'): string {
+export function buildAutowikiSystemPrompt(contentType: 'code' | 'docs', opts?: { obsidianCompat?: boolean }): string {
+  const obsidian = opts?.obsidianCompat ?? false
   const intro = contentType === 'code'
     ? `You are Axiom, a meticulous knowledge base builder. Your job is to explore a software project's codebase and build a comprehensive wiki documenting its architecture, components, patterns, and usage.`
     : `You are Axiom, a meticulous knowledge base builder. Your job is to explore a collection of documents and build a comprehensive wiki that organizes, connects, and summarizes the knowledge within them.`
@@ -318,7 +337,9 @@ ${categoryGuide}
 
 ## Cross-References
 
-Link related pages using \`[[category/slug]]\` syntax, e.g. \`[[entities/alan-turing]]\`, \`[[concepts/machine-learning]]\`.
+${obsidian
+    ? `Link related pages using \`[[page-name]]\` syntax (Obsidian-compatible), e.g. \`[[alan-turing]]\`, \`[[machine-learning]]\`.`
+    : `Link related pages using \`[[category/slug]]\` syntax, e.g. \`[[entities/alan-turing]]\`, \`[[concepts/machine-learning]]\`.`}
 Be generous with cross-references — link every mention of something that has its own page.
 
 ---
@@ -342,7 +363,8 @@ export const AUTOWIKI_CONTINUE_PROMPT = `Continue building the wiki for this pro
 When you've documented everything important, end your response with DONE on its own line.`
 
 
-export function buildSyncSystemPrompt(contentType: 'code' | 'docs'): string {
+export function buildSyncSystemPrompt(contentType: 'code' | 'docs', opts?: { obsidianCompat?: boolean }): string {
+  const obsidian = opts?.obsidianCompat ?? false
   const contentLabel = contentType === 'code' ? 'codebase' : 'document collection'
   const categoryHint = contentType === 'code'
     ? 'analyses (overviews), entities (modules/components), concepts (patterns)'
@@ -387,7 +409,7 @@ updatedAt: "YYYY-MM-DD"
 ## Naming & Cross-References
 
 - Filenames: kebab-case in \`wiki/pages/<category>/<slug>.md\`
-- Cross-references: \`[[category/slug]]\` syntax
+- Cross-references: ${obsidian ? `\`[[page-name]]\` syntax (Obsidian-compatible)` : `\`[[category/slug]]\` syntax`}
 - Categories: ${categoryHint}
 
 ---

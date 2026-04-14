@@ -2,7 +2,7 @@ import { Agent } from '@mastra/core/agent'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
-import { SYSTEM_PROMPT, buildAutowikiSystemPrompt, buildSyncSystemPrompt } from './prompts.js'
+import { buildSystemPrompt, buildAutowikiSystemPrompt, buildSyncSystemPrompt } from './prompts.js'
 import { createAxiomTools } from './tools.js'
 import { createCodebaseTools } from './codebase-tools.js'
 import type { AxiomConfig } from '../config/index.js'
@@ -17,7 +17,7 @@ export function createAxiomAgent(config: AxiomConfig) {
   const agent = new Agent({
     id: 'axiom',
     name: 'axiom',
-    instructions: SYSTEM_PROMPT,
+    instructions: buildSystemPrompt({ obsidianCompat: config.obsidianCompat }),
     model,
     tools,
   })
@@ -50,9 +50,10 @@ export function createAutowikiAgent(config: AxiomConfig, projectRoot: string, sn
   const tools = { ...wikiTools, ...codebaseTools }
 
   const contentType = detectContentType(snapshot)
+  const compatOpts = { obsidianCompat: config.obsidianCompat }
   const instructions = mode === 'sync'
-    ? buildSyncSystemPrompt(contentType)
-    : buildAutowikiSystemPrompt(contentType)
+    ? buildSyncSystemPrompt(contentType, compatOpts)
+    : buildAutowikiSystemPrompt(contentType, compatOpts)
 
   return new Agent({
     id: 'axiom-autowiki',

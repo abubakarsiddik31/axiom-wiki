@@ -81,17 +81,19 @@ export function SourcesScreen({ onExit }: Props) {
     const src = sources[selected]
     if (!src) return
     try {
-      await removeSource(config.wikiDir, src.filename)
-
-      // Remove from compilation state
+      // Load state so removeSource can freeze shared concepts
       const state = loadState(config.wikiDir)
+      const { frozenSlugs } = await removeSource(config.wikiDir, src.filename, state)
+
+      // Remove from compilation state and save (frozenSlugs already updated by removeSource)
       delete state.sources[src.filename]
       saveState(config.wikiDir, state)
 
       const updated = await listSources(config.wikiDir)
       setSources(updated)
       setSelected((s) => Math.min(s, Math.max(0, updated.length - 1)))
-      setMessage({ text: `Removed ${src.filename}`, color: 'green' })
+      const frozenNote = frozenSlugs.length > 0 ? ` (${frozenSlugs.length} shared pages preserved)` : ''
+      setMessage({ text: `Removed ${src.filename}${frozenNote}`, color: 'green' })
       setTimeout(() => setMessage(null), 3000)
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : String(err), color: 'red' })

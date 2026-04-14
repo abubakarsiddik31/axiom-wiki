@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
 import { readPage } from './wiki.js'
+import type { CompilationState } from './state.js'
 
 export interface SourceRecord {
   filename: string
@@ -94,7 +95,8 @@ export async function getSource(wikiDir: string, filename: string): Promise<stri
 export async function removeSource(
   wikiDir: string,
   filename: string,
-): Promise<{ removedPage: string; orphanedPages: string[] }> {
+  state?: CompilationState,
+): Promise<{ removedPage: string; orphanedPages: string[]; frozenSlugs: string[] }> {
   const summaryPage = findSummaryPage(wikiDir, filename)
   if (!summaryPage) {
     throw new Error(`No summary page found for source: ${filename}`)
@@ -102,6 +104,31 @@ export async function removeSource(
 
   const abs = path.join(wikiDir, summaryPage)
   fs.unlinkSync(abs)
+
+  // Determine which concept pages are shared with other sources
+  const frozenSlugs: string[] = []
+  if (state) {
+    const deletedConcepts = state.sources[filename]?.concepts ?? []
+    for (const concept of deletedConcepts) {
+      // Check if any other source also contributes to this concept
+      const isShared = Object.entries(state.sources).some(
+        ([src, srcState]) => src !== filename && srcState.concepts.includes(concept),
+      )
+      if (isShared) {
+        // Extract slug from page path (e.g. "wiki/pages/concepts/foo.md" → "concepts/foo")
+        const slug = concept
+          .replace(/^wiki\/pages\//, '')
+          .replace(/\.md$/, '')
+        frozenSlugs.push(slug)
+      }
+    }
+    // Add to state's frozenSlugs (deduplicated)
+    for (const slug of frozenSlugs) {
+      if (!state.frozenSlugs.includes(slug)) {
+        state.frozenSlugs.push(slug)
+      }
+    }
+  }
 
   // Scan all remaining pages for [[links]] to the removed source page
   const pagesDir = path.join(wikiDir, 'wiki/pages')
@@ -112,14 +139,19 @@ export async function removeSource(
     const summaryBasename = path.basename(summaryPage, '.md')
 
     for (const file of allFiles) {
+      const rel = path.relative(wikiDir, file)
+      // Skip frozen concept pages — they're shared with other sources
+      const relSlug = rel.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+      if (frozenSlugs.includes(relSlug)) continue
+
       const content = fs.readFileSync(file, 'utf-8')
       if (content.includes(`[[sources/${summaryBasename}]]`) || content.includes(filename)) {
-        orphanedPages.push(path.relative(wikiDir, file))
+        orphanedPages.push(rel)
       }
     }
   }
 
-  return { removedPage: summaryPage, orphanedPages }
+  return { removedPage: summaryPage, orphanedPages, frozenSlugs }
 }
 
 export async function markForReingest(wikiDir: string, filename: string): Promise<void> {

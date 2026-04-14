@@ -55,7 +55,9 @@ export async function searchWiki(
 
     if (matchCount === 0) continue
 
-    const score = matchCount / (searchable.length / 1000 + 1)
+    let score = matchCount / (searchable.length / 1000 + 1)
+    // Boost analyses pages — previously filed answers are high-value results
+    if (rel.includes('/analyses/')) score *= 1.5
     const excerpt = buildExcerpt(content, terms)
 
     results.push({ path: rel, title, summary, excerpt, score, matchCount })

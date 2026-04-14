@@ -10,8 +10,8 @@ description: Directory layout and page frontmatter schema.
 ```
 my-project/
   .axiom/                 # Everything lives here
-    config.json           # Local config (provider, model, paths)
-    state.json            # Compilation state (SHA-256 hashes per source)
+    config.json           # Local config (provider, model, paths, obsidianCompat)
+    state.json            # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
     map-state.json        # Autowiki/sync state (pages, git hash)
     raw/                  # Source files to ingest
       .axiomignore
@@ -33,7 +33,7 @@ my-project/
 
 ```
 ~/my-wiki/
-  state.json              # Compilation state
+  state.json              # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
   map-state.json          # Autowiki/sync state
   raw/                    # Source files to ingest
     .axiomignore
@@ -85,6 +85,15 @@ Internal links use wiki-link syntax:
 [[entities/alan-turing]]
 [[concepts/turing-completeness]]
 ```
+
+With `obsidianCompat: true` in config, links use bare names instead:
+
+```
+[[alan-turing]]
+[[turing-completeness]]
+```
+
+Axiom's graph parser handles both formats — bare names default to the `entities/` category.
 
 ## Source citations
 

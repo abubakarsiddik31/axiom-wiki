@@ -51,13 +51,17 @@ export function loadMapState(wikiDir: string): MapState | null {
   const legacyPath = path.join(wikiDir, '.axiom', MAP_STATE_FILENAME)
   const resolvedPath = fs.existsSync(filePath) ? filePath
     : fs.existsSync(legacyPath) ? legacyPath : filePath
+  if (!fs.existsSync(resolvedPath)) return null
   try {
-    if (!fs.existsSync(resolvedPath)) return null
     const raw = fs.readFileSync(resolvedPath, 'utf-8')
     const parsed = JSON.parse(raw)
-    if (parsed?.version !== 1 || !Array.isArray(parsed?.pages)) return null
+    if (parsed?.version !== 1 || !Array.isArray(parsed?.pages)) {
+      process.stderr.write(`[axiom-wiki] Warning: ${resolvedPath} has invalid format (version=${parsed?.version})\n`)
+      return null
+    }
     return parsed as MapState
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[axiom-wiki] Error reading ${resolvedPath}: ${err instanceof Error ? err.message : String(err)}\n`)
     return null
   }
 }
@@ -75,6 +79,8 @@ export function getGitHeadHash(dir: string): string | null {
 }
 
 export function getGitChangedFiles(dir: string, sinceHash: string): string[] {
+  // Validate hash to prevent command injection
+  if (!/^[0-9a-f]{4,40}$/i.test(sinceHash)) return []
   try {
     const output = execSync(`git diff --name-only ${sinceHash}..HEAD`, {
       cwd: dir,

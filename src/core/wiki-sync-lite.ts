@@ -31,23 +31,30 @@ export async function applyTier1Updates(
           const idx = page.paths.indexOf(change.oldPath)
           if (idx === -1 && !pageCoversFile(page, change.oldPath)) continue
 
-          // Update paths array
-          if (idx !== -1) {
-            page.paths[idx] = change.path
-          }
-
-          // Update page content references
+          // Update page content references first (before mutating paths)
           const pagePath = resolvePagePath(page)
+          let contentUpdated = false
           try {
             const content = await readPage(wikiDir, pagePath)
             if (content.includes(change.oldPath)) {
               const updated = content.replaceAll(change.oldPath, change.path)
               await writePage(wikiDir, pagePath, updated)
+              contentUpdated = true
               updatedPages.push(page.slug)
               referenceUpdates.push({ page: page.slug, oldRef: change.oldPath, newRef: change.path })
             }
-          } catch {
-            // Page may not exist yet
+          } catch (err: unknown) {
+            // Only ignore "file not found" — rethrow write failures
+            const code = (err as NodeJS.ErrnoException)?.code
+            if (code && code !== 'ENOENT' && code !== 'ERR_NOT_FOUND') {
+              // Page exists but write failed — don't mutate paths
+              continue
+            }
+          }
+
+          // Only update paths array after successful content update (or if page doesn't exist)
+          if (idx !== -1) {
+            page.paths[idx] = change.path
           }
         }
         break

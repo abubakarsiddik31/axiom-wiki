@@ -158,18 +158,33 @@ ${filesBlock}
     }
   }
 
-  // Post-update maintenance
+  // Post-update maintenance — wrapped in try/catch so partial results are still returned
   if (result.pagesUpdated.length > 0) {
-    await updateIndex(wikiDir)
-    await updateMOC(wikiDir)
-    await appendLog(wikiDir, `incremental-sync: updated ${result.pagesUpdated.join(', ')}`, 'sync')
+    try {
+      await updateIndex(wikiDir)
+      await updateMOC(wikiDir)
+      await appendLog(wikiDir, `incremental-sync: updated ${result.pagesUpdated.join(', ')}`, 'sync')
+    } catch (err) {
+      log(`Post-update maintenance failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   return result
 }
 
 function extractUpdatedContent(response: any): string | null {
-  // Check tool calls for return_updated_page result
+  // Check tool results first — the agent may have called return_updated_page
+  const toolResults = response.toolResults ?? response.tool_results
+  if (Array.isArray(toolResults)) {
+    for (const tr of toolResults) {
+      const content = tr?.result ?? tr?.content
+      if (typeof content === 'string' && content.includes('---')) {
+        return content.trim()
+      }
+    }
+  }
+
+  // Fall back to text response
   const text = response.text ?? ''
   if (!text) return null
 
@@ -177,8 +192,8 @@ function extractUpdatedContent(response: any): string | null {
   const fenceMatch = text.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/m)
   if (fenceMatch) return fenceMatch[1].trim()
 
-  // If it looks like a frontmatter-containing page, use as-is
+  // Only accept text that looks like a wiki page (has frontmatter)
   if (text.startsWith('---')) return text.trim()
 
-  return text.trim() || null
+  return null
 }

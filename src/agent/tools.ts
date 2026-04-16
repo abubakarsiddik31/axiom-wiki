@@ -248,15 +248,17 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
           await wiki.appendLog(wikiDir, `notify: tier1 updated ${tier1.updatedPages.join(', ')}`, 'sync')
         }
 
+        // Save after Tier 1 so mutations are persisted even if Tier 2 fails
+        saveMapState(wikiDir, mapState)
+
         let tier2 = null
         if (input.run_tier2) {
           const stalePages = getStalePages(mapState, 0.5)
           if (stalePages.length > 0) {
             tier2 = await applyTier2Updates(config, wikiDir, stalePages, changedPaths, root, mapState)
+            saveMapState(wikiDir, mapState)
           }
         }
-
-        saveMapState(wikiDir, mapState)
 
         return {
           tier1,
@@ -292,9 +294,14 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       }
 
       if (changedFiles.length > 0) {
-        const currentCommit = root ? getGitHeadHash(root) ?? '' : ''
-        updateStaleness(mapState, changedFiles, currentCommit)
-        saveMapState(wikiDir, mapState)
+        if (!acquireLock(wikiDir)) return { status: 'locked', message: 'Wiki is locked by another operation.' }
+        try {
+          const currentCommit = root ? getGitHeadHash(root) ?? '' : ''
+          updateStaleness(mapState, changedFiles, currentCommit)
+          saveMapState(wikiDir, mapState)
+        } finally {
+          releaseLock(wikiDir)
+        }
       }
 
       const stale = getStalePages(mapState, 0.7)
@@ -333,7 +340,10 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
         let existingContent: string
         try {
           existingContent = await wiki.readPage(wikiDir, decisionPagePath)
-        } catch {
+        } catch (err: unknown) {
+          // Only create fresh page on "not found" — rethrow other errors
+          const msg = err instanceof Error ? err.message : String(err)
+          if (!msg.includes('not found') && !msg.includes('ENOENT')) throw err
           existingContent = `---
 title: "Decision Log"
 summary: "Architectural decisions, user clarifications, and rationale"

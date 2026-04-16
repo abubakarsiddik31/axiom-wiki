@@ -29,7 +29,10 @@ export async function startMcpServer(): Promise<void> {
   )
 
   for (const [name, tool] of Object.entries(allTools)) {
-    if (!tool.execute) continue
+    if (!tool.execute) {
+      process.stderr.write(`[axiom-wiki] Warning: tool "${name}" has no execute function, skipping\n`)
+      continue
+    }
 
     const executeFn = tool.execute
     const inputSchema = tool.inputSchema as unknown as AnySchema
@@ -41,9 +44,17 @@ export async function startMcpServer(): Promise<void> {
         inputSchema,
       },
       async (args: unknown) => {
-        const result = await executeFn(args as never, {} as never)
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        try {
+          const result = await executeFn(args as never, {} as never)
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ error: message }, null, 2) }],
+            isError: true,
+          }
         }
       },
     )

@@ -23,11 +23,33 @@ This detects your agent config files and appends the axiom-wiki instructions. Su
 | Windsurf | `.windsurfrules` |
 | Google Gemini | `GEMINI.md` |
 
+## Cost Rule: Batch Code Updates Aggressively
+
+`notify_code_change` with `run_tier2: true` costs LLM tokens (~2-5K per wiki page updated). The agent is instructed to call it **at most once per feature or PR** — whichever comes first. Never per-file or per-edit.
+
+Everything else is free — decisions, planning queries, status checks. Those can be called as often as needed.
+
 ## When Does the Agent Trigger Updates?
 
-The instructions define **5 specific trigger points** so the agent knows exactly when to act:
+### 1. Decisions → Log immediately (FREE)
 
-### 1. Before starting a task → Query the wiki
+```
+log_decision({
+  decision: "Chose JWT over session cookies for auth",
+  context: "Need stateless auth for horizontal scaling",
+  alternatives: ["Session cookies", "OAuth tokens"],
+  affected_areas: ["auth", "api", "config"]
+})
+```
+
+This is the highest-priority trigger. Decisions are **logged the moment the user makes them** — not batched, not deferred. They're free (just a wiki page append) and would be lost if not captured immediately. Triggers include:
+
+- User chooses between approaches
+- Design trade-off is resolved
+- Library/tool/pattern is selected
+- User clarifies requirements or corrects the agent's approach
+
+### 2. Before starting work → Query the wiki (FREE)
 
 ```
 get_architecture_brief({})
@@ -36,7 +58,7 @@ plan_with_wiki({ task: "add WebSocket support to notifications" })
 
 The agent calls these FIRST to get project context. Confidence scores tell it which pages to trust.
 
-### 2. After a logical unit of work → Report changes
+### 3. After a complete feature or PR → Report changes (ONCE)
 
 ```
 notify_code_change({
@@ -49,47 +71,20 @@ notify_code_change({
 })
 ```
 
-**Important:** The agent batches changes — it does NOT call this after every single file edit. One call per feature/bugfix/refactor.
+This is called **once per feature or PR-ready change** — not mid-work, not per file. The agent accumulates all changes and reports them in a single call at the end.
 
 - **Tier 1** (always runs, free): Updates file path references, flags stale pages
-- **Tier 2** (`run_tier2: true`, ~2-5K tokens/page): LLM reads changed files and updates wiki pages
+- **Tier 2** (`run_tier2: true`): LLM reads changed files and updates affected wiki pages
 
-When to use `run_tier2: true`:
-- New features or modules
-- Refactors, renames, API changes
-- File deletions
+Use `run_tier2: true` only for new features, refactors, renames, API changes. Skip it for bugfixes, config tweaks, test-only changes.
 
-When to skip Tier 2:
-- Small bugfixes, config changes, dependency updates
-
-### 3. When the user decides something → Log it
-
-```
-log_decision({
-  decision: "Chose JWT over session cookies for auth",
-  context: "Need stateless auth for horizontal scaling",
-  alternatives: ["Session cookies", "OAuth tokens"],
-  affected_areas: ["auth", "api", "config"]
-})
-```
-
-Triggered when the user:
-- Chooses between approaches
-- Resolves a design trade-off
-- Selects a library, tool, or pattern
-- Clarifies requirements or constraints
-
-Creates a running log at `wiki/pages/analyses/decisions.md`.
-
-### 4. Before committing → Check staleness
+### 4. Before committing → Check staleness (FREE)
 
 ```
 check_before_commit({ files: ["src/auth/oauth.ts", "src/config/models.ts"] })
 ```
 
-Reports which wiki pages will go stale. If many are affected, the agent runs `notify_code_change` with Tier 2 first.
-
-### 5. End of conversation/task → Report completion
+### 5. End of conversation → Report completion (FREE)
 
 ```
 report_task_complete({
@@ -98,20 +93,18 @@ report_task_complete({
 })
 ```
 
-Ensures the next agent session starts with a current wiki.
+## Tool Cost Summary
 
-## Tool Cost Reference
-
-| Tool | Cost |
-|------|------|
-| `get_architecture_brief` | Free |
-| `plan_with_wiki` | Free |
-| `get_context_for_change` | Free |
-| `check_before_commit` | Free |
-| `notify_code_change` (Tier 1 only) | Free |
-| `notify_code_change` (Tier 2) | ~2-5K tokens per page |
-| `report_task_complete` | Free |
-| `log_decision` | Free |
+| Tool | Cost | Frequency |
+|------|------|-----------|
+| `log_decision` | Free | Every decision (immediately) |
+| `get_architecture_brief` | Free | Start of task |
+| `plan_with_wiki` | Free | Start of task |
+| `get_context_for_change` | Free | As needed |
+| `check_before_commit` | Free | Before commit |
+| `report_task_complete` | Free | End of task |
+| `notify_code_change` (Tier 1) | Free | Once per feature/PR |
+| `notify_code_change` (Tier 2) | ~2-5K tokens/page | Once per feature/PR |
 
 ## Manual Setup
 

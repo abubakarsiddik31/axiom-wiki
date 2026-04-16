@@ -31,6 +31,7 @@ export async function applyTier2Updates(
   mapState: MapState,
   opts?: Tier2Options,
 ): Promise<Tier2Result> {
+  const maxCost = opts?.maxCostUsd ?? 0.50
   const maxPages = opts?.maxPages ?? 5
   const log = opts?.onLog ?? (() => {})
 
@@ -61,6 +62,12 @@ export async function applyTier2Updates(
   })
 
   for (const page of toProcess) {
+    if (result.costUsd >= maxCost) {
+      result.pagesSkipped.push(page.slug)
+      log(`Cost limit reached ($${result.costUsd.toFixed(4)} >= $${maxCost}), skipping ${page.slug}`)
+      continue
+    }
+
     log(`Updating wiki page: ${page.slug}`)
 
     // Read existing wiki page
@@ -139,12 +146,12 @@ ${filesBlock}
 
       // Track usage from response
       const usage = (response as any).usage
-      if (usage) {
-        result.inputTokens += usage.promptTokens ?? usage.input_tokens ?? 0
-        result.outputTokens += usage.completionTokens ?? usage.output_tokens ?? 0
-      }
-      // Rough cost estimate
-      result.costUsd += ((result.inputTokens) * 0.000000075) + ((result.outputTokens) * 0.0000003)
+      const iterInput = usage?.promptTokens ?? usage?.input_tokens ?? 0
+      const iterOutput = usage?.completionTokens ?? usage?.output_tokens ?? 0
+      result.inputTokens += iterInput
+      result.outputTokens += iterOutput
+      // Rough cost estimate per iteration (Gemini Flash pricing)
+      result.costUsd += (iterInput * 0.000000075) + (iterOutput * 0.0000003)
     } catch (err) {
       log(`Failed to update ${page.slug}: ${err instanceof Error ? err.message : String(err)}`)
       result.pagesSkipped.push(page.slug)

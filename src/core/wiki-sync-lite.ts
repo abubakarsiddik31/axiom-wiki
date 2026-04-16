@@ -65,7 +65,6 @@ export async function applyTier1Updates(
 
       case 'created': {
         const parentDir = path.dirname(change.path)
-        const dirPrefix = parentDir + '/'
         for (const page of mapState.pages) {
           const covers = page.paths.some((p) => {
             if (p.endsWith('/')) return change.path.startsWith(p)

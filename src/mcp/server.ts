@@ -1,20 +1,13 @@
-import path from 'path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { AnySchema } from '@modelcontextprotocol/sdk/server/zod-compat.js'
 import { getConfig } from '../config/index.js'
 import { createAxiomTools } from '../agent/tools.js'
 import { createPlanningTools } from './planning-tools.js'
+import { deriveProjectRoot } from '../core/sync.js'
 
 // When true, all logging must go to stderr — stdout is reserved for JSON-RPC
 export let isMcpMode = false
-
-function deriveProjectRoot(wikiDir: string): string | undefined {
-  if (wikiDir.endsWith('.axiom') || wikiDir.endsWith('.axiom/')) {
-    return path.dirname(wikiDir.replace(/\/$/, ''))
-  }
-  return undefined
-}
 
 export async function startMcpServer(): Promise<void> {
   isMcpMode = true

@@ -1,4 +1,3 @@
-import path from 'path'
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { AxiomConfig } from '../config/index.js'
@@ -9,10 +8,11 @@ import * as sources from '../core/sources.js'
 import * as graph from '../core/graph.js'
 import {
   loadMapState, saveMapState, getGitHeadHash, getGitChangedFiles,
-  updateStaleness, getStalePages,
+  updateStaleness, getStalePages, deriveProjectRoot,
 } from '../core/sync.js'
 import { applyTier1Updates, type FileChange } from '../core/wiki-sync-lite.js'
 import { applyTier2Updates } from '../core/incremental-sync.js'
+import { acquireLock, releaseLock } from '../core/lock.js'
 
 export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
   const { wikiDir, rawDir } = config
@@ -219,28 +219,52 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       const root = projectRoot ?? deriveProjectRoot(wikiDir)
       if (!root) return { error: 'Cannot determine project root. This tool requires a local wiki.' }
 
-      // Tier 1: deterministic updates
-      const tier1 = await applyTier1Updates(wikiDir, input.files as FileChange[], mapState)
+      if (!acquireLock(wikiDir)) return { error: 'Wiki is locked by another operation. Try again later.' }
+      try {
+        // Tier 1: deterministic updates
+        const tier1 = await applyTier1Updates(wikiDir, input.files as FileChange[], mapState)
 
-      // Update staleness scores
-      const changedPaths = input.files.map((f) => f.path)
-      const currentCommit = getGitHeadHash(root) ?? ''
-      updateStaleness(mapState, changedPaths, currentCommit)
-
-      let tier2 = null
-      if (input.run_tier2) {
-        const stalePages = getStalePages(mapState, 0.5)
-        if (stalePages.length > 0) {
-          tier2 = await applyTier2Updates(config, wikiDir, stalePages, changedPaths, root, mapState)
+        // Update staleness scores (only for files NOT already adjusted by Tier 1)
+        const tier1Handled = new Set([...tier1.updatedPages, ...tier1.flaggedStale])
+        const changedPaths = input.files.map((f) => f.path)
+        const currentCommit = getGitHeadHash(root) ?? ''
+        // Only run updateStaleness for pages not already touched by Tier 1
+        for (const page of mapState.pages) {
+          if (tier1Handled.has(page.slug)) continue
+          const touched = changedPaths.some((f) => {
+            if (page.paths.length === 0) return false
+            return page.paths.some((p) => p.endsWith('/') ? f.startsWith(p) : f === p)
+          })
+          if (touched) {
+            page._confidence = Math.max(0.1, (page._confidence ?? 1.0) * 0.85)
+          }
         }
-      }
+        mapState.gitCommitHash = currentCommit || mapState.gitCommitHash
 
-      saveMapState(wikiDir, mapState)
+        // Rebuild index/moc if Tier 1 wrote pages
+        if (tier1.updatedPages.length > 0) {
+          await wiki.updateIndex(wikiDir)
+          await wiki.updateMOC(wikiDir)
+          await wiki.appendLog(wikiDir, `notify: tier1 updated ${tier1.updatedPages.join(', ')}`, 'sync')
+        }
 
-      return {
-        tier1,
-        tier2,
-        stalePages: getStalePages(mapState, 0.8).map((p) => ({ slug: p.slug, confidence: p._confidence })),
+        let tier2 = null
+        if (input.run_tier2) {
+          const stalePages = getStalePages(mapState, 0.5)
+          if (stalePages.length > 0) {
+            tier2 = await applyTier2Updates(config, wikiDir, stalePages, changedPaths, root, mapState)
+          }
+        }
+
+        saveMapState(wikiDir, mapState)
+
+        return {
+          tier1,
+          tier2,
+          stalePages: getStalePages(mapState, 0.8).map((p) => ({ slug: p.slug, confidence: p._confidence })),
+        }
+      } finally {
+        releaseLock(wikiDir)
       }
     },
   })
@@ -299,16 +323,18 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       affected_areas: z.array(z.string()).optional().describe('Areas affected, e.g. ["auth", "api"]'),
     }),
     execute: async (input) => {
-      const decisionPagePath = 'wiki/pages/analyses/decisions.md'
-      const today = new Date().toISOString().slice(0, 10)
-      const entryId = `decision-${Date.now()}`
-
-      // Read or create the decisions page
-      let existingContent: string
+      if (!acquireLock(wikiDir)) return { error: 'Wiki is locked by another operation. Try again later.' }
       try {
-        existingContent = await wiki.readPage(wikiDir, decisionPagePath)
-      } catch {
-        existingContent = `---
+        const decisionPagePath = 'wiki/pages/analyses/decisions.md'
+        const today = new Date().toISOString().slice(0, 10)
+        const entryId = `decision-${Date.now()}`
+
+        // Read or create the decisions page
+        let existingContent: string
+        try {
+          existingContent = await wiki.readPage(wikiDir, decisionPagePath)
+        } catch {
+          existingContent = `---
 title: "Decision Log"
 summary: "Architectural decisions, user clarifications, and rationale"
 tags: [decisions, architecture]
@@ -320,38 +346,41 @@ updatedAt: "${today}"
 
 _Append-only record of key decisions made during development._
 `
-      }
-
-      // Build the new entry
-      const lines: string[] = [
-        '',
-        `## [${today}] ${input.decision} {#${entryId}}`,
-        '',
-      ]
-      if (input.context) {
-        lines.push(`**Context:** ${input.context}`, '')
-      }
-      if (input.alternatives && input.alternatives.length > 0) {
-        lines.push('**Alternatives considered:**')
-        for (const alt of input.alternatives) {
-          lines.push(`- ${alt}`)
         }
-        lines.push('')
+
+        // Build the new entry
+        const lines: string[] = [
+          '',
+          `## [${today}] ${input.decision} {#${entryId}}`,
+          '',
+        ]
+        if (input.context) {
+          lines.push(`**Context:** ${input.context}`, '')
+        }
+        if (input.alternatives && input.alternatives.length > 0) {
+          lines.push('**Alternatives considered:**')
+          for (const alt of input.alternatives) {
+            lines.push(`- ${alt}`)
+          }
+          lines.push('')
+        }
+        if (input.affected_areas && input.affected_areas.length > 0) {
+          lines.push(`**Affected areas:** ${input.affected_areas.join(', ')}`, '')
+        }
+
+        // Update the updatedAt in frontmatter
+        const updated = existingContent.replace(
+          /updatedAt: ".*?"/,
+          `updatedAt: "${today}"`,
+        ) + lines.join('\n')
+
+        await wiki.writePage(wikiDir, decisionPagePath, updated)
+        await wiki.updateIndex(wikiDir)
+
+        return { page: decisionPagePath, entry_id: entryId }
+      } finally {
+        releaseLock(wikiDir)
       }
-      if (input.affected_areas && input.affected_areas.length > 0) {
-        lines.push(`**Affected areas:** ${input.affected_areas.join(', ')}`, '')
-      }
-
-      // Update the updatedAt in frontmatter
-      const updated = existingContent.replace(
-        /updatedAt: ".*?"/,
-        `updatedAt: "${today}"`,
-      ) + lines.join('\n')
-
-      await wiki.writePage(wikiDir, decisionPagePath, updated)
-      await wiki.updateIndex(wikiDir)
-
-      return { page: decisionPagePath, entry_id: entryId }
     },
   })
 
@@ -378,12 +407,5 @@ _Append-only record of key decisions made during development._
   }
 }
 
-function deriveProjectRoot(wikiDir: string): string | undefined {
-  // For local wikis (.axiom), project root is the parent directory
-  if (wikiDir.endsWith('.axiom') || wikiDir.endsWith('.axiom/')) {
-    return path.dirname(wikiDir.replace(/\/$/, ''))
-  }
-  return undefined
-}
 
 export type AxiomTools = ReturnType<typeof createAxiomTools>

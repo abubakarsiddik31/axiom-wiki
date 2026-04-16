@@ -3,7 +3,8 @@ import { Box, Text, useApp, useInput } from 'ink'
 import fs from 'fs'
 import path from 'path'
 import { getConfig } from '../../config/index.js'
-import { getAgentTemplates, type AgentTemplate } from '../../templates/agent-instructions.js'
+import { getAgentTemplates } from '../../templates/agent-instructions.js'
+import { deriveProjectRoot } from '../../core/sync.js'
 
 type Phase = 'selecting' | 'applying' | 'done'
 
@@ -25,9 +26,7 @@ export function SetupAgentScreen() {
   const [results, setResults] = useState<ApplyResult[]>([])
 
   const projectRoot = config
-    ? config.wikiDir.endsWith('.axiom') || config.wikiDir.endsWith('.axiom/')
-      ? path.dirname(config.wikiDir.replace(/\/$/, ''))
-      : process.cwd()
+    ? deriveProjectRoot(config.wikiDir) ?? process.cwd()
     : process.cwd()
 
   useInput((input, key) => {

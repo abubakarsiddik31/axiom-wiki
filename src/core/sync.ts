@@ -190,6 +190,13 @@ export function getStalePages(state: MapState, threshold = 0.5): MapPageEntry[] 
   return state.pages.filter((p) => (p._confidence ?? 1.0) < threshold)
 }
 
+export function deriveProjectRoot(wikiDir: string): string | undefined {
+  if (wikiDir.endsWith('.axiom') || wikiDir.endsWith('.axiom/')) {
+    return path.dirname(wikiDir.replace(/\/$/, ''))
+  }
+  return undefined
+}
+
 export function markPageVerified(state: MapState, slug: string, commitHash: string): void {
   const page = state.pages.find((p) => p.slug === slug)
   if (!page) return

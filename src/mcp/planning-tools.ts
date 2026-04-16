@@ -128,10 +128,10 @@ export function createPlanningTools(config: AxiomConfig) {
 
       // Find related pages by extracting wiki-links from affected pages
       const related: Array<{ slug: string; title: string; summary: string }> = []
-      const linkPattern = /\[\[([^\]]+)\]\]/g
       const allPages = await wiki.listPages(wikiDir)
 
       for (const affected of directlyAffected) {
+        const linkPattern = /\[\[([^\]]+)\]\]/g
         let match: RegExpExecArray | null
         while ((match = linkPattern.exec(affected.content)) !== null) {
           const linkTarget = match[1]

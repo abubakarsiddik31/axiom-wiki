@@ -1,10 +1,9 @@
-import path from 'path'
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { AxiomConfig } from '../config/index.js'
 import * as wiki from '../core/wiki.js'
 import * as searchMod from '../core/search.js'
-import { loadMapState, pageCoversFile, getStalePages, type MapPageEntry } from '../core/sync.js'
+import { loadMapState, pageCoversFile, getStalePages } from '../core/sync.js'
 
 export function createPlanningTools(config: AxiomConfig) {
   const { wikiDir } = config

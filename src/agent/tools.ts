@@ -1,3 +1,4 @@
+import path from 'path'
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { AxiomConfig } from '../config/index.js'
@@ -6,8 +7,14 @@ import * as search from '../core/search.js'
 import * as files from '../core/files.js'
 import * as sources from '../core/sources.js'
 import * as graph from '../core/graph.js'
+import {
+  loadMapState, saveMapState, getGitHeadHash, getGitChangedFiles,
+  updateStaleness, getStalePages,
+} from '../core/sync.js'
+import { applyTier1Updates, type FileChange } from '../core/wiki-sync-lite.js'
+import { applyTier2Updates } from '../core/incremental-sync.js'
 
-export function createAxiomTools(config: AxiomConfig) {
+export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
   const { wikiDir, rawDir } = config
 
   const read_page = createTool({
@@ -192,6 +199,162 @@ export function createAxiomTools(config: AxiomConfig) {
     },
   })
 
+  const notify_code_change = createTool({
+    id: 'notify_code_change',
+    description:
+      'Notify the wiki that code files have changed. Runs Tier 1 (instant, deterministic) updates immediately. Optionally runs Tier 2 (LLM-based) updates for stale pages.',
+    inputSchema: z.object({
+      files: z.array(z.object({
+        path: z.string().describe('File path relative to project root'),
+        type: z.enum(['created', 'modified', 'deleted', 'renamed']),
+        oldPath: z.string().optional().describe('Previous path for renamed files'),
+      })),
+      description: z.string().optional().describe('Brief description of what changed and why'),
+      run_tier2: z.boolean().optional().describe('Whether to run LLM-based updates (default: false)'),
+    }),
+    execute: async (input) => {
+      const mapState = loadMapState(wikiDir)
+      if (!mapState) return { error: 'No map-state.json found. Run autowiki first to build the initial wiki.' }
+
+      const root = projectRoot ?? deriveProjectRoot(wikiDir)
+      if (!root) return { error: 'Cannot determine project root. This tool requires a local wiki.' }
+
+      // Tier 1: deterministic updates
+      const tier1 = await applyTier1Updates(wikiDir, input.files as FileChange[], mapState)
+
+      // Update staleness scores
+      const changedPaths = input.files.map((f) => f.path)
+      const currentCommit = getGitHeadHash(root) ?? ''
+      updateStaleness(mapState, changedPaths, currentCommit)
+
+      let tier2 = null
+      if (input.run_tier2) {
+        const stalePages = getStalePages(mapState, 0.5)
+        if (stalePages.length > 0) {
+          tier2 = await applyTier2Updates(config, wikiDir, stalePages, changedPaths, root, mapState)
+        }
+      }
+
+      saveMapState(wikiDir, mapState)
+
+      return {
+        tier1,
+        tier2,
+        stalePages: getStalePages(mapState, 0.8).map((p) => ({ slug: p.slug, confidence: p._confidence })),
+      }
+    },
+  })
+
+  const report_task_complete = createTool({
+    id: 'report_task_complete',
+    description:
+      'Report that a coding task is complete. Detects changed files and returns wiki staleness info with recommendations.',
+    inputSchema: z.object({
+      task_description: z.string().describe('What was done'),
+      files_changed: z.array(z.string()).optional().describe('Files that were modified (auto-detected from git if omitted)'),
+    }),
+    execute: async (input) => {
+      const mapState = loadMapState(wikiDir)
+      if (!mapState) return { status: 'no_wiki', message: 'No map-state.json found. Run autowiki first.' }
+
+      const root = projectRoot ?? deriveProjectRoot(wikiDir)
+      let changedFiles = input.files_changed ?? []
+
+      if (changedFiles.length === 0 && root) {
+        const currentHash = getGitHeadHash(root)
+        if (currentHash && mapState.gitCommitHash) {
+          changedFiles = getGitChangedFiles(root, mapState.gitCommitHash)
+        }
+      }
+
+      if (changedFiles.length > 0) {
+        const currentCommit = root ? getGitHeadHash(root) ?? '' : ''
+        updateStaleness(mapState, changedFiles, currentCommit)
+        saveMapState(wikiDir, mapState)
+      }
+
+      const stale = getStalePages(mapState, 0.7)
+      const recommendation = stale.length > 5
+        ? 'Many stale pages. Run notify_code_change with run_tier2: true, or run axiom-wiki sync.'
+        : stale.length > 0
+          ? `${stale.length} page(s) slightly stale. Will auto-correct on next sync.`
+          : 'Wiki is up to date.'
+
+      return {
+        status: 'ok',
+        stalePages: stale.map((p) => ({ slug: p.slug, confidence: p._confidence })),
+        recommendation,
+      }
+    },
+  })
+
+  const log_decision = createTool({
+    id: 'log_decision',
+    description:
+      'Log an architectural decision, user clarification, or important rationale to the wiki. Creates a running decision log.',
+    inputSchema: z.object({
+      decision: z.string().describe('The decision that was made, e.g. "Chose JWT over session cookies"'),
+      context: z.string().optional().describe('Why this decision was made'),
+      alternatives: z.array(z.string()).optional().describe('What alternatives were considered'),
+      affected_areas: z.array(z.string()).optional().describe('Areas affected, e.g. ["auth", "api"]'),
+    }),
+    execute: async (input) => {
+      const decisionPagePath = 'wiki/pages/analyses/decisions.md'
+      const today = new Date().toISOString().slice(0, 10)
+      const entryId = `decision-${Date.now()}`
+
+      // Read or create the decisions page
+      let existingContent: string
+      try {
+        existingContent = await wiki.readPage(wikiDir, decisionPagePath)
+      } catch {
+        existingContent = `---
+title: "Decision Log"
+summary: "Architectural decisions, user clarifications, and rationale"
+tags: [decisions, architecture]
+category: analyses
+updatedAt: "${today}"
+---
+
+# Decision Log
+
+_Append-only record of key decisions made during development._
+`
+      }
+
+      // Build the new entry
+      const lines: string[] = [
+        '',
+        `## [${today}] ${input.decision} {#${entryId}}`,
+        '',
+      ]
+      if (input.context) {
+        lines.push(`**Context:** ${input.context}`, '')
+      }
+      if (input.alternatives && input.alternatives.length > 0) {
+        lines.push('**Alternatives considered:**')
+        for (const alt of input.alternatives) {
+          lines.push(`- ${alt}`)
+        }
+        lines.push('')
+      }
+      if (input.affected_areas && input.affected_areas.length > 0) {
+        lines.push(`**Affected areas:** ${input.affected_areas.join(', ')}`, '')
+      }
+
+      // Update the updatedAt in frontmatter
+      const updated = existingContent.replace(
+        /updatedAt: ".*?"/,
+        `updatedAt: "${today}"`,
+      ) + lines.join('\n')
+
+      await wiki.writePage(wikiDir, decisionPagePath, updated)
+      await wiki.updateIndex(wikiDir)
+
+      return { page: decisionPagePath, entry_id: entryId }
+    },
+  })
+
   return {
     read_page,
     write_page,
@@ -209,7 +372,18 @@ export function createAxiomTools(config: AxiomConfig) {
     resolve_contradiction,
     update_moc,
     analyze_graph,
+    notify_code_change,
+    report_task_complete,
+    log_decision,
   }
+}
+
+function deriveProjectRoot(wikiDir: string): string | undefined {
+  // For local wikis (.axiom), project root is the parent directory
+  if (wikiDir.endsWith('.axiom') || wikiDir.endsWith('.axiom/')) {
+    return path.dirname(wikiDir.replace(/\/$/, ''))
+  }
+  return undefined
 }
 
 export type AxiomTools = ReturnType<typeof createAxiomTools>

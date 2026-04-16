@@ -148,6 +148,13 @@ program
     // No Ink — process stays alive serving MCP requests via stdio
   })
 
+program
+  .command('setup-agent')
+  .description('Add axiom-wiki instructions to agent config files (CLAUDE.md, AGENTS.md, etc.)')
+  .action(() => {
+    renderApp({ name: 'setup-agent' })
+  })
+
 // No command given → home menu
 program.action(() => {
   if (hasConfig()) {

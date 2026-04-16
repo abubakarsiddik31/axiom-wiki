@@ -9,6 +9,15 @@ export interface MapPageEntry {
   category: string
   description: string
   paths: string[]
+  _lastVerifiedAt?: string
+  _coveredCommit?: string
+  _confidence?: number
+}
+
+export interface CodeChangeNotification {
+  timestamp: string
+  files: Array<{ path: string; type: 'created' | 'modified' | 'deleted' | 'renamed'; oldPath?: string }>
+  description?: string
 }
 
 export interface MapState {
@@ -17,6 +26,7 @@ export interface MapState {
   lastSyncAt: string
   gitCommitHash: string | null
   pages: MapPageEntry[]
+  pendingChanges?: CodeChangeNotification[]
 }
 
 export interface SyncAnalysis {
@@ -77,7 +87,7 @@ export function getGitChangedFiles(dir: string, sinceHash: string): string[] {
   }
 }
 
-function pageCoversFile(page: MapPageEntry, filePath: string): boolean {
+export function pageCoversFile(page: MapPageEntry, filePath: string): boolean {
   if (page.paths.length === 0) return false
   const normalized = page.paths.map(normalizePath)
   return normalized.some((p) =>
@@ -157,4 +167,33 @@ export function groupChangedFilesByDir(files: string[]): Array<{ dir: string; co
   return [...dirs.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([dir, count]) => ({ dir, count }))
+}
+
+// ── staleness tracking ───────────────────────────────────────────────────────
+
+export function computeConfidence(page: MapPageEntry, changedFiles: string[]): number {
+  const current = page._confidence ?? 1.0
+  const touched = changedFiles.some((f) => pageCoversFile(page, f))
+  if (!touched) return current
+  return Math.max(0.1, current * 0.85)
+}
+
+export function updateStaleness(state: MapState, changedFiles: string[], currentCommit: string): MapState {
+  for (const page of state.pages) {
+    page._confidence = computeConfidence(page, changedFiles)
+  }
+  state.gitCommitHash = currentCommit || state.gitCommitHash
+  return state
+}
+
+export function getStalePages(state: MapState, threshold = 0.5): MapPageEntry[] {
+  return state.pages.filter((p) => (p._confidence ?? 1.0) < threshold)
+}
+
+export function markPageVerified(state: MapState, slug: string, commitHash: string): void {
+  const page = state.pages.find((p) => p.slug === slug)
+  if (!page) return
+  page._lastVerifiedAt = new Date().toISOString().slice(0, 10)
+  page._coveredCommit = commitHash
+  page._confidence = 1.0
 }

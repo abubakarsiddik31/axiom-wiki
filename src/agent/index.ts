@@ -64,7 +64,9 @@ export function createAutowikiAgent(config: AxiomConfig, projectRoot: string, sn
   })
 }
 
-function resolveModel(config: AxiomConfig) {
+type AnyModel = ReturnType<ReturnType<typeof createGoogleGenerativeAI>>
+
+export function resolveModel(config: AxiomConfig): AnyModel {
   const { provider, model: modelId, apiKey } = config
   if (process.env['AXIOM_DEBUG'] === '1') console.error('[resolveModel]', { provider, modelId, ollamaBaseUrl: config.ollamaBaseUrl })
   switch (provider) {

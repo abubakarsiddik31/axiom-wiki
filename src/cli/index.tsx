@@ -13,6 +13,7 @@ import { ReviewScreen } from './screens/review.js'
 import { GraphScreen } from './screens/graph.js'
 import { MapScreen } from './screens/map.js'
 import { SyncScreen } from './screens/sync.js'
+import { SetupAgentScreen } from './screens/setup-agent.js'
 
 export type AxiomCommand =
   | { name: 'init' }
@@ -28,6 +29,7 @@ export type AxiomCommand =
   | { name: 'graph' }
   | { name: 'map' }
   | { name: 'sync' }
+  | { name: 'setup-agent' }
 
 export function renderApp(command: AxiomCommand): void {
   switch (command.name) {
@@ -69,6 +71,9 @@ export function renderApp(command: AxiomCommand): void {
       break
     case 'sync':
       render(<SyncScreen />)
+      break
+    case 'setup-agent':
+      render(<SetupAgentScreen />)
       break
     default: {
       const _exhaustive: never = command

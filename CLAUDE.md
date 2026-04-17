@@ -60,7 +60,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 **Module system:** ESM (`"module": "NodeNext"` in tsconfig). Use `.js` extensions in relative imports even for `.ts` source files.
 
-**Wiki directory structure** (wikiDir = `.axiom` for local, user-chosen for global):
+**Wiki directory structure** (wikiDir = `axiom` for local, user-chosen for global):
 ```
 <wikiDir>/
 ├── config.json             ← Local project config (local scope only)
@@ -115,7 +115,7 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 2. `state.sources[filename].sha256 = ''` + `saveState()` — clear hash so next ingest detects it as "changed"
 
 **Compilation lock rules:**
-- Lock is at `.axiom/lock` (PID + timestamp JSON). Stale locks from dead processes auto-reclaim.
+- Lock is at `axiom/lock` (PID + timestamp JSON). Stale locks from dead processes auto-reclaim.
 - **Every code path that acquires the lock must release it** — including early returns, error catches, user cancellation ("n"), and Escape key. This is the most common source of bugs.
 - The `watch` screen uses `try/finally` to guarantee release.
 - The `ingest` screen has multiple async pause points (reingest-confirm, interactive-reply, interactive-confirm) where the lock stays held until the user responds — release on both "y" and "n" paths.
@@ -131,4 +131,4 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 | `query` | no | yes | no | no | no | yes |
 | `autowiki` / `sync` | no | yes | yes | yes | no (own state) | yes |
 
-**Both config scopes work identically** — state files live directly in `{wikiDir}/` (`state.json`, `lock`, `map-state.json`). For local wikis `wikiDir = .axiom`, for global wikis it's the user-chosen directory.
+**Both config scopes work identically** — state files live directly in `{wikiDir}/` (`state.json`, `lock`, `map-state.json`). For local wikis `wikiDir = axiom`, for global wikis it's the user-chosen directory.

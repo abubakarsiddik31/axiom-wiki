@@ -52,7 +52,7 @@ services:
   axiom-wiki:
     image: axiomwiki/axiom-wiki
     volumes:
-      - ./.axiom:/wiki
+      - ./axiom:/wiki
     environment:
       - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
 ```

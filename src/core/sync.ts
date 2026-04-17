@@ -47,8 +47,8 @@ export function saveMapState(wikiDir: string, state: MapState): void {
 
 export function loadMapState(wikiDir: string): MapState | null {
   const filePath = path.join(wikiDir, MAP_STATE_FILENAME)
-  // Fallback for v0.1.x wikis that stored map-state under .axiom/
-  const legacyPath = path.join(wikiDir, '.axiom', MAP_STATE_FILENAME)
+  // Fallback for older wikis that stored map-state in a subdirectory
+  const legacyPath = path.join(wikiDir, 'axiom', MAP_STATE_FILENAME)
   const resolvedPath = fs.existsSync(filePath) ? filePath
     : fs.existsSync(legacyPath) ? legacyPath : filePath
   if (!fs.existsSync(resolvedPath)) return null
@@ -197,7 +197,7 @@ export function getStalePages(state: MapState, threshold = 0.5): MapPageEntry[] 
 }
 
 export function deriveProjectRoot(wikiDir: string): string | undefined {
-  if (wikiDir.endsWith('.axiom') || wikiDir.endsWith('.axiom/')) {
+  if (wikiDir.endsWith('/axiom') || wikiDir.endsWith('/axiom/')) {
     return path.dirname(wikiDir.replace(/\/$/, ''))
   }
   return undefined

@@ -108,7 +108,7 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 
 **Incremental sync** — `axiom-wiki sync` detects changes and lets the agent update stale pages and document new areas. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
 
-**Local project wikis** — Scope a wiki to a single project inside `.axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
+**Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 
 **Web clipper** — `axiom-wiki clip <url>` fetches articles via Readability and saves them for ingest. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/clip/)
 
@@ -144,10 +144,10 @@ See [Installation docs](https://abubakarsiddik31.github.io/axiom-wiki/getting-st
 
 ## Wiki Structure
 
-For local wikis (inside a project), everything lives in `.axiom/`:
+For local wikis (inside a project), everything lives in `axiom/`:
 
 ```
-.axiom/
+axiom/
   config.json           Local config
   state.json            Compilation state (source hashes)
   map-state.json        Autowiki/sync state

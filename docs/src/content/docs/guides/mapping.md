@@ -80,7 +80,7 @@ Running `autowiki` again creates fresh pages from scratch. Use this when the pro
 
 ## How it works under the hood
 
-Autowiki saves its state to `.axiom/map-state.json` — this tracks which pages were created and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.
+Autowiki saves its state to `axiom/map-state.json` — this tracks which pages were created and the git commit hash at the time of the last sync. This is what lets `sync` know what changed.
 
 The agent runs in batches. Each batch is a fresh LLM call with a clean context window. Between batches, the wiki itself serves as the agent's memory — it reads `wiki/index.md` to see what it's already documented, then focuses on uncovered areas. This means:
 

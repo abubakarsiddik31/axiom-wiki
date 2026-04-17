@@ -18,7 +18,7 @@ function makeTmpDir(): string {
 }
 
 function scaffoldWiki(wikiDir: string): void {
-  fs.mkdirSync(path.join(wikiDir, '.axiom'), { recursive: true });
+  fs.mkdirSync(path.join(wikiDir, 'axiom'), { recursive: true });
   fs.mkdirSync(path.join(wikiDir, 'raw'), { recursive: true });
   fs.mkdirSync(path.join(wikiDir, 'wiki/pages/entities'), { recursive: true });
   fs.mkdirSync(path.join(wikiDir, 'wiki/pages/concepts'), { recursive: true });
@@ -125,7 +125,7 @@ describe('state management', () => {
       expect(loaded.sources['file.md'].sha256).toBe('hash1');
     });
 
-    it('creates .axiom directory if missing', () => {
+    it('creates axiom directory if missing', () => {
       const freshDir = makeTmpDir();
       const state: CompilationState = { version: 1, sources: {}, frozenSlugs: [] };
       saveState(freshDir, state);

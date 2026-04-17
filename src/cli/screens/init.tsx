@@ -46,7 +46,7 @@ function detectContext() {
 
   // Detect legacy ~/my-wiki directory from older versions
   const legacyWikiDir = path.join(os.homedir(), 'my-wiki')
-  const newWikiDir = path.join(os.homedir(), '.axiom')
+  const newWikiDir = path.join(os.homedir(), 'axiom')
   const hasLegacyWiki = fs.existsSync(legacyWikiDir) && isLegacyWikiDir(legacyWikiDir) && !fs.existsSync(newWikiDir)
 
   return { gitRoot, isHomedir, existingLocalConfig, hasLegacyWiki, legacyWikiDir }
@@ -63,7 +63,7 @@ export function InitScreen() {
   const [ollamaError, setOllamaError] = useState('')
   const [model, setModel] = useState('')
   const [customModel, setCustomModel] = useState('')
-  const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), '.axiom'))
+  const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'axiom'))
   const [rawDir, setRawDir] = useState('')
   const [migrating, setMigrating] = useState(false)
   const [migrationDone, setMigrationDone] = useState(false)
@@ -77,11 +77,11 @@ export function InitScreen() {
 
   useEffect(() => {
     if (scope === 'local') {
-      setWikiDir(path.join(process.cwd(), '.axiom'))
-      setRawDir(path.join(process.cwd(), '.axiom/raw'))
+      setWikiDir(path.join(process.cwd(), 'axiom'))
+      setRawDir(path.join(process.cwd(), 'axiom/raw'))
     } else if (scope === 'global') {
-      setWikiDir(path.join(os.homedir(), '.axiom'))
-      setRawDir(path.join(os.homedir(), '.axiom', 'raw'))
+      setWikiDir(path.join(os.homedir(), 'axiom'))
+      setRawDir(path.join(os.homedir(), 'axiom', 'raw'))
     }
   }, [scope])
 
@@ -114,16 +114,16 @@ export function InitScreen() {
         clearConfig(scope ?? 'global')
 
         if (scope === 'local') {
-          const localConfigPath = path.join(process.cwd(), '.axiom/config.json')
+          const localConfigPath = path.join(process.cwd(), 'axiom/config.json')
           setLocalConfig(configToSave, localConfigPath)
 
-          // Add .axiom/ to .gitignore (contains API key + generated content)
+          // Add axiom/ to .gitignore (contains API key + generated content)
           const gitignorePath = path.join(context.gitRoot ?? process.cwd(), '.gitignore')
-          const entry = '.axiom/'
+          const entry = 'axiom/'
           const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : ''
           if (!existing.split('\n').some((l) => l.trim() === entry)) {
             fs.writeFileSync(gitignorePath, existing + (existing.endsWith('\n') || !existing ? '' : '\n') + entry + '\n', 'utf-8')
-            addLog('✓ Added .axiom/ to .gitignore')
+            addLog('✓ Added axiom/ to .gitignore')
           }
         } else {
           setConfig(configToSave)
@@ -208,7 +208,7 @@ export function InitScreen() {
 
   if (step === 0.5) {
     const { legacyWikiDir } = context
-    const newDir = path.join(os.homedir(), '.axiom')
+    const newDir = path.join(os.homedir(), 'axiom')
 
     const doMigrate = async () => {
       setMigrating(true)
@@ -253,7 +253,7 @@ export function InitScreen() {
           <Text>Found an existing wiki at <Text color="cyan">{legacyWikiDir}</Text></Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">Since v0.5.0, the default global wiki directory is <Text color="white">~/.axiom</Text></Text>
+          <Text color="gray">Since v0.5.0, the default global wiki directory is <Text color="white">~/axiom</Text></Text>
         </Box>
         {migrating ? (
           <Box marginTop={1}>
@@ -276,7 +276,7 @@ export function InitScreen() {
         {migrationError && (
           <Box marginTop={1}>
             <Text color="red">✗ Migration failed: {migrationError}</Text>
-            <Text color="gray">You can move it manually: mv ~/my-wiki ~/.axiom</Text>
+            <Text color="gray">You can move it manually: mv ~/my-wiki ~/axiom</Text>
           </Box>
         )}
       </Box>
@@ -289,7 +289,7 @@ export function InitScreen() {
     // In home directory, only offer global wiki
     if (isHomedir) {
       const items = [
-        { label: `Global — personal wiki in ${os.homedir()}/.axiom/`, value: 'global' },
+        { label: `Global — personal wiki in ${os.homedir()}/axiom/`, value: 'global' },
       ]
       return (
         <Box flexDirection="column" padding={1}>
@@ -318,8 +318,8 @@ export function InitScreen() {
     }
 
     const items = [
-      { label: `Local  — project wiki in ${process.cwd()}/.axiom/`, value: 'local' },
-      { label: `Global — personal wiki in ${os.homedir()}/.axiom/`, value: 'global' },
+      { label: `Local  — project wiki in ${process.cwd()}/axiom/`, value: 'local' },
+      { label: `Global — personal wiki in ${os.homedir()}/axiom/`, value: 'global' },
     ]
 
     return (
@@ -648,7 +648,7 @@ export function InitScreen() {
         <Text>Your wiki:    <Text color="cyan">{expandedWiki}/wiki/</Text></Text>
         <Text>Raw sources:  <Text color="cyan">{expandedRaw}/</Text></Text>
         {scope === 'local' && (
-          <Text color="gray">Config: <Text color="cyan">{process.cwd()}/.axiom/config.json</Text></Text>
+          <Text color="gray">Config: <Text color="cyan">{process.cwd()}/axiom/config.json</Text></Text>
         )}
       </Box>
       <Box marginTop={1} flexDirection="column">

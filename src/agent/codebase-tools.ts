@@ -13,7 +13,7 @@ const MAX_SEARCH_LINE_LEN = 200
 
 function loadIgnore(projectRoot: string): ReturnType<typeof ignore> {
   const ig = ignore().add([
-    'node_modules', '.git', '.axiom', 'dist', 'build', 'out',
+    'node_modules', '.git', 'axiom', 'dist', 'build', 'out',
     '.next', '.nuxt', '.svelte-kit', 'coverage', '__pycache__',
     '.DS_Store', 'Thumbs.db', '*.lock', '*.log', '.env', '.env.*',
     'vendor', '.cache', '.turbo',

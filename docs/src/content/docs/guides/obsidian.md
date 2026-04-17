@@ -17,7 +17,7 @@ By default, Axiom uses `[[category/page-name]]` links (e.g. `[[entities/alan-tur
 Enable compatibility mode to use bare `[[page-name]]` links instead:
 
 ```json
-// .axiom/config.json (local) or global config
+// axiom/config.json (local) or global config
 {
   "obsidianCompat": true
 }

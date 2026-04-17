@@ -13,7 +13,7 @@ describe('compilation lock', () => {
 
   beforeEach(() => {
     wikiDir = makeTmpDir();
-    fs.mkdirSync(path.join(wikiDir, '.axiom'), { recursive: true });
+    fs.mkdirSync(path.join(wikiDir, 'axiom'), { recursive: true });
   });
 
   afterEach(() => {

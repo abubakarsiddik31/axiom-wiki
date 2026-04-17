@@ -9,7 +9,7 @@ description: Directory layout and page frontmatter schema.
 
 ```
 my-project/
-  .axiom/                 # Everything lives here
+  axiom/                  # Everything lives here
     config.json           # Local config (provider, model, paths, obsidianCompat)
     state.json            # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
     map-state.json        # Autowiki/sync state (pages, git hash)
@@ -32,7 +32,7 @@ my-project/
 ### Global wiki (personal knowledge base)
 
 ```
-~/.axiom/
+~/axiom/
   state.json              # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
   map-state.json          # Autowiki/sync state
   raw/                    # Source files to ingest

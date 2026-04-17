@@ -17,7 +17,7 @@ export interface AxiomConfig {
 
 export type ConfigScope = 'local' | 'global'
 
-const LOCAL_CONFIG_FILENAME = '.axiom/config.json'
+const LOCAL_CONFIG_FILENAME = 'axiom/config.json'
 
 const store = new Conf<AxiomConfig>({ projectName: 'axiom-wiki' })
 

@@ -11,7 +11,7 @@ Detects what changed since the last `autowiki` or `sync`, and lets the agent upd
 
 ## Prerequisites
 
-Run [`autowiki`](/axiom-wiki/commands/map/) first. Sync reads the map state (`.axiom/map-state.json`) to know what was previously documented.
+Run [`autowiki`](/axiom-wiki/commands/map/) first. Sync reads the map state (`axiom/map-state.json`) to know what was previously documented.
 
 ## How it works
 

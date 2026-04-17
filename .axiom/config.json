@@ -1,0 +1,7 @@
+{
+  "provider": "google",
+  "apiKey": "AIzaSyD7h_rYnKAHqZLh_amb36xqR4D3I7baKbc",
+  "model": "gemini-3-flash-preview",
+  "wikiDir": "/Users/abubakarsiddik/Desktop/OSS/axiom-wiki/.axiom/wiki",
+  "rawDir": "/Users/abubakarsiddik/Desktop/OSS/axiom-wiki/.axiom/wiki/raw"
+}

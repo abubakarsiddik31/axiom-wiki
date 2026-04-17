@@ -1,7 +1,0 @@
-# axiomignore — patterns to skip during watch/ingest
-# Uses the same syntax as .gitignore
-
-# Temporary files
-*.tmp
-*.swp
-.DS_Store

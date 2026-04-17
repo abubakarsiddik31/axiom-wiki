@@ -190,3 +190,13 @@ PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 [Elastic License 2.0 (ELv2)](LICENSE) — Free to use, self-host, and modify. See [LICENSE](LICENSE) for details.
 
 *Axiom Wiki — The wiki that maintains itself.*
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=abubakarsiddik31%2Faxiom-wiki&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&legend=top-left" />
+ </picture>
+</a>

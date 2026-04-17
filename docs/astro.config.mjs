@@ -33,6 +33,7 @@ export default defineConfig({
             { label: 'Ollama (Offline)', slug: 'guides/ollama' },
             { label: 'MCP Integration', slug: 'guides/mcp' },
             { label: 'Obsidian', slug: 'guides/obsidian' },
+            { label: 'Migration (v0.4 → v0.5)', slug: 'guides/migration' },
           ],
         },
         {

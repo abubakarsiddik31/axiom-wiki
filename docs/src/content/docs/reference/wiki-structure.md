@@ -32,7 +32,7 @@ my-project/
 ### Global wiki (personal knowledge base)
 
 ```
-~/my-wiki/
+~/.axiom/
   state.json              # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
   map-state.json          # Autowiki/sync state
   raw/                    # Source files to ingest
@@ -50,6 +50,10 @@ my-project/
     usage.log
     schema.md
 ```
+
+:::note
+Before v0.5.0 the default was `~/my-wiki/`. See the [migration guide](/axiom-wiki/guides/migration/) if upgrading.
+:::
 
 Global config lives in your OS config directory (`~/.config/axiom-wiki/` on macOS/Linux).
 

@@ -14,8 +14,8 @@ import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, type OllamaModel } from '../../core/ollama.js'
 
-// Steps: 0=welcome 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+// Steps: 0=welcome 0.5=migrate 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
+type Step = 0 | 0.5 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
 
@@ -23,6 +23,11 @@ function expandTilde(p: string): string {
   if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))
   if (p === '~') return os.homedir()
   return p
+}
+
+/** Check if a directory looks like a legacy axiom wiki (has wiki/pages or wiki/index.md). */
+function isLegacyWikiDir(dir: string): boolean {
+  return fs.existsSync(path.join(dir, 'wiki', 'index.md')) || fs.existsSync(path.join(dir, 'wiki', 'pages'))
 }
 
 function detectContext() {
@@ -39,7 +44,12 @@ function detectContext() {
   const isHomedir = process.cwd() === os.homedir()
   const existingLocalConfig = findLocalConfig()
 
-  return { gitRoot, isHomedir, existingLocalConfig }
+  // Detect legacy ~/my-wiki directory from older versions
+  const legacyWikiDir = path.join(os.homedir(), 'my-wiki')
+  const newWikiDir = path.join(os.homedir(), '.axiom')
+  const hasLegacyWiki = fs.existsSync(legacyWikiDir) && isLegacyWikiDir(legacyWikiDir) && !fs.existsSync(newWikiDir)
+
+  return { gitRoot, isHomedir, existingLocalConfig, hasLegacyWiki, legacyWikiDir }
 }
 
 export function InitScreen() {
@@ -53,8 +63,11 @@ export function InitScreen() {
   const [ollamaError, setOllamaError] = useState('')
   const [model, setModel] = useState('')
   const [customModel, setCustomModel] = useState('')
-  const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'my-wiki'))
+  const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), '.axiom'))
   const [rawDir, setRawDir] = useState('')
+  const [migrating, setMigrating] = useState(false)
+  const [migrationDone, setMigrationDone] = useState(false)
+  const [migrationError, setMigrationError] = useState('')
   const [log, setLog] = useState<string[]>([])
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([])
   const [ollamaStatus, setOllamaStatus] = useState<'ok' | 'no-models' | 'unreachable' | null>(null)
@@ -67,8 +80,8 @@ export function InitScreen() {
       setWikiDir(path.join(process.cwd(), '.axiom'))
       setRawDir(path.join(process.cwd(), '.axiom/raw'))
     } else if (scope === 'global') {
-      setWikiDir(path.join(os.homedir(), 'my-wiki'))
-      setRawDir(path.join(os.homedir(), 'my-wiki', 'raw'))
+      setWikiDir(path.join(os.homedir(), '.axiom'))
+      setRawDir(path.join(os.homedir(), '.axiom', 'raw'))
     }
   }, [scope])
 
@@ -78,7 +91,10 @@ export function InitScreen() {
   }, [wikiDir, step])
 
   useInput((_, key) => {
-    if (step === 0 && key.return) setStep(1)
+    if (step === 0 && key.return) {
+      setStep(context.hasLegacyWiki ? 0.5 : 1)
+    }
+    if (step === 0.5 && migrationDone && key.return) exit()
     if (step === 8 && key.return) exit()
   })
 
@@ -190,21 +206,120 @@ export function InitScreen() {
     )
   }
 
+  if (step === 0.5) {
+    const { legacyWikiDir } = context
+    const newDir = path.join(os.homedir(), '.axiom')
+
+    const doMigrate = async () => {
+      setMigrating(true)
+      setMigrationError('')
+      try {
+        fs.renameSync(legacyWikiDir, newDir)
+        // Update global config to point to new path
+        setConfig({ wikiDir: newDir, rawDir: path.join(newDir, 'raw') })
+        setMigrationDone(true)
+      } catch (err) {
+        setMigrationError(err instanceof Error ? err.message : String(err))
+      }
+      setMigrating(false)
+    }
+
+    if (migrationDone) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold color="green">✓ Migrated successfully!</Text>
+          <Box marginTop={1}>
+            <Text><Text color="gray">{legacyWikiDir}</Text> → <Text color="cyan">{newDir}</Text></Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">Global config updated. Your wiki is now at <Text color="cyan">{newDir}</Text></Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">Press <Text color="white">Enter</Text> to exit</Text>
+          </Box>
+        </Box>
+      )
+    }
+
+    const items = [
+      { label: `Migrate — move ${legacyWikiDir} → ${newDir}`, value: 'migrate' },
+      { label: 'Skip — set up a fresh wiki instead', value: 'skip' },
+    ]
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold color="yellow">Legacy wiki detected</Text>
+        <Box marginTop={1}>
+          <Text>Found an existing wiki at <Text color="cyan">{legacyWikiDir}</Text></Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray">Since v0.5.0, the default global wiki directory is <Text color="white">~/.axiom</Text></Text>
+        </Box>
+        {migrating ? (
+          <Box marginTop={1}>
+            <Text>⠸ Migrating...</Text>
+          </Box>
+        ) : (
+          <Box marginTop={1}>
+            <SelectInput
+              items={items}
+              onSelect={async (item) => {
+                if (item.value === 'migrate') {
+                  await doMigrate()
+                } else {
+                  setStep(1)
+                }
+              }}
+            />
+          </Box>
+        )}
+        {migrationError && (
+          <Box marginTop={1}>
+            <Text color="red">✗ Migration failed: {migrationError}</Text>
+            <Text color="gray">You can move it manually: mv ~/my-wiki ~/.axiom</Text>
+          </Box>
+        )}
+      </Box>
+    )
+  }
+
   if (step === 1) {
     const { gitRoot, isHomedir, existingLocalConfig } = context
+
+    // In home directory, only offer global wiki
+    if (isHomedir) {
+      const items = [
+        { label: `Global — personal wiki in ${os.homedir()}/.axiom/`, value: 'global' },
+      ]
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Where should this wiki live?</Text>
+          <Box marginTop={1}>
+            <Text color="gray">You're in your home directory.</Text>
+          </Box>
+          <Box marginTop={1}>
+            <SelectInput
+              items={items}
+              onSelect={(item) => {
+                setScope(item.value as ConfigScope)
+                setStep(2)
+              }}
+            />
+          </Box>
+        </Box>
+      )
+    }
 
     let contextMessage: string
     if (gitRoot) {
       contextMessage = `I see you're in a git repo at ${gitRoot}.`
-    } else if (isHomedir) {
-      contextMessage = `You're in your home directory.`
     } else {
       contextMessage = `You're in ${process.cwd()}.`
     }
 
     const items = [
       { label: `Local  — project wiki in ${process.cwd()}/.axiom/`, value: 'local' },
-      { label: `Global — personal wiki in ${os.homedir()}/my-wiki/`, value: 'global' },
+      { label: `Global — personal wiki in ${os.homedir()}/.axiom/`, value: 'global' },
     ]
 
     return (

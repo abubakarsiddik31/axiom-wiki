@@ -5,8 +5,12 @@ description: Use Axiom Wiki scoped to a single project or repository.
 
 Axiom Wiki can run at two levels:
 
-- **Global** — a personal wiki in `~/my-wiki/` for general knowledge
+- **Global** — a personal wiki in `~/.axiom/` for general knowledge
 - **Local** — a project-scoped wiki inside `.axiom/` for codebase documentation
+
+:::note
+In versions before v0.5.0, the global wiki defaulted to `~/my-wiki/`. See the [migration guide](/axiom-wiki/guides/migration/) if you're upgrading.
+:::
 
 ## Setting up a local wiki
 
@@ -15,8 +19,10 @@ During `axiom-wiki init`, the wizard detects your context (git repo, home direct
 ```
 Where should this wiki live?
   > Local  — project wiki in /path/to/project/.axiom/
-    Global — personal wiki in ~/my-wiki/
+    Global — personal wiki in ~/.axiom/
 ```
+
+When running from your home directory, only the Global option is shown.
 
 **Local mode** stores everything inside `.axiom/`:
 

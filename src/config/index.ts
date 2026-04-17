@@ -18,6 +18,7 @@ export interface AxiomConfig {
 export type ConfigScope = 'local' | 'global'
 
 const LOCAL_CONFIG_FILENAME = 'axiom/config.json'
+const LEGACY_LOCAL_CONFIG_FILENAME = '.axiom/config.json'
 
 const store = new Conf<AxiomConfig>({ projectName: 'axiom-wiki' })
 
@@ -54,6 +55,12 @@ export function findLocalConfig(startDir?: string): string | null {
     if (fs.existsSync(candidate)) {
       _cachedLocalConfigPath = candidate
       return candidate
+    }
+    // Fall back to legacy .axiom/ directory for existing users
+    const legacyCandidate = path.join(dir, LEGACY_LOCAL_CONFIG_FILENAME)
+    if (fs.existsSync(legacyCandidate)) {
+      _cachedLocalConfigPath = legacyCandidate
+      return legacyCandidate
     }
     const parent = path.dirname(dir)
     if (parent === dir || dir === root) break
@@ -136,6 +143,13 @@ export function setLocalConfig(cfg: Partial<AxiomConfig>, configPath?: string): 
 
 export function configScope(): ConfigScope {
   return getLocalConfig() !== null ? 'local' : 'global'
+}
+
+/** Returns true if the local config is in a legacy `.axiom/` directory. */
+export function isLegacyLocalConfig(): boolean {
+  const configPath = findLocalConfig()
+  if (!configPath) return false
+  return configPath.includes('/.axiom/')
 }
 
 export function getLocalConfigError(): string | null {

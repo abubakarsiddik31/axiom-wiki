@@ -197,7 +197,8 @@ export function getStalePages(state: MapState, threshold = 0.5): MapPageEntry[] 
 }
 
 export function deriveProjectRoot(wikiDir: string): string | undefined {
-  if (wikiDir.endsWith('/axiom') || wikiDir.endsWith('/axiom/')) {
+  const normalized = wikiDir.replace(/\/$/, '')
+  if (normalized.endsWith('/axiom') || normalized.endsWith('/.axiom')) {
     return path.dirname(wikiDir.replace(/\/$/, ''))
   }
   return undefined

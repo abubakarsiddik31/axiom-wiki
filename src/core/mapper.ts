@@ -4,7 +4,7 @@ import { execSync } from 'child_process'
 import ignore from 'ignore'
 
 const STANDARD_IGNORES = [
-  'node_modules', '.git', 'axiom', 'dist', 'build', 'out',
+  'node_modules', '.git', 'axiom', '.axiom', 'dist', 'build', 'out',
   '.next', '.nuxt', '.svelte-kit', 'coverage', '__pycache__',
   '.DS_Store', 'Thumbs.db', '*.lock', '*.log', '.env', '.env.*',
   'vendor', '.cache', '.turbo', '.vercel', '.netlify',

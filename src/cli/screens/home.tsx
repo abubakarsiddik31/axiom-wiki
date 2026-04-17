@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import TextInput from 'ink-text-input'
-import { getConfig, hasConfig, configScope } from '../../config/index.js'
+import { getConfig, hasConfig, configScope, isLegacyLocalConfig } from '../../config/index.js'
 import { getStatus } from '../../core/wiki.js'
 import { Header } from '../components/Header.js'
 import { SlashMenu, SLASH_COMMANDS, filterCommands, parseSlash } from '../components/SlashMenu.js'
@@ -224,6 +224,16 @@ export function HomeScreen() {
   return (
     <Box flexDirection="column" padding={1}>
       <Header config={config} totalPages={totalPages} scope={scope} />
+
+      {/* Deprecation notice for legacy .axiom/ directory */}
+      {isLegacyLocalConfig() && (
+        <Box marginBottom={1} paddingX={1}>
+          <Text color="yellow">⚠ Deprecated: </Text>
+          <Text color="gray">.axiom/ has been renamed to axiom/ — run </Text>
+          <Text color="cyan">axiom-wiki init</Text>
+          <Text color="gray"> to migrate.</Text>
+        </Box>
+      )}
 
       {/* Log / output area */}
       <Box flexDirection="column" marginBottom={1}>

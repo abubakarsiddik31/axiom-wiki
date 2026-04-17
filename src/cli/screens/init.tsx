@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
-import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
+import { setConfig, clearConfig, setLocalConfig, findLocalConfig, isLegacyLocalConfig, type ConfigScope } from '../../config/index.js'
 import { VERSION } from '../../version.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { withRetry } from '../../core/retry.js'
@@ -44,12 +44,17 @@ function detectContext() {
   const isHomedir = process.cwd() === os.homedir()
   const existingLocalConfig = findLocalConfig()
 
-  // Detect legacy ~/my-wiki directory from older versions
-  const legacyWikiDir = path.join(os.homedir(), 'my-wiki')
-  const newWikiDir = path.join(os.homedir(), 'axiom')
-  const hasLegacyWiki = fs.existsSync(legacyWikiDir) && isLegacyWikiDir(legacyWikiDir) && !fs.existsSync(newWikiDir)
+  // Detect legacy ~/my-wiki global directory from older versions
+  const legacyGlobalDir = path.join(os.homedir(), 'my-wiki')
+  const newGlobalDir = path.join(os.homedir(), 'axiom')
+  const hasLegacyGlobal = fs.existsSync(legacyGlobalDir) && isLegacyWikiDir(legacyGlobalDir) && !fs.existsSync(newGlobalDir)
 
-  return { gitRoot, isHomedir, existingLocalConfig, hasLegacyWiki, legacyWikiDir }
+  // Detect legacy .axiom/ local directory from older versions
+  const legacyLocalDir = path.join(process.cwd(), '.axiom')
+  const newLocalDir = path.join(process.cwd(), 'axiom')
+  const hasLegacyLocal = fs.existsSync(legacyLocalDir) && isLegacyWikiDir(legacyLocalDir) && !fs.existsSync(newLocalDir)
+
+  return { gitRoot, isHomedir, existingLocalConfig, hasLegacyGlobal, legacyGlobalDir, hasLegacyLocal, legacyLocalDir, newLocalDir }
 }
 
 export function InitScreen() {
@@ -92,7 +97,7 @@ export function InitScreen() {
 
   useInput((_, key) => {
     if (step === 0 && key.return) {
-      setStep(context.hasLegacyWiki ? 0.5 : 1)
+      setStep((context.hasLegacyGlobal || context.hasLegacyLocal) ? 0.5 : 1)
     }
     if (step === 0.5 && migrationDone && key.return) exit()
     if (step === 8 && key.return) exit()
@@ -117,12 +122,15 @@ export function InitScreen() {
           const localConfigPath = path.join(process.cwd(), 'axiom/config.json')
           setLocalConfig(configToSave, localConfigPath)
 
-          // Add axiom/ to .gitignore (contains API key + generated content)
+          // Add axiom/ and .axiom/ to .gitignore (contains API key + generated content)
           const gitignorePath = path.join(context.gitRoot ?? process.cwd(), '.gitignore')
-          const entry = 'axiom/'
           const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : ''
-          if (!existing.split('\n').some((l) => l.trim() === entry)) {
-            fs.writeFileSync(gitignorePath, existing + (existing.endsWith('\n') || !existing ? '' : '\n') + entry + '\n', 'utf-8')
+          const lines = existing.split('\n').map((l: string) => l.trim())
+          let additions = ''
+          if (!lines.includes('axiom/')) additions += 'axiom/\n'
+          if (!lines.includes('.axiom/')) additions += '.axiom/\n'
+          if (additions) {
+            fs.writeFileSync(gitignorePath, existing + (existing.endsWith('\n') || !existing ? '' : '\n') + additions, 'utf-8')
             addLog('✓ Added axiom/ to .gitignore')
           }
         } else {
@@ -207,16 +215,37 @@ export function InitScreen() {
   }
 
   if (step === 0.5) {
-    const { legacyWikiDir } = context
-    const newDir = path.join(os.homedir(), 'axiom')
+    const { hasLegacyGlobal, legacyGlobalDir, hasLegacyLocal, legacyLocalDir, newLocalDir } = context
+    const newGlobalDir = path.join(os.homedir(), 'axiom')
 
     const doMigrate = async () => {
       setMigrating(true)
       setMigrationError('')
       try {
-        fs.renameSync(legacyWikiDir, newDir)
-        // Update global config to point to new path
-        setConfig({ wikiDir: newDir, rawDir: path.join(newDir, 'raw') })
+        if (hasLegacyGlobal) {
+          fs.renameSync(legacyGlobalDir, newGlobalDir)
+          setConfig({ wikiDir: newGlobalDir, rawDir: path.join(newGlobalDir, 'raw') })
+        }
+        if (hasLegacyLocal) {
+          fs.renameSync(legacyLocalDir, newLocalDir)
+          // Update config.json paths inside the moved directory
+          const configPath = path.join(newLocalDir, 'config.json')
+          if (fs.existsSync(configPath)) {
+            const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+            cfg.wikiDir = newLocalDir
+            cfg.rawDir = path.join(newLocalDir, 'raw')
+            fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf-8')
+          }
+          // Update .gitignore: replace .axiom/ with axiom/
+          const gitignorePath = path.join(context.gitRoot ?? process.cwd(), '.gitignore')
+          if (fs.existsSync(gitignorePath)) {
+            let content = fs.readFileSync(gitignorePath, 'utf-8')
+            if (!content.split('\n').some((l: string) => l.trim() === 'axiom/')) {
+              content = content.replace(/^\.axiom\/$/m, 'axiom/')
+              fs.writeFileSync(gitignorePath, content, 'utf-8')
+            }
+          }
+        }
         setMigrationDone(true)
       } catch (err) {
         setMigrationError(err instanceof Error ? err.message : String(err))
@@ -228,12 +257,16 @@ export function InitScreen() {
       return (
         <Box flexDirection="column" padding={1}>
           <Text bold color="green">✓ Migrated successfully!</Text>
-          <Box marginTop={1}>
-            <Text><Text color="gray">{legacyWikiDir}</Text> → <Text color="cyan">{newDir}</Text></Text>
-          </Box>
-          <Box marginTop={1}>
-            <Text color="gray">Global config updated. Your wiki is now at <Text color="cyan">{newDir}</Text></Text>
-          </Box>
+          {hasLegacyGlobal && (
+            <Box marginTop={1}>
+              <Text><Text color="gray">{legacyGlobalDir}</Text> → <Text color="cyan">{newGlobalDir}</Text></Text>
+            </Box>
+          )}
+          {hasLegacyLocal && (
+            <Box marginTop={1}>
+              <Text><Text color="gray">{legacyLocalDir}</Text> → <Text color="cyan">{newLocalDir}</Text></Text>
+            </Box>
+          )}
           <Box marginTop={1}>
             <Text color="gray">Press <Text color="white">Enter</Text> to exit</Text>
           </Box>
@@ -242,18 +275,21 @@ export function InitScreen() {
     }
 
     const items = [
-      { label: `Migrate — move ${legacyWikiDir} → ${newDir}`, value: 'migrate' },
+      { label: 'Migrate — rename to new directory layout', value: 'migrate' },
       { label: 'Skip — set up a fresh wiki instead', value: 'skip' },
     ]
 
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="yellow">Legacy wiki detected</Text>
-        <Box marginTop={1}>
-          <Text>Found an existing wiki at <Text color="cyan">{legacyWikiDir}</Text></Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color="gray">Since v0.5.0, the default global wiki directory is <Text color="white">~/axiom</Text></Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color="gray">Since v0.5.0, wiki directories have been renamed:</Text>
+          {hasLegacyGlobal && (
+            <Text>  <Text color="gray">{legacyGlobalDir}</Text> → <Text color="cyan">{newGlobalDir}</Text></Text>
+          )}
+          {hasLegacyLocal && (
+            <Text>  <Text color="gray">{legacyLocalDir}</Text> → <Text color="cyan">{newLocalDir}</Text></Text>
+          )}
         </Box>
         {migrating ? (
           <Box marginTop={1}>
@@ -274,9 +310,10 @@ export function InitScreen() {
           </Box>
         )}
         {migrationError && (
-          <Box marginTop={1}>
+          <Box marginTop={1} flexDirection="column">
             <Text color="red">✗ Migration failed: {migrationError}</Text>
-            <Text color="gray">You can move it manually: mv ~/my-wiki ~/axiom</Text>
+            {hasLegacyGlobal && <Text color="gray">  Manual: mv ~/my-wiki ~/axiom</Text>}
+            {hasLegacyLocal && <Text color="gray">  Manual: mv .axiom axiom</Text>}
           </Box>
         )}
       </Box>

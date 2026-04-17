@@ -76,6 +76,12 @@ export function resolveModel(config: AxiomConfig): AnyModel {
       return createOpenAI({ apiKey })(modelId)
     case 'anthropic':
       return createAnthropic({ apiKey })(modelId)
+    case 'openrouter':
+      return createOpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey,
+        headers: { 'HTTP-Referer': 'https://github.com/abubakarsiddik31/axiom-wiki', 'X-Title': 'Axiom Wiki' },
+      })(modelId)
     case 'ollama': {
       const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/v1'
       const numCtx = getOllamaNumCtx(modelId, config.ollamaNumCtx)

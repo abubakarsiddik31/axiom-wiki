@@ -1,4 +1,4 @@
-export type ProviderId = 'google' | 'openai' | 'anthropic' | 'ollama'
+export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openrouter' | 'ollama'
 
 export interface ModelDef {
   id: string
@@ -64,6 +64,20 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
       { id: 'claude-opus-4-6',   label: 'Claude Opus 4.6',   desc: 'Most capable — best reasoning and coding', pricing: { input: 15.00, output: 75.00 }, contextWindow: 200_000 },
       { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', desc: 'Balanced speed and quality', recommended: true, pricing: { input: 3.00, output: 15.00 }, contextWindow: 200_000 },
       { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5',  desc: 'Fast and cost-efficient', pricing: { input: 0.80, output: 4.00 }, contextWindow: 200_000 },
+    ],
+  },
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    keyLabel: 'OpenRouter API Key',
+    keyEnv: 'OPENROUTER_API_KEY',
+    keyUrl: 'https://openrouter.ai/keys',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    models: [
+      // Models are fetched dynamically from the API during setup.
+      // This list is only used as a fallback if the API is unreachable.
+      { id: 'openrouter/auto', label: 'Auto (best for prompt)', desc: 'Automatically selects the best model', recommended: true },
     ],
   },
   ollama: {

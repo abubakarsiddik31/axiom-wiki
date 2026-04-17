@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 export interface AxiomConfig {
-  provider: 'google' | 'openai' | 'anthropic' | 'ollama'
+  provider: 'google' | 'openai' | 'anthropic' | 'openrouter' | 'ollama'
   apiKey: string
   model: string
   wikiDir: string

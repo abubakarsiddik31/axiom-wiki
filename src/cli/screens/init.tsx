@@ -13,6 +13,7 @@ import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, type OllamaModel } from '../../core/ollama.js'
+import { fetchOpenRouterModels, pickPopularModels, formatModelLabel, type OpenRouterModel } from '../../core/openrouter.js'
 
 // Steps: 0=welcome 0.5=migrate 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
 type Step = 0 | 0.5 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
@@ -79,6 +80,8 @@ export function InitScreen() {
   const [pulling, setPulling] = useState(false)
   const [pullProgress, setPullProgress] = useState('')
   const [pullError, setPullError] = useState('')
+  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>([])
+  const [openRouterStatus, setOpenRouterStatus] = useState<'ok' | 'no-models' | 'unreachable' | 'auth-error' | 'loading' | null>(null)
 
   useEffect(() => {
     if (scope === 'local') {
@@ -455,7 +458,16 @@ export function InitScreen() {
             value={apiKey}
             onChange={setApiKey}
             mask="•"
-            onSubmit={(val) => { if (val.trim()) setStep(4) }}
+            onSubmit={async (val) => {
+              if (!val.trim()) return
+              if (provider === 'openrouter') {
+                setOpenRouterStatus('loading')
+                const result = await fetchOpenRouterModels(val.trim())
+                setOpenRouterStatus(result.status)
+                setOpenRouterModels(result.models)
+              }
+              setStep(4)
+            }}
           />
         </Box>
         <Box marginTop={1}>
@@ -514,6 +526,9 @@ export function InitScreen() {
           <Text bold>Enter model name:</Text>
           {provider === 'ollama' && (
             <Text color="gray">The model will be pulled automatically if not already available.</Text>
+          )}
+          {provider === 'openrouter' && (
+            <Text color="gray">Enter the model ID (e.g. anthropic/claude-sonnet-4). Browse: https://openrouter.ai/models</Text>
           )}
           <Box marginTop={1}>
             <Text>{'> '}</Text>
@@ -593,7 +608,68 @@ export function InitScreen() {
       )
     }
 
-    // Non-Ollama providers: hardcoded list
+    // OpenRouter: show fetched models or loading/error state
+    if (provider === 'openrouter') {
+      if (openRouterStatus === 'loading') {
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold>Fetching available models from OpenRouter...</Text>
+          </Box>
+        )
+      }
+      if (openRouterStatus === 'auth-error') {
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold color="red">Invalid API key.</Text>
+            <Text color="gray">Check your key at https://openrouter.ai/keys</Text>
+            <Text color="gray">Press Ctrl+C to go back.</Text>
+          </Box>
+        )
+      }
+      if (openRouterStatus === 'unreachable' || openRouterStatus === 'no-models') {
+        // Fallback to manual entry
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text bold color="yellow">Could not fetch models from OpenRouter.</Text>
+            <Text>Enter a model ID manually (e.g. anthropic/claude-sonnet-4):</Text>
+            <Box marginTop={1}>
+              <Text>{'> '}</Text>
+              <TextInput
+                value={customModel}
+                onChange={setCustomModel}
+                onSubmit={(val) => { if (val.trim()) { setModel(val.trim()); setStep(5) } }}
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">Browse models at https://openrouter.ai/models</Text>
+            </Box>
+          </Box>
+        )
+      }
+      // Show popular picks + custom option
+      const popular = pickPopularModels(openRouterModels)
+      const items = [
+        ...popular.map((m) => ({ label: formatModelLabel(m), value: m.id })),
+        { label: `[ Browse all ${openRouterModels.length} models — enter ID ]`, value: '__custom__' },
+      ]
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Choose a model <Text color="gray">({openRouterModels.length} available)</Text>:</Text>
+          <Box marginTop={1}>
+            <SelectInput
+              items={items}
+              onSelect={(item) => {
+                if (item.value === '__custom__') { setModel('__custom__'); return }
+                setModel(item.value)
+                setStep(5)
+              }}
+            />
+          </Box>
+        </Box>
+      )
+    }
+
+    // Non-Ollama/non-OpenRouter providers: hardcoded list
     const models = [
       ...PROVIDERS[provider!].models.map((m) => ({ label: `${m.label}  ${m.desc}`, value: m.id })),
       { label: '[ Enter custom model name ]', value: '__custom__' },

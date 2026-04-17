@@ -145,6 +145,11 @@ export function configScope(): ConfigScope {
   return getLocalConfig() !== null ? 'local' : 'global'
 }
 
+/** Clear the cached local config path. Call after renaming the config directory. */
+export function clearLocalConfigCache(): void {
+  _cachedLocalConfigPath = undefined
+}
+
 /** Returns true if the local config is in a legacy `.axiom/` directory. */
 export function isLegacyLocalConfig(): boolean {
   const configPath = findLocalConfig()

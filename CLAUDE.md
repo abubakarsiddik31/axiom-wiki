@@ -115,7 +115,7 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 2. `state.sources[filename].sha256 = ''` + `saveState()` — clear hash so next ingest detects it as "changed"
 
 **Compilation lock rules:**
-- Lock is at `axiom/lock` (PID + timestamp JSON). Stale locks from dead processes auto-reclaim.
+- Lock is at `{wikiDir}/lock` (PID + timestamp JSON). Stale locks from dead processes auto-reclaim.
 - **Every code path that acquires the lock must release it** — including early returns, error catches, user cancellation ("n"), and Escape key. This is the most common source of bugs.
 - The `watch` screen uses `try/finally` to guarantee release.
 - The `ingest` screen has multiple async pause points (reingest-confirm, interactive-reply, interactive-confirm) where the lock stays held until the user responds — release on both "y" and "n" paths.

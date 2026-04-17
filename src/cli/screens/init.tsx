@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
-import { setConfig, clearConfig, setLocalConfig, findLocalConfig, isLegacyLocalConfig, type ConfigScope } from '../../config/index.js'
+import { setConfig, clearConfig, setLocalConfig, findLocalConfig, isLegacyLocalConfig, clearLocalConfigCache, type ConfigScope } from '../../config/index.js'
 import { VERSION } from '../../version.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { withRetry } from '../../core/retry.js'
@@ -228,6 +228,7 @@ export function InitScreen() {
         }
         if (hasLegacyLocal) {
           fs.renameSync(legacyLocalDir, newLocalDir)
+          clearLocalConfigCache()
           // Update config.json paths inside the moved directory
           const configPath = path.join(newLocalDir, 'config.json')
           if (fs.existsSync(configPath)) {
@@ -236,12 +237,16 @@ export function InitScreen() {
             cfg.rawDir = path.join(newLocalDir, 'raw')
             fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf-8')
           }
-          // Update .gitignore: replace .axiom/ with axiom/
+          // Update .gitignore: add axiom/ if not present
           const gitignorePath = path.join(context.gitRoot ?? process.cwd(), '.gitignore')
           if (fs.existsSync(gitignorePath)) {
             let content = fs.readFileSync(gitignorePath, 'utf-8')
             if (!content.split('\n').some((l: string) => l.trim() === 'axiom/')) {
-              content = content.replace(/^\.axiom\/$/m, 'axiom/')
+              content = content.replace(/^\.axiom\/?$/m, 'axiom/')
+              // If regex didn't match (different format), append
+              if (!content.split('\n').some((l: string) => l.trim() === 'axiom/')) {
+                content += (content.endsWith('\n') ? '' : '\n') + 'axiom/\n'
+              }
               fs.writeFileSync(gitignorePath, content, 'utf-8')
             }
           }

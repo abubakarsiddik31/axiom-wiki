@@ -3,6 +3,7 @@ import { Command } from 'commander'
 import { hasConfig } from '../src/config/index.js'
 import { renderApp } from '../src/cli/index.js'
 import { startMcpServer } from '../src/mcp/server.js'
+import { VERSION } from '../src/version.js'
 import { createAxiomAgent } from '../src/agent/index.js'
 import { getConfig } from '../src/config/index.js'
 
@@ -16,7 +17,7 @@ function requireConfig() {
 const program = new Command()
   .name('axiom-wiki')
   .description('The wiki that maintains itself.')
-  .version('0.1.0')
+  .version(VERSION)
 
 program
   .command('init')

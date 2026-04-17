@@ -7,6 +7,7 @@ import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
 import { setConfig, clearConfig, setLocalConfig, findLocalConfig, type ConfigScope } from '../../config/index.js'
+import { VERSION } from '../../version.js'
 import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.js'
 import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
@@ -170,7 +171,7 @@ export function InitScreen() {
           <Text color="gray" dimColor>{'  '}The wiki that maintains itself.</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">{'  '}v0.2.0</Text>
+          <Text color="gray">{'  '}v{VERSION}</Text>
         </Box>
         {context.existingLocalConfig ? (
           <Box marginTop={2} flexDirection="column">

@@ -71,6 +71,10 @@ See the [full documentation](https://abubakarsiddik31.github.io/axiom-wiki) for 
 | **Google Gemini** *(recommended)* | Yes | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
 | **OpenAI** | No | [platform.openai.com](https://platform.openai.com/api-keys) |
 | **Anthropic** | No | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **OpenRouter** | Yes (free models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **DeepSeek** | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| **Groq** | Yes | [console.groq.com](https://console.groq.com/keys) |
+| **Mistral AI** | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | **Ollama** *(local)* | Free | [ollama.com](https://ollama.com) |
 
 ---

@@ -11,7 +11,7 @@ axiom-wiki init
 
 The setup wizard asks for:
 1. **Scope** — local (project) or global (personal) wiki
-2. **LLM provider** — Google Gemini (free), OpenAI, Anthropic, or Ollama
+2. **LLM provider** — Google Gemini (free), OpenAI, Anthropic, OpenRouter, DeepSeek, Groq, Mistral, or Ollama
 3. **API key** — paste your key (or Ollama URL)
 4. **Model** — pick from the provider's model list
 5. **Wiki directory** — where pages are stored

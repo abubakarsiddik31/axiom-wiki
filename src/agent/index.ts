@@ -66,6 +66,11 @@ export function createAutowikiAgent(config: AxiomConfig, projectRoot: string, sn
 
 type AnyModel = ReturnType<ReturnType<typeof createGoogleGenerativeAI>>
 
+/** Create an OpenAI-compatible provider client for API gateways that follow the OpenAI /v1 spec. */
+function createOpenAICompatible(baseURL: string, apiKey: string, headers?: Record<string, string>) {
+  return createOpenAI({ baseURL, apiKey, headers })
+}
+
 export function resolveModel(config: AxiomConfig): AnyModel {
   const { provider, model: modelId, apiKey } = config
   if (process.env['AXIOM_DEBUG'] === '1') console.error('[resolveModel]', { provider, modelId, ollamaBaseUrl: config.ollamaBaseUrl })
@@ -77,11 +82,16 @@ export function resolveModel(config: AxiomConfig): AnyModel {
     case 'anthropic':
       return createAnthropic({ apiKey })(modelId)
     case 'openrouter':
-      return createOpenAI({
-        baseURL: 'https://openrouter.ai/api/v1',
-        apiKey,
-        headers: { 'HTTP-Referer': 'https://github.com/abubakarsiddik31/axiom-wiki', 'X-Title': 'Axiom Wiki' },
+      return createOpenAICompatible('https://openrouter.ai/api/v1', apiKey, {
+        'HTTP-Referer': 'https://github.com/abubakarsiddik31/axiom-wiki',
+        'X-Title': 'Axiom Wiki',
       })(modelId)
+    case 'deepseek':
+      return createOpenAICompatible('https://api.deepseek.com/v1', apiKey)(modelId)
+    case 'groq':
+      return createOpenAICompatible('https://api.groq.com/openai/v1', apiKey)(modelId)
+    case 'mistral':
+      return createOpenAICompatible('https://api.mistral.ai/v1', apiKey)(modelId)
     case 'ollama': {
       const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/v1'
       const numCtx = getOllamaNumCtx(modelId, config.ollamaNumCtx)

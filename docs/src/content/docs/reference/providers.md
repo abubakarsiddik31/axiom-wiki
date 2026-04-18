@@ -9,6 +9,9 @@ description: Supported LLM providers and models.
 | **OpenAI** | GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano | No | [platform.openai.com](https://platform.openai.com/api-keys) |
 | **Anthropic** | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 | No | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **OpenRouter** | 300+ models (Claude, GPT, Llama, DeepSeek, etc.) | Yes (free models available) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **DeepSeek** | DeepSeek V3 (chat), DeepSeek R1 (reasoning) | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| **Groq** | Llama 3.3 70B, Gemma 2 9B, Llama 3.1 8B | Yes (generous free tier) | [console.groq.com](https://console.groq.com/keys) |
+| **Mistral AI** | Mistral Large, Medium, Small, Codestral | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | **Ollama** *(local)* | Any model you pull locally | Free | [ollama.com](https://ollama.com) |
 
 Switch provider or model at any time:
@@ -30,6 +33,18 @@ Use it when you want to:
 - Try new models without switching providers
 
 The setup is the same as any other provider — just paste your OpenRouter API key during `axiom-wiki init`.
+
+### DeepSeek
+
+DeepSeek offers two models: **V3** for general-purpose tasks (fast, very affordable) and **R1** for chain-of-thought reasoning. Both use the OpenAI-compatible API format.
+
+### Groq
+
+Groq provides extremely fast inference on open-source models. Great for interactive query mode where speed matters. Has a generous free tier.
+
+### Mistral AI
+
+Mistral offers a range of models from the fast and cheap **Small** to the powerful **Large**. **Codestral** is a code-specialized model with a 256K context window — excellent for autowiki on large codebases.
 
 ### Ollama
 

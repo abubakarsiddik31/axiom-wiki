@@ -1,4 +1,4 @@
-export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openrouter' | 'ollama'
+export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'ollama'
 
 export interface ModelDef {
   id: string
@@ -78,6 +78,48 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
       // Models are fetched dynamically from the API during setup.
       // This list is only used as a fallback if the API is unreachable.
       { id: 'openrouter/auto', label: 'Auto (best for prompt)', desc: 'Automatically selects the best model', recommended: true },
+    ],
+  },
+  deepseek: {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    keyLabel: 'DeepSeek API Key',
+    keyEnv: 'DEEPSEEK_API_KEY',
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    models: [
+      { id: 'deepseek-chat',     label: 'DeepSeek V3',  desc: 'General purpose, fast and cheap', recommended: true, pricing: { input: 0.27, output: 1.10 }, contextWindow: 64_000 },
+      { id: 'deepseek-reasoner', label: 'DeepSeek R1',  desc: 'Chain-of-thought reasoning', pricing: { input: 0.55, output: 2.19 }, contextWindow: 64_000 },
+    ],
+  },
+  groq: {
+    id: 'groq',
+    label: 'Groq',
+    keyLabel: 'Groq API Key',
+    keyEnv: 'GROQ_API_KEY',
+    keyUrl: 'https://console.groq.com/keys',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+    models: [
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B',  desc: 'Fast Llama inference', recommended: true, pricing: { input: 0.59, output: 0.79 }, contextWindow: 128_000 },
+      { id: 'gemma2-9b-it',            label: 'Gemma 2 9B',      desc: 'Fast and lightweight', pricing: { input: 0.20, output: 0.20 }, contextWindow: 8_192 },
+      { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B',    desc: 'Ultra-fast small model', pricing: { input: 0.05, output: 0.08 }, contextWindow: 128_000 },
+    ],
+  },
+  mistral: {
+    id: 'mistral',
+    label: 'Mistral AI',
+    keyLabel: 'Mistral API Key',
+    keyEnv: 'MISTRAL_API_KEY',
+    keyUrl: 'https://console.mistral.ai/api-keys',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.mistral.ai/v1',
+    models: [
+      { id: 'mistral-large-latest',  label: 'Mistral Large',  desc: 'Flagship reasoning model', recommended: true, pricing: { input: 2.00, output: 6.00 }, contextWindow: 128_000 },
+      { id: 'mistral-medium-latest', label: 'Mistral Medium', desc: 'Balanced speed and quality', pricing: { input: 0.40, output: 2.00 }, contextWindow: 128_000 },
+      { id: 'mistral-small-latest',  label: 'Mistral Small',  desc: 'Fast and cost-efficient', pricing: { input: 0.10, output: 0.30 }, contextWindow: 128_000 },
+      { id: 'codestral-latest',      label: 'Codestral',      desc: 'Code-specialized model', pricing: { input: 0.30, output: 0.90 }, contextWindow: 256_000 },
     ],
   },
   ollama: {

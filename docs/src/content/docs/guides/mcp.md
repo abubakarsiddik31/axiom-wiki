@@ -74,5 +74,24 @@ These tools help agents plan changes using wiki knowledge:
 | `plan_with_wiki` | Search wiki for context relevant to a task |
 | `get_context_for_change` | Get wiki pages covering specific files |
 | `check_before_commit` | Pre-commit staleness check |
+| `get_wiki_health` | Wiki health status: staleness scores, sync info, recommendations |
+
+**Format options:** The planning tools (`get_architecture_brief`, `plan_with_wiki`, `get_context_for_change`) accept an optional `format` parameter:
+
+- `"full"` (default) — Complete markdown content
+- `"compact"` — Frontmatter + first paragraph + cross-references (~80% token reduction)
+- `"summary"` — Title + summary + tags only (~95% token reduction)
+
+They also accept `maxTokens` to set a token budget — content is automatically truncated to fit.
+
+## Resources
+
+MCP resources provide ambient context that agents can pin without explicit tool calls:
+
+| Resource URI | Description |
+|---|---|
+| `axiom://overview` | Project architecture overview (pin this for always-on context) |
+| `axiom://index` | Full page index with summaries and staleness markers |
+| `axiom://recent-changes` | Last 10 wiki log entries |
 
 To configure your agent to call these tools automatically, see the [Agent Setup guide](/guides/agent-setup/).

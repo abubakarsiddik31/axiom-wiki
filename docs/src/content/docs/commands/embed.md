@@ -31,6 +31,18 @@ When enabled, Axiom generates a vector embedding for every wiki page and stores 
 
 Search queries are automatically converted to vectors, and the results are merged with keyword matches using **Reciprocal Rank Fusion (RRF)**. This ensures that exact matches still rank highly while semantically related pages are surfaced.
 
+### Migration for Existing Users
+
+If you already have an Axiom Wiki but haven't enabled semantic search:
+
+1.  **Upgrade**: Ensure you are on `axiom-wiki@0.7.0` or higher.
+2.  **Setup**: Run `axiom-wiki embed --setup`.
+3.  **Index**: The wizard will guide you through picking a provider and will automatically trigger a full re-index of your existing pages.
+
+Once complete, your AI agent will automatically start using hybrid search for all planning and context retrieval tasks.
+
+### Indexing Maintenance
+
 Indexing happens automatically during:
 - `axiom-wiki ingest`
 - `axiom-wiki autowiki`

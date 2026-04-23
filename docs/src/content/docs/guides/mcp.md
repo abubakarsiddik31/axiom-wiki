@@ -19,13 +19,13 @@ Axiom Wiki exposes all its tools as an MCP server for use with Claude Code, Curs
 }
 ```
 
-Or with npx (no global install required):
+Or with pnpm dlx (no global install required):
 
 ```json
 {
   "axiom-wiki": {
-    "command": "npx",
-    "args": ["axiom-wiki", "mcp"],
+    "command": "pnpm",
+    "args": ["dlx", "axiom-wiki", "mcp"],
     "env": {}
   }
 }

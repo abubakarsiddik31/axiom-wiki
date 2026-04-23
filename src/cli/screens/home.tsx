@@ -55,6 +55,7 @@ export function HomeScreen() {
   const [menuIndex, setMenuIndex] = useState(0)
   const [inputKey, setInputKey] = useState(0)
   const [totalPages, setTotalPages] = useState<number | undefined>(undefined)
+  const [semanticDisabled, setSemanticDisabled] = useState(false)
   const [log, setLog] = useState<LogLine[]>([
     { text: 'Type /help to see commands, or ask a question.', color: 'gray' },
   ])
@@ -75,7 +76,10 @@ export function HomeScreen() {
   useEffect(() => {
     if (!config) return
     getStatus(config)
-      .then((s) => setTotalPages(s.totalPages))
+      .then((s) => {
+        setTotalPages(s.totalPages)
+        setSemanticDisabled(s.semanticHealth?.status === 'disabled')
+      })
       .catch(() => {})
   }, [screenName])
 
@@ -232,6 +236,14 @@ export function HomeScreen() {
           <Text color="gray">.axiom/ has been renamed to axiom/ — run </Text>
           <Text color="cyan">axiom-wiki init</Text>
           <Text color="gray"> to migrate.</Text>
+        </Box>
+      )}
+
+      {semanticDisabled && (
+        <Box marginBottom={1} paddingX={1}>
+          <Text color="yellow">Tip: </Text>
+          <Text color="gray">Enable semantic search for 10x better agent planning — run </Text>
+          <Text color="cyan">axiom-wiki embed --setup</Text>
         </Box>
       )}
 

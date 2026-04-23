@@ -124,6 +124,12 @@ export function StatusScreen({ onExit }: Props) {
       <Box marginTop={1}>
         <Text color="gray">Tip: Run <Text color="cyan">axiom-wiki lint</Text> to check wiki health.</Text>
       </Box>
+
+      {status.semanticHealth?.status === 'disabled' && (
+        <Box marginTop={1}>
+          <Text color="yellow">Tip: Run <Text color="cyan">axiom-wiki embed --setup</Text> to enable semantic search.</Text>
+        </Box>
+      )}
     </Box>
   )
 }

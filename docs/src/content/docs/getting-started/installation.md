@@ -3,7 +3,11 @@ title: Installation
 description: Install Axiom Wiki via npm, yarn, pnpm, or Docker.
 ---
 
-## npm / yarn / pnpm
+## pnpm / npm / yarn
+
+```bash
+pnpm add -g axiom-wiki
+```
 
 ```bash
 npm install -g axiom-wiki
@@ -13,14 +17,10 @@ npm install -g axiom-wiki
 yarn global add axiom-wiki
 ```
 
-```bash
-pnpm add -g axiom-wiki
-```
-
 **Run without installing:**
 
 ```bash
-npx axiom-wiki init
+pnpm dlx axiom-wiki init
 ```
 
 Both `axiom-wiki` and the shorthand `axwiki` are available after install.

@@ -1,7 +1,17 @@
 ---
-title: Migration from v0.4 → v0.5
-description: Migrate your wiki directories to the new v0.5 layout.
+title: Migration Guide
+description: Upgrade your wiki to the latest version of Axiom Wiki.
 ---
+
+## Latest Version
+
+- **[Upgrading to v0.7.0 (Semantic Search)](/guides/v070-migration)** — Enable hybrid search for better agent planning.
+
+---
+
+## Legacy Migrations
+
+### Migration from v0.4 → v0.5
 
 In v0.5.0, the default wiki directories changed:
 

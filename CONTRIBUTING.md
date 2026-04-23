@@ -51,8 +51,8 @@ pnpm build
 Run a command directly without installing globally:
 
 ```bash
-npx tsx bin/axiom-wiki.ts init
-npx tsx bin/axiom-wiki.ts ingest path/to/file.md
+pnpm dlx tsx bin/axiom-wiki.ts init
+pnpm dlx tsx bin/axiom-wiki.ts ingest path/to/file.md
 ```
 
 Watch mode for development (recompiles on save):
@@ -95,6 +95,7 @@ src/
       status.tsx        ← Status screen
       model.tsx         ← Model switcher
       init.tsx          ← Setup wizard
+      embed.tsx         ← Semantic search management
   core/
     wiki.ts             ← Atomic wiki I/O (read/write/index/log/snapshot)
     files.ts            ← File reading, Google Files API upload, message building
@@ -102,7 +103,11 @@ src/
     usage.ts            ← Token cost calculation and usage.log
     clip.ts             ← Web clipper (fetch + Readability + save)
     watcher.ts          ← Chokidar file watcher with .axiomignore
-    search.ts           ← Full-text search
+    search.ts           ← Hybrid search engine
+    embeddings.ts       ← Multi-provider vector generation
+    indexing.ts         ← Full and incremental semantic indexing
+    search/
+      orama-store.ts    ← Orama v3 search index management
   config/
     index.ts            ← conf-based persistent config
     models.ts           ← Provider and model definitions with pricing

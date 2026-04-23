@@ -94,4 +94,4 @@ MCP resources provide ambient context that agents can pin without explicit tool 
 | `axiom://index` | Full page index with summaries and staleness markers |
 | `axiom://recent-changes` | Last 10 wiki log entries |
 
-To configure your agent to call these tools automatically, see the [Agent Setup guide](/guides/agent-setup/).
+To configure your agent to call these tools automatically, see the [Agent Setup guide](/axiom-wiki/guides/agent-setup).

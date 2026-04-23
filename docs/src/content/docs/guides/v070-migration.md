@@ -5,6 +5,10 @@ description: How to enable Semantic Search and upgrade your existing Axiom Wiki.
 
 Axiom Wiki v0.7.0 introduces **Hybrid Semantic Search** (Lexical + Vector) using the Orama engine. This upgrade allows your AI agents to find relevant context through conceptual understanding rather than just keyword matching.
 
+:::note
+This guide applies to all v0.7.x releases (v0.7.0, v0.7.1, v0.7.2).
+:::
+
 ## 🔄 Upgrade Steps (v0.6.0 → v0.7.0)
 
 If you are an existing user upgrading from v0.6.0 to v0.7.0, follow these steps to enable the new semantic capabilities:

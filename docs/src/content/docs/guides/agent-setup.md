@@ -112,6 +112,6 @@ If you prefer to add the instructions manually instead of running `axiom-wiki se
 
 ## Prerequisites
 
-The MCP server must be configured first. See the [MCP Integration guide](/guides/mcp/) for setup instructions.
+The MCP server must be configured first. See the [MCP Integration guide](/axiom-wiki/guides/mcp) for setup instructions.
 
 You also need to run `axiom-wiki autowiki` at least once to build the initial wiki and `map-state.json`. The auto-update tools require this state file to know which wiki pages cover which source files.

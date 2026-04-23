@@ -7,8 +7,8 @@ As Axiom Wiki evolves, we occasionally introduce changes that require a migratio
 
 ## Available Migration Guides
 
-- **[Upgrading to v0.7.0 (Semantic Search)](./v070-migration)** — Enable hybrid search and vector embeddings for your wiki.
-- **[Upgrading to v0.5.0 (Directory Rename)](./migration#migration-from-v04--v05)** — Transition from `.axiom/` to `axiom/` and `~/my-wiki/` to `~/axiom/`.
+- **[Upgrading to v0.7.x (Semantic Search)](/axiom-wiki/guides/v070-migration)** — Enable hybrid search and vector embeddings for your wiki.
+- **[Upgrading to v0.5.0 (Directory Rename)](/axiom-wiki/guides/migration#migration-from-v04--v05)** — Transition from `.axiom/` to `axiom/` and `~/my-wiki/` to `~/axiom/`.
 
 ---
 

@@ -59,8 +59,9 @@ function detectContext() {
   return { gitRoot, isHomedir, existingLocalConfig, hasLegacyGlobal, legacyGlobalDir, hasLegacyLocal, legacyLocalDir, newLocalDir }
 }
 
-export function InitScreen() {
+export function InitScreen({ onExit }: { onExit?: () => void }) {
   const { exit } = useApp()
+  const doExit = onExit ?? exit
   const [step, setStep] = useState<Step>(0)
   const [scope, setScope] = useState<ConfigScope | null>(null)
   const [context] = useState(detectContext)
@@ -104,8 +105,8 @@ export function InitScreen() {
     if (step === 0 && key.return) {
       setStep((context.hasLegacyGlobal || context.hasLegacyLocal) ? 0.5 : 1)
     }
-    if (step === 0.5 && migrationDone && key.return) exit()
-    if (step === 8 && key.return) exit()
+    if (step === 0.5 && migrationDone && key.return) doExit()
+    if (step === 8 && key.return) doExit()
   })
 
   useEffect(() => {

@@ -170,6 +170,7 @@ export async function runAutowiki(
     try {
       await updateIndex(config.wikiDir)
       if (config.embeddings && config.embeddings.provider !== 'none') {
+        log(`Indexing ${batchResult.pagesWritten.length} pages...`)
         for (const p of batchResult.pagesWritten) {
           try { await indexWikiPage(config, p) } catch { /* skip failed index */ }
         }
@@ -327,6 +328,7 @@ Today's date: ${today}`
       try {
         await updateIndex(config.wikiDir)
         if (config.embeddings && config.embeddings.provider !== 'none') {
+          log(`Indexing ${pagesWritten.length} pages...`)
           for (const p of pagesWritten) {
             try { await indexWikiPage(config, p) } catch { /* skip failed index */ }
           }

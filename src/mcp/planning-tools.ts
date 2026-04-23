@@ -480,7 +480,7 @@ export function createPlanningTools(config: AxiomConfig) {
       const healthyPages = mapState.pages.filter((p) => (p._confidence ?? 1.0) >= 0.8)
 
       const vectorStalePages = mapState.pages.filter((p) => p._vectorSynced === false)
-      const indexExists = fs.existsSync(path.join(wikiDir, 'search.index'))
+      const indexExists = fs.existsSync(path.join(wikiDir, 'wiki/search.index'))
       const semanticSearchEnabled = config.embeddings && config.embeddings.provider !== 'none'
       const semanticHealth = !semanticSearchEnabled ? 'disabled'
         : !indexExists ? 'missing_index'

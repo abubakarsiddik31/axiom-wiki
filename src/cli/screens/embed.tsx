@@ -33,7 +33,7 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
 
   useInput((_input, key) => {
     if (key.escape) { doExit() }
-    if (step === 'done' && key.return) { doExit() }
+    if ((step === 'done' || step === 'status') && key.return) { doExit() }
   })
 
   useEffect(() => {
@@ -213,7 +213,7 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
           <Text>  Index Size : <Text color="cyan">{oramaStatus?.totalPages ?? 0} pages</Text></Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">Press Esc to return</Text>
+          <Text color="gray">Press Esc or Enter to return</Text>
         </Box>
       </Box>
     )

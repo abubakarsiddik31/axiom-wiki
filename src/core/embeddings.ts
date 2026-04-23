@@ -45,11 +45,21 @@ export async function generateEmbedding(config: AxiomConfig, text: string): Prom
       baseURL: baseUrl,
       apiKey: 'ollama',
     });
-    const { embedding } = await embed({
-      model: ollama.embedding(modelId),
-      value: text,
-    });
-    return embedding;
+    try {
+      const { embedding } = await embed({
+        model: ollama.embedding(modelId),
+        value: text,
+      });
+      return embedding;
+    } catch (err: any) {
+      if (err.message?.includes('404') || err.message?.includes('not found')) {
+        throw new Error(`Ollama model "${modelId}" not found. Run "ollama pull ${modelId}" first.`);
+      }
+      if (err.message?.includes('ECONNREFUSED')) {
+        throw new Error(`Could not connect to Ollama at ${baseUrl}. Is Ollama running?`);
+      }
+      throw err;
+    }
   }
 
   throw new Error(`Unsupported embedding provider: ${provider}`);
@@ -89,11 +99,21 @@ export async function generateEmbeddings(config: AxiomConfig, texts: string[]): 
       baseURL: baseUrl,
       apiKey: 'ollama',
     });
-    const { embeddings: result } = await embedMany({
-      model: ollama.embedding(modelId),
-      values: texts,
-    });
-    return result;
+    try {
+      const { embeddings: result } = await embedMany({
+        model: ollama.embedding(modelId),
+        values: texts,
+      });
+      return result;
+    } catch (err: any) {
+      if (err.message?.includes('404') || err.message?.includes('not found')) {
+        throw new Error(`Ollama model "${modelId}" not found. Run "ollama pull ${modelId}" first.`);
+      }
+      if (err.message?.includes('ECONNREFUSED')) {
+        throw new Error(`Could not connect to Ollama at ${baseUrl}. Is Ollama running?`);
+      }
+      throw err;
+    }
   }
 
   throw new Error(`Unsupported embedding provider: ${provider}`);

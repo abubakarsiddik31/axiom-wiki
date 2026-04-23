@@ -209,6 +209,12 @@ export function deriveProjectRoot(wikiDir: string): string | undefined {
   return undefined
 }
 
+export function markPageVectorSynced(state: MapState, slug: string): void {
+  const page = state.pages.find((p) => p.slug === slug)
+  if (!page) return
+  page._vectorSynced = true
+}
+
 export function markPageVerified(state: MapState, slug: string, commitHash: string): void {
   const page = state.pages.find((p) => p.slug === slug)
   if (!page) return

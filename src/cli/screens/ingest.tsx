@@ -392,6 +392,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       
       // Index new pages
       if (config.embeddings && config.embeddings.provider !== 'none') {
+        setLiveLines((prev) => [...prev, { text: "⠸ Updating semantic index…", color: "yellow" }]);
         for (const p of currentPages) {
           try {
             await indexWikiPage(config, p);
@@ -400,6 +401,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           }
         }
         await persistOrama(config);
+        setLiveLines((prev) => [...prev, { text: "✓ Semantic index updated", color: "green" }]);
       }
 
       await appendLog(config.wikiDir, currentFile, "ingest");
@@ -515,8 +517,9 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       await updateIndex(config.wikiDir);
       await updateMOC(config.wikiDir);
 
-      // Index new pages
+      // Index new pages (redundant if agent used write_page tool, but good for safety)
       if (config.embeddings && config.embeddings.provider !== 'none') {
+        setLiveLines((prev) => [...prev, { text: "⠸ Updating semantic index…", color: "yellow" }]);
         for (const p of pagesFound) {
           try {
             await indexWikiPage(config, p);
@@ -525,6 +528,7 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
           }
         }
         await persistOrama(config);
+        setLiveLines((prev) => [...prev, { text: "✓ Semantic index updated", color: "green" }]);
       }
 
       await appendLog(config.wikiDir, filename, "ingest");

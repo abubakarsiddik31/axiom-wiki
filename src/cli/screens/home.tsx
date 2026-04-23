@@ -16,6 +16,8 @@ import { ReviewScreen } from './review.js'
 import { GraphScreen } from './graph.js'
 import { MapScreen } from './map.js'
 import { SyncScreen } from './sync.js'
+import { EmbedScreen } from './embed.js'
+import { InitScreen } from './init.js'
 
 type ActiveScreen =
   | { name: 'shell' }
@@ -30,6 +32,8 @@ type ActiveScreen =
   | { name: 'graph' }
   | { name: 'map' }
   | { name: 'sync' }
+  | { name: 'embed'; setup?: boolean; reindex?: boolean; status?: boolean }
+  | { name: 'init' }
 
 interface LogLine {
   text: string
@@ -142,6 +146,15 @@ export function HomeScreen() {
       if (parsed.command === 'graph')   { setScreen({ name: 'graph' }); return }
       if (parsed.command === 'autowiki' || parsed.command === 'map') { setScreen({ name: 'map' }); return }
       if (parsed.command === 'sync')    { setScreen({ name: 'sync' }); return }
+      if (parsed.command === 'init')    { setScreen({ name: 'init' }); return }
+
+      if (parsed.command === 'embed') {
+        const setup = parsed.arg.includes('--setup')
+        const reindex = parsed.arg.includes('--reindex')
+        const status = parsed.arg.includes('--status')
+        setScreen({ name: 'embed', setup, reindex, status })
+        return
+      }
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
@@ -223,6 +236,8 @@ export function HomeScreen() {
   if (screen.name === 'graph')   return <GraphScreen onExit={goHome} />
   if (screen.name === 'map')     return <MapScreen onExit={goHome} />
   if (screen.name === 'sync')    return <SyncScreen onExit={goHome} />
+  if (screen.name === 'embed')   return <EmbedScreen setup={screen.setup} reindex={screen.reindex} status={screen.status} onExit={goHome} />
+  if (screen.name === 'init')    return <InitScreen onExit={goHome} />
 
   // ── Shell ─────────────────────────────────────────────────────────────────
   return (

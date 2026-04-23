@@ -12,6 +12,7 @@ import {
 } from '../core/sync.js'
 import { applyTier1Updates, type FileChange } from '../core/wiki-sync-lite.js'
 import { applyTier2Updates } from '../core/incremental-sync.js'
+import { indexWikiPage, persistOrama } from '../core/indexing.js'
 import { acquireLock, releaseLock } from '../core/lock.js'
 
 export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
@@ -35,6 +36,17 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
     }),
     execute: async (input) => {
       await wiki.writePage(wikiDir, input.path, input.content)
+      
+      // Update semantic index if enabled
+      if (config.embeddings && config.embeddings.provider !== 'none') {
+        try {
+          await indexWikiPage(config, input.path)
+          await persistOrama(config)
+        } catch (err) {
+          // Non-fatal for the agent
+        }
+      }
+      
       return 'written'
     },
   })
@@ -170,6 +182,15 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       const content = await wiki.readPage(wikiDir, input.path)
       const updated = content.replace(/> ⚠️ Contradiction:.*$/m, input.resolution || '')
       await wiki.writePage(wikiDir, input.path, updated.trim())
+      
+      // Update semantic index if enabled
+      if (config.embeddings && config.embeddings.provider !== 'none') {
+        try {
+          await indexWikiPage(config, input.path)
+          await persistOrama(config)
+        } catch { /* skip */ }
+      }
+
       return 'resolved'
     },
   })
@@ -246,6 +267,18 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
         if (tier1.updatedPages.length > 0) {
           await wiki.updateIndex(wikiDir)
           await wiki.updateMOC(wikiDir)
+          
+          if (config.embeddings && config.embeddings.provider !== 'none') {
+            for (const slug of tier1.updatedPages) {
+              const page = mapState.pages.find((p) => p.slug === slug)
+              if (page) {
+                const pagePath = `wiki/pages/${page.category}/${page.slug}.md`
+                try { await indexWikiPage(config, pagePath) } catch { /* skip */ }
+              }
+            }
+            await persistOrama(config)
+          }
+
           await wiki.appendLog(wikiDir, `notify: tier1 updated ${tier1.updatedPages.join(', ')}`, 'sync')
         }
 
@@ -387,6 +420,14 @@ _Append-only record of key decisions made during development._
 
         await wiki.writePage(wikiDir, decisionPagePath, updated)
         await wiki.updateIndex(wikiDir)
+
+        // Update semantic index if enabled
+        if (config.embeddings && config.embeddings.provider !== 'none') {
+          try {
+            await indexWikiPage(config, decisionPagePath)
+            await persistOrama(config)
+          } catch { /* skip */ }
+        }
 
         return { page: decisionPagePath, entry_id: entryId }
       } finally {

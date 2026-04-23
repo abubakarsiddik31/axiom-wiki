@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, useApp } from 'ink'
+import { Box, Text, useApp, useInput } from 'ink'
 import { getConfig, hasConfig } from '../../config/index.js'
 import { PROVIDERS } from '../../config/models.js'
 import { getStatus, type WikiStatus } from '../../core/wiki.js'
@@ -28,6 +28,7 @@ interface Props {
 export function StatusScreen({ onExit }: Props) {
   const { exit } = useApp()
   const doExit = onExit ?? exit
+  const isInteractive = !!onExit
   const config = getConfig()
   const [status, setStatus] = useState<WikiStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -35,12 +36,25 @@ export function StatusScreen({ onExit }: Props) {
   useEffect(() => {
     if (!config) return
     getStatus(config)
-      .then((s) => { setStatus(s); setTimeout(doExit, 100) })
+      .then((s) => { 
+        setStatus(s)
+        if (!isInteractive) {
+          setTimeout(doExit, 100)
+        }
+      })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : String(e))
-        setTimeout(doExit, 100)
+        if (!isInteractive) {
+          setTimeout(doExit, 100)
+        }
       })
-  }, [])
+  }, [config, isInteractive, doExit])
+
+  useInput((_input, key) => {
+    if (isInteractive && (key.escape || key.return)) {
+      doExit()
+    }
+  })
 
   if (!hasConfig() || !config) {
     return (
@@ -124,6 +138,12 @@ export function StatusScreen({ onExit }: Props) {
       <Box marginTop={1}>
         <Text color="gray">Tip: Run <Text color="cyan">axiom-wiki lint</Text> to check wiki health.</Text>
       </Box>
+
+      {isInteractive && (
+        <Box marginTop={1}>
+          <Text color="gray">Press Esc or Enter to return</Text>
+        </Box>
+      )}
 
       {status.semanticHealth?.status === 'disabled' && (
         <Box marginTop={1}>

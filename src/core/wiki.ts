@@ -318,7 +318,7 @@ export async function getStatus(config: AxiomConfig): Promise<WikiStatus> {
 
   // Semantic health
   const mapState = loadMapState(wikiDir)
-  const indexExists = fs.existsSync(path.join(wikiDir, 'search.index'))
+  const indexExists = fs.existsSync(path.join(wikiDir, 'wiki/search.index'))
   const semanticSearchEnabled = config.embeddings && config.embeddings.provider !== 'none'
   let semanticStatus: 'healthy' | 'stale' | 'missing_index' | 'disabled' = 'disabled'
 

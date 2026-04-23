@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-23
+
+### Fixed
+- **Path Resolution**: Fixed bug where semantic index was sought in the wrong directory.
+- **UI Persistence**: Resolved vanishing slash command outputs in the interactive shell.
+- **Orama Integration**: Corrected serialization and counting logic for Orama v3.
+- **Navigation**: Standardized "Press Esc or Enter to return" behavior across all sub-screens.
+
+### Improved
+- **Ingest Screen**: Added real-time visual feedback during the vectorization phase.
+- **Error Handling**: Added specific error messages for Ollama connection and model issues.
+- **Agent Integration**: Ensured all agent-initiated wiki writes trigger semantic indexing.
+- **Shell Commands**: Added `/embed` and `/init` support to the interactive REPL.
+
 ## [0.7.0] - 2026-04-23
 
 ### Added
@@ -64,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release with core wiki structure and basic CLI.
 
+[0.7.1]: https://github.com/abubakarsiddik31/axiom-wiki/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/abubakarsiddik31/axiom-wiki/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/abubakarsiddik31/axiom-wiki/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/abubakarsiddik31/axiom-wiki/compare/v0.4.0...v0.5.0

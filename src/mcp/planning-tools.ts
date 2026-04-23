@@ -175,7 +175,7 @@ export function createPlanningTools(config: AxiomConfig) {
       const maxTokens = (input as { maxTokens?: number }).maxTokens
       const mapState = loadMapState(wikiDir)
 
-      const results = await searchMod.searchWiki(wikiDir, input.task, { limit: maxPages })
+      const results = await searchMod.searchWiki(wikiDir, input.task, { limit: maxPages, config })
       let pages: Array<{ path: string; title: string; content: string; confidence: number; excerpt: string; score: number }> = []
 
       for (const r of results) {

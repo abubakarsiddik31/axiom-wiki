@@ -13,6 +13,7 @@ my-project/
     config.json           # Local config (provider, model, paths, obsidianCompat)
     state.json            # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
     map-state.json        # Autowiki/sync state (pages, git hash)
+    search.index          # Orama search index (binary/JSON)
     raw/                  # Source files to ingest
       .axiomignore
       assets/
@@ -35,6 +36,7 @@ my-project/
 ~/axiom/
   state.json              # Compilation state (SHA-256 hashes, concepts, frozenSlugs)
   map-state.json          # Autowiki/sync state
+  search.index            # Orama search index
   raw/                    # Source files to ingest
     .axiomignore
     assets/

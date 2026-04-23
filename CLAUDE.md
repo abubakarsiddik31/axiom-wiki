@@ -26,13 +26,13 @@ npx tsx bin/axiom-wiki.ts <command>   # e.g., status, query, ingest
 Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 ### Entry & Routing
-- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining 11 commands (`init`, `ingest`, `query`, `model`, `status`, `lint`, `watch`, `clip`, `sources`, `review`, `mcp`). Defaults to the home screen if no command is given.
+- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining 12 commands (`init`, `ingest`, `query`, `model`, `status`, `lint`, `watch`, `clip`, `sources`, `review`, `mcp`, `embed`). Defaults to the home screen if no command is given.
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
 ### CLI/UI Layer (`src/cli/`)
 - Built with **Ink 5 + React 18** (React for the terminal).
 - **`screens/home.tsx`** — Main interactive REPL shell. Handles slash command autocomplete, keyboard navigation (↑↓ Tab Esc Ctrl+C), and routes to other screens.
-- Each other screen (`ingest`, `query`, `init`, `watch`, `clip`, `sources`, `review`, `status`, `model`) is a self-contained Ink component.
+- Each other screen (`ingest`, `query`, `init`, `watch`, `clip`, `sources`, `review`, `status`, `model`, `embed`) is a self-contained Ink component.
 
 ### Agent Layer (`src/agent/`)
 - **`index.ts`** — Creates a Mastra `Agent` with the resolved LLM model, system prompt, and tools.
@@ -44,7 +44,9 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 - **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `{wikiDir}/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
 - **`lock.ts`** — PID-based compilation lock (`{wikiDir}/lock`). Prevents concurrent ingest/compile operations. Stale locks from dead processes are auto-reclaimed. Key functions: `acquireLock`, `releaseLock`, `getLockInfo`, `forceReleaseLock`.
 - **`files.ts`** — Normalizes source files into `SourceFile` objects. Supported: `.md`, `.txt`, `.pdf`, `.docx`, `.html`, `.png/.jpg/.jpeg/.webp`. PDF/images → base64; HTML → Markdown via `node-html-markdown`; DOCX → Markdown via `mammoth`.
-- **`search.ts`** — Full-text search over title, summary, tags, and content with ranked results.
+- **`search.ts`** — Hybrid search (Lexical + Semantic) using Orama. Orchestrates keyword matching and vector similarity.
+- **`indexing.ts`** — Manages full and incremental indexing of wiki pages into the Orama store.
+- **`embeddings.ts`** — Unified provider for vector embeddings (Google, OpenAI, Ollama).
 - **`sources.ts`** — Tracks ingested sources by parsing `wiki/log.md`.
 - **`watcher.ts`** — Chokidar file watcher with `.axiomignore` support and debouncing.
 
@@ -66,6 +68,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 ├── config.json             ← Local project config (local scope only)
 ├── state.json              ← Compilation state (SHA-256 hashes, concept mappings)
 ├── map-state.json          ← Autowiki/sync state
+├── search.index            ← Orama binary/JSON search index
 ├── lock                    ← PID-based lock (transient, present during ingest)
 ├── raw/                    ← Source files to ingest
 │   └── .axiomignore
@@ -104,9 +107,10 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 3. `updateMOC(wikiDir)` — rebuild `wiki/moc.md` (tag-grouped Map of Content)
 4. `appendLog(wikiDir, filename, 'ingest')` — append to `wiki/log.md`
 5. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `state.json` with SHA-256 hash and concept mappings
-6. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
+6. `recordIngest(state, filename, filepath, pages)` + `saveState(wikiDir, state)` — update `state.json` with SHA-256 hash and concept mappings
+7. `indexWikiPage(config, pagePath)` — update semantic index for new/modified pages
+8. `releaseLock(wikiDir)` — release lock on **every** exit path (success, error, user cancel, escape)
 
-**After source deletion** (sources screen → delete):
 1. `removeSource(wikiDir, filename)` — delete summary page
 2. `delete state.sources[filename]` + `saveState()` — remove from compilation state
 

@@ -93,6 +93,7 @@ axiom-wiki clip [url]         Clip a URL to raw/
 axiom-wiki sources            Manage ingested sources
 axiom-wiki review             Resolve wiki contradictions
 axiom-wiki graph              Visualize the wiki page graph
+axiom-wiki embed              Manage semantic search embeddings
 axiom-wiki model              Switch LLM provider or model
 axiom-wiki status             Wiki statistics
 axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
@@ -111,6 +112,8 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 **Incremental compilation** — Source files are tracked by SHA-256 hash. Re-running `axiom-wiki ingest` skips unchanged files and only processes new or modified sources — fast even on large wikis.
 
 **Incremental sync** — `axiom-wiki sync` detects changes and lets the agent update stale pages and document new areas. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
+
+**Hybrid Semantic Search** — Axiom uses **Orama** to provide hybrid search (keyword + vector). Supports Google Gemini, OpenAI, and Ollama embeddings. Enable during `init` or run `axiom-wiki embed --setup`.
 
 **Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 

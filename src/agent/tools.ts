@@ -61,6 +61,7 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       search.searchWiki(wikiDir, input.query, {
         limit: input.limit,
         category: input.category,
+        config,
       }),
   })
 

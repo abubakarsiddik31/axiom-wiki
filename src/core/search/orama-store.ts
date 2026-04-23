@@ -38,7 +38,8 @@ export async function getOrama(config: AxiomConfig): Promise<AnyOrama> {
       load(_orama, data);
       return _orama!;
     } catch (err) {
-      console.error(`[orama] Failed to load index: ${err}. Recreating...`);
+      console.error(`[orama] Failed to load index (possibly due to dimension mismatch): ${err}. Recreating...`);
+      _orama = null; // Reset so we create a fresh one below
     }
   }
 

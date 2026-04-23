@@ -15,6 +15,7 @@ Interactive setup wizard that configures:
 4. **Model** — select from the provider's available models
 5. **Wiki directory** — where wiki pages are stored
 6. **Raw directory** — where source files go
+7. **Semantic Search** — enable hybrid (keyword + vector) search
 
 For local mode, the wizard auto-detects git repos and adds `axiom/` to `.gitignore`.
 

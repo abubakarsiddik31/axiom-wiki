@@ -101,7 +101,7 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
     id: 'get_status',
     description: 'Get current wiki statistics: page counts, source count, last operation dates.',
     inputSchema: z.object({}),
-    execute: async () => wiki.getStatus(wikiDir, rawDir),
+    execute: async () => wiki.getStatus(config),
   })
 
   const lint_wiki = createTool({

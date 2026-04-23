@@ -1,4 +1,4 @@
-import { create, insert, search, save, restore, remove, type AnyOrama } from '@orama/orama';
+import { create, insert, search, save, load, remove, type AnyOrama, type Results } from '@orama/orama';
 import fs from 'fs';
 import path from 'path';
 import type { AxiomConfig } from '../../config/index.js';
@@ -19,40 +19,39 @@ let _orama: AnyOrama | null = null;
 export async function getOrama(config: AxiomConfig): Promise<AnyOrama> {
   if (_orama) return _orama;
 
+  const dimensions = config.embeddings?.dimensions || 768;
+  const schema = {
+    id: 'string',
+    title: 'string',
+    summary: 'string',
+    content: 'string',
+    tags: 'string[]',
+    category: 'string',
+    embedding: `vector[${dimensions}]`,
+  } as const;
+
   const indexPath = getIndexPath(config);
   if (fs.existsSync(indexPath)) {
     try {
-      const data = fs.readFileSync(indexPath);
-      _orama = await restore('binary', data);
+      const data = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+      _orama = await create({ schema });
+      load(_orama, data);
       return _orama!;
     } catch (err) {
-      console.error(`[orama] Failed to restore index: ${err}. Recreating...`);
+      console.error(`[orama] Failed to load index: ${err}. Recreating...`);
     }
   }
 
-  const dimensions = config.embeddings?.dimensions || 768;
-
-  _orama = await create({
-    schema: {
-      id: 'string',
-      title: 'string',
-      summary: 'string',
-      content: 'string',
-      tags: 'string[]',
-      category: 'string',
-      embedding: `vector[${dimensions}]`,
-    } as const,
-  });
-
+  _orama = await create({ schema });
   return _orama!;
 }
 
 export async function persistOrama(config: AxiomConfig): Promise<void> {
   if (!_orama) return;
   const indexPath = getIndexPath(config);
-  const data = await save(_orama, 'binary');
+  const data = save(_orama);
   fs.mkdirSync(path.dirname(indexPath), { recursive: true });
-  fs.writeFileSync(indexPath, Buffer.from(data));
+  fs.writeFileSync(indexPath, JSON.stringify(data), 'utf-8');
 }
 
 export async function indexPage(config: AxiomConfig, doc: SearchDoc): Promise<void> {
@@ -80,7 +79,7 @@ export async function clearIndex(config: AxiomConfig): Promise<void> {
   _orama = null;
 }
 
-export async function hybridSearch(config: AxiomConfig, query: string, limit = 10) {
+export async function hybridSearch(config: AxiomConfig, query: string, limit = 10): Promise<Results<any>> {
   const db = await getOrama(config);
   const { embeddings } = config;
   

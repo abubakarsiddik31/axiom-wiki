@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 import TextInput from 'ink-text-input'
+import { count } from '@orama/orama'
 import { getConfig, setConfig, type AxiomConfig } from '../../config/index.js'
 import { reindexWiki } from '../../core/indexing.js'
 import { getOrama } from '../../core/search/orama-store.js'
@@ -55,11 +56,9 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
         if (!config) return
         try {
           const db = await getOrama(config)
-          // Orama 3 doesn't have a simple way to get count without searching or internal access
-          // but we can do a match-all search
-          const results = await db.search({ limit: 0 })
+          const total = await count(db)
           setOramaStatus({
-            totalPages: results.count,
+            totalPages: total,
             lastSyncAt: config.embeddings?.provider !== 'none' ? 'Active' : 'Disabled'
           })
         } catch {

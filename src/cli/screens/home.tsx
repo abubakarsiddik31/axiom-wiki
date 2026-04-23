@@ -74,7 +74,7 @@ export function HomeScreen() {
   const screenName = screen.name
   useEffect(() => {
     if (!config) return
-    getStatus(config.wikiDir, config.rawDir)
+    getStatus(config)
       .then((s) => setTotalPages(s.totalPages))
       .catch(() => {})
   }, [screenName])

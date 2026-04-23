@@ -2,6 +2,9 @@ import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
 
+import { loadMapState } from './sync.js'
+import type { AxiomConfig } from '../config/index.js'
+
 export interface PageMeta {
   path: string
   title: string
@@ -9,13 +12,6 @@ export interface PageMeta {
   tags: string[]
   category: string
   updatedAt: string
-}
-
-export interface SearchResult {
-  path: string
-  title: string
-  excerpt: string
-  score: number
 }
 
 export interface WikiStatus {
@@ -26,6 +22,11 @@ export interface WikiStatus {
   lastIngest: string | null
   lastQuery: string | null
   lastLint: string | null
+  semanticHealth?: {
+    status: 'healthy' | 'stale' | 'missing_index' | 'disabled'
+    provider: string
+    model: string | null
+  }
 }
 
 const SCHEMA_MD = `# Wiki Schema
@@ -196,47 +197,6 @@ export async function listPages(
   return results
 }
 
-export async function searchWiki(
-  wikiDir: string,
-  query: string,
-  limit = 10,
-): Promise<SearchResult[]> {
-  const pagesDir = path.join(wikiDir, 'wiki/pages')
-  if (!fs.existsSync(pagesDir)) return []
-
-  const files = walkDir(pagesDir).filter((f) => f.endsWith('.md'))
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const results: SearchResult[] = []
-
-  for (const abs of files) {
-    const rel = path.relative(wikiDir, abs)
-    const raw = fs.readFileSync(abs, 'utf-8')
-    const { data, content } = matter(raw)
-    const lower = content.toLowerCase()
-
-    let score = 0
-    for (const term of terms) {
-      const matches = lower.split(term).length - 1
-      score += matches
-    }
-
-    if (score === 0) continue
-
-    const firstIdx = lower.indexOf(terms[0] ?? '')
-    const start = Math.max(0, firstIdx - 60)
-    const excerpt = content.slice(start, start + 150).replace(/\n/g, ' ').trim()
-
-    results.push({
-      path: rel,
-      title: String(data['title'] ?? path.basename(abs, '.md')),
-      excerpt,
-      score: score / (content.length / 1000 + 1),
-    })
-  }
-
-  return results.sort((a, b) => b.score - a.score).slice(0, limit)
-}
-
 export function buildIndex(pages: PageMeta[]): string {
   const byCategory: Record<string, PageMeta[]> = {
     entities: [],
@@ -321,7 +281,8 @@ export async function appendLog(
   fs.appendFileSync(logPath, line, 'utf-8')
 }
 
-export async function getStatus(wikiDir: string, rawDir: string): Promise<WikiStatus> {
+export async function getStatus(config: AxiomConfig): Promise<WikiStatus> {
+  const { wikiDir, rawDir } = config
   const pages = await listPages(wikiDir)
   const pagesByCategory: Record<string, number> = {}
   for (const p of pages) {
@@ -355,6 +316,21 @@ export async function getStatus(wikiDir: string, rawDir: string): Promise<WikiSt
     }
   }
 
+  // Semantic health
+  const mapState = loadMapState(wikiDir)
+  const indexExists = fs.existsSync(path.join(wikiDir, 'search.index'))
+  const semanticSearchEnabled = config.embeddings && config.embeddings.provider !== 'none'
+  let semanticStatus: 'healthy' | 'stale' | 'missing_index' | 'disabled' = 'disabled'
+
+  if (!semanticSearchEnabled) {
+    semanticStatus = 'disabled'
+  } else if (!indexExists) {
+    semanticStatus = 'missing_index'
+  } else if (mapState) {
+    const staleCount = mapState.pages.filter((p) => p._vectorSynced === false).length
+    semanticStatus = staleCount > 0 ? 'stale' : 'healthy'
+  }
+
   return {
     totalPages: pages.length,
     pagesByCategory,
@@ -363,6 +339,11 @@ export async function getStatus(wikiDir: string, rawDir: string): Promise<WikiSt
     lastIngest,
     lastQuery,
     lastLint,
+    semanticHealth: {
+      status: semanticStatus,
+      provider: config.embeddings?.provider ?? 'none',
+      model: config.embeddings?.model ?? null,
+    },
   }
 }
 

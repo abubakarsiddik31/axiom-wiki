@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { AxiomConfig } from '../config/index.js'
@@ -6,6 +8,7 @@ import * as searchMod from '../core/search.js'
 import { loadMapState, saveMapState, pageCoversFile, getStalePages, getGitHeadHash, getGitChangedFiles, updateStaleness, deriveProjectRoot } from '../core/sync.js'
 import { applyTier1Updates, type FileChange } from '../core/wiki-sync-lite.js'
 import { applyTier2Updates } from '../core/incremental-sync.js'
+import { indexWikiPage, persistOrama } from '../core/indexing.js'
 import { acquireLock, releaseLock } from '../core/lock.js'
 import { estimateTokens } from '../config/models.js'
 import matter from 'gray-matter'
@@ -362,6 +365,18 @@ export function createPlanningTools(config: AxiomConfig) {
         if (tier1.updatedPages.length > 0) {
           await wiki.updateIndex(wikiDir)
           await wiki.updateMOC(wikiDir)
+          
+          if (config.embeddings && config.embeddings.provider !== 'none') {
+            for (const slug of tier1.updatedPages) {
+              const page = mapState.pages.find((p) => p.slug === slug)
+              if (page) {
+                const pagePath = `wiki/pages/${page.category}/${page.slug}.md`
+                try { await indexWikiPage(config, pagePath) } catch { /* skip */ }
+              }
+            }
+            await persistOrama(config)
+          }
+
           await wiki.appendLog(wikiDir, `notify: tier1 updated ${tier1.updatedPages.join(', ')}`, 'sync')
         }
 
@@ -464,6 +479,14 @@ export function createPlanningTools(config: AxiomConfig) {
       const warningPages = getStalePages(mapState, 0.8)
       const healthyPages = mapState.pages.filter((p) => (p._confidence ?? 1.0) >= 0.8)
 
+      const vectorStalePages = mapState.pages.filter((p) => p._vectorSynced === false)
+      const indexExists = fs.existsSync(path.join(wikiDir, 'search.index'))
+      const semanticSearchEnabled = config.embeddings && config.embeddings.provider !== 'none'
+      const semanticHealth = !semanticSearchEnabled ? 'disabled'
+        : !indexExists ? 'missing_index'
+        : vectorStalePages.length > 0 ? 'stale'
+        : 'healthy'
+
       const avgConfidence = mapState.pages.length > 0
         ? mapState.pages.reduce((sum, p) => sum + (p._confidence ?? 1.0), 0) / mapState.pages.length
         : 1.0
@@ -480,6 +503,12 @@ export function createPlanningTools(config: AxiomConfig) {
         healthyPages: healthyPages.length,
         warningPages: warningPages.length - stalePages.length,
         stalePages: stalePages.length,
+        semanticSearch: {
+          status: semanticHealth,
+          provider: config.embeddings?.provider ?? 'none',
+          model: config.embeddings?.model ?? null,
+          staleCount: vectorStalePages.length,
+        },
         avgConfidence: Math.round(avgConfidence * 100) / 100,
         lastSyncAt: mapState.lastSyncAt,
         coveredCommit: mapState.gitCommitHash,

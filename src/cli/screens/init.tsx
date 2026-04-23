@@ -12,11 +12,12 @@ import { PROVIDERS, listProviders, type ProviderId } from '../../config/models.j
 import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
+import { reindexWiki } from '../../core/indexing.js'
 import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, type OllamaModel } from '../../core/ollama.js'
 import { fetchOpenRouterModels, pickPopularModels, formatModelLabel, type OpenRouterModel } from '../../core/openrouter.js'
 
-// Steps: 0=welcome 0.5=migrate 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 7=scaffold 8=done
-type Step = 0 | 0.5 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+// Steps: 0=welcome 0.5=migrate 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 6.5=embeddings 7=scaffold 8=done
+type Step = 0 | 0.5 | 1 | 2 | 3 | 4 | 5 | 6 | 6.5 | 7 | 8
 
 const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
 
@@ -71,6 +72,7 @@ export function InitScreen() {
   const [customModel, setCustomModel] = useState('')
   const [wikiDir, setWikiDir] = useState(path.join(os.homedir(), 'axiom'))
   const [rawDir, setRawDir] = useState('')
+  const [enableEmbeddings, setEnableEmbeddings] = useState(true)
   const [migrating, setMigrating] = useState(false)
   const [migrationDone, setMigrationDone] = useState(false)
   const [migrationError, setMigrationError] = useState('')
@@ -115,9 +117,20 @@ export function InitScreen() {
         const expandedRaw = expandTilde(rawDir)
         const finalModel = model === '__custom__' ? customModel.trim() : model
 
-        const configToSave = provider === 'ollama'
+        const configToSave: AxiomConfig = provider === 'ollama'
           ? { provider: provider!, apiKey: '', model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw, ollamaBaseUrl: ollamaUrl.trim() + '/v1' }
           : { provider: provider!, apiKey, model: finalModel, wikiDir: expandedWiki, rawDir: expandedRaw }
+
+        if (enableEmbeddings) {
+          const embProvider = (provider === 'google' || provider === 'openai' || provider === 'ollama') ? provider : 'google'
+          const embModel = embProvider === 'google' ? 'text-embedding-004' : embProvider === 'openai' ? 'text-embedding-3-small' : 'nomic-embed-text'
+          const dimensions = embProvider === 'openai' ? 1536 : 768
+          configToSave.embeddings = {
+            provider: embProvider,
+            model: embModel,
+            dimensions
+          }
+        }
 
         clearConfig(scope ?? 'global')
 
@@ -143,6 +156,12 @@ export function InitScreen() {
 
         await scaffoldWiki(expandedWiki)
         addLog('✓ Wiki structure created')
+
+        if (enableEmbeddings) {
+          addLog('⠸ Initializing semantic index...')
+          await reindexWiki(configToSave)
+          addLog('✓ Semantic index initialized')
+        }
 
         const rawFiles = fs.existsSync(expandedRaw)
           ? fs.readdirSync(expandedRaw).filter((f: string) => {
@@ -726,12 +745,36 @@ export function InitScreen() {
             onChange={setRawDir}
             onSubmit={(val) => {
               setRawDir(val.trim() || defaultRaw)
-              setStep(7)
+              setStep(6.5)
             }}
           />
         </Box>
         <Box marginTop={1}>
           <Text color="gray">Drop your source files here (PDFs, markdown, etc.)</Text>
+        </Box>
+      </Box>
+    )
+  }
+
+  if (step === 6.5) {
+    const items = [
+      { label: 'Yes (Recommended for better AI planning)', value: 'yes' },
+      { label: 'No (Keyword search only)', value: 'no' },
+    ]
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Enable Semantic Search?</Text>
+        <Box marginTop={1}>
+          <Text color="gray">This allows your AI agent to find relevant context even if keywords don't match exactly.</Text>
+        </Box>
+        <Box marginTop={1}>
+          <SelectInput
+            items={items}
+            onSelect={(item) => {
+              setEnableEmbeddings(item.value === 'yes')
+              setStep(7)
+            }}
+          />
         </Box>
       </Box>
     )

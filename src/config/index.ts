@@ -13,6 +13,12 @@ export interface AxiomConfig {
   ollamaNumCtx?: number
   /** Use [[page-name]] instead of [[category/page-name]] for Obsidian compatibility. */
   obsidianCompat?: boolean
+  embeddings?: {
+    provider: 'google' | 'openai' | 'ollama' | 'none'
+    apiKey?: string
+    model?: string
+    dimensions?: number
+  }
 }
 
 export type ConfigScope = 'local' | 'global'
@@ -39,7 +45,8 @@ function getGlobalConfig(): AxiomConfig | null {
 
   const ollamaNumCtx = store.get('ollamaNumCtx')
   const obsidianCompat = store.get('obsidianCompat')
-  return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat }
+  const embeddings = store.get('embeddings')
+  return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings }
 }
 
 let _cachedLocalConfigPath: string | null | undefined = undefined
@@ -80,13 +87,14 @@ interface LocalConfigFile {
   ollamaBaseUrl?: string
   ollamaNumCtx?: number
   obsidianCompat?: boolean
+  embeddings?: AxiomConfig['embeddings']
 }
 
 function readLocalConfig(configPath: string): AxiomConfig | null {
   try {
     const raw = fs.readFileSync(configPath, 'utf-8')
     const parsed: LocalConfigFile = JSON.parse(raw)
-    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat } = parsed
+    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings } = parsed
 
     if (!provider || !model || !wikiDir || !rawDir) return null
     if (provider !== 'ollama' && !apiKey) return null
@@ -103,6 +111,7 @@ function readLocalConfig(configPath: string): AxiomConfig | null {
       ollamaBaseUrl: resolvedOllamaUrl,
       ollamaNumCtx,
       obsidianCompat,
+      embeddings,
     }
   } catch {
     return null

@@ -12,6 +12,7 @@ export interface MapPageEntry {
   _lastVerifiedAt?: string
   _coveredCommit?: string
   _confidence?: number
+  _vectorSynced?: boolean
 }
 
 export interface CodeChangeNotification {
@@ -186,7 +187,11 @@ export function computeConfidence(page: MapPageEntry, changedFiles: string[]): n
 
 export function updateStaleness(state: MapState, changedFiles: string[], currentCommit: string): MapState {
   for (const page of state.pages) {
+    const touched = changedFiles.some((f) => pageCoversFile(page, f))
     page._confidence = computeConfidence(page, changedFiles)
+    if (touched) {
+      page._vectorSynced = false
+    }
   }
   state.gitCommitHash = currentCommit || state.gitCommitHash
   return state
@@ -210,4 +215,5 @@ export function markPageVerified(state: MapState, slug: string, commitHash: stri
   page._lastVerifiedAt = new Date().toISOString().slice(0, 10)
   page._coveredCommit = commitHash
   page._confidence = 1.0
+  page._vectorSynced = true
 }

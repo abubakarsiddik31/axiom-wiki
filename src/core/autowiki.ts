@@ -1,6 +1,7 @@
 import { createAutowikiAgent } from '../agent/index.js'
 import { AUTOWIKI_CONTINUE_PROMPT } from '../agent/prompts.js'
 import { updateIndex, appendLog } from './wiki.js'
+import { indexWikiPage, persistOrama } from './indexing.js'
 import { calcCost, appendUsageLog } from './usage.js'
 import { saveMapState, getGitHeadHash, type MapState } from './sync.js'
 import { withRetry, classifyError, friendlyErrorMessage } from './retry.js'
@@ -166,7 +167,15 @@ export async function runAutowiki(
     log(`Batch ${batchCount} done: ${batchResult.pagesWritten.length} pages written`)
 
     // Update index after each batch so next batch sees current state
-    try { await updateIndex(config.wikiDir) } catch { /* non-fatal */ }
+    try {
+      await updateIndex(config.wikiDir)
+      if (config.embeddings && config.embeddings.provider !== 'none') {
+        for (const p of batchResult.pagesWritten) {
+          try { await indexWikiPage(config, p) } catch { /* skip failed index */ }
+        }
+        await persistOrama(config)
+      }
+    } catch { /* non-fatal */ }
 
     // Stop conditions
     if (batchResult.done) {
@@ -315,7 +324,15 @@ Today's date: ${today}`
       const isDone = /\bDONE\b/.test(result.text?.trim().split('\n').pop() ?? '')
       if (isDone || pagesWritten.length === 0) break
 
-      try { await updateIndex(config.wikiDir) } catch { /* non-fatal */ }
+      try {
+        await updateIndex(config.wikiDir)
+        if (config.embeddings && config.embeddings.provider !== 'none') {
+          for (const p of pagesWritten) {
+            try { await indexWikiPage(config, p) } catch { /* skip failed index */ }
+          }
+          await persistOrama(config)
+        }
+      } catch { /* non-fatal */ }
     } catch (err: unknown) {
       const errorClass = classifyError(err)
       const errMsg = errorClass !== 'unknown'

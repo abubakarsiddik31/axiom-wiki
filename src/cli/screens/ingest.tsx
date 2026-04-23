@@ -11,6 +11,7 @@ import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage, checkFileSize,
 import { clipUrl } from "../../core/clip.js";
 import type { CoreMessage } from "../../agent/types.js";
 import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
+import { indexWikiPage, persistOrama } from "../../core/indexing.js";
 import { getIngestedFromLog } from "../../core/sources.js";
 import { calcCost, appendUsageLog } from "../../core/usage.js";
 import { loadIgnorePatterns } from "../../core/watcher.js";
@@ -388,6 +389,19 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
     try {
       await updateIndex(config.wikiDir);
       await updateMOC(config.wikiDir);
+      
+      // Index new pages
+      if (config.embeddings && config.embeddings.provider !== 'none') {
+        for (const p of currentPages) {
+          try {
+            await indexWikiPage(config, p);
+          } catch (e) {
+            // Silently fail indexing
+          }
+        }
+        await persistOrama(config);
+      }
+
       await appendLog(config.wikiDir, currentFile, "ingest");
 
       // Record source state for incremental compilation
@@ -500,6 +514,19 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
       // Always write index + log + moc ourselves — don't rely on the agent
       await updateIndex(config.wikiDir);
       await updateMOC(config.wikiDir);
+
+      // Index new pages
+      if (config.embeddings && config.embeddings.provider !== 'none') {
+        for (const p of pagesFound) {
+          try {
+            await indexWikiPage(config, p);
+          } catch (e) {
+            // Silently fail indexing
+          }
+        }
+        await persistOrama(config);
+      }
+
       await appendLog(config.wikiDir, filename, "ingest");
 
       // Record source state for incremental compilation

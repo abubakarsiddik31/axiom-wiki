@@ -1,6 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
+import { hybridSearch } from './search/orama-store.js'
+import type { AxiomConfig } from '../config/index.js'
 
 export interface SearchResult {
   path: string
@@ -17,8 +19,31 @@ export async function searchWiki(
   options?: {
     limit?: number
     category?: string
+    config?: AxiomConfig
   },
 ): Promise<SearchResult[]> {
+  const limit = options?.limit ?? 10
+  
+  // Try Orama hybrid search if config is provided
+  if (options?.config) {
+    try {
+      const results = await hybridSearch(options.config, query, limit)
+      return results.hits.map((hit) => {
+        const doc = hit.document as any
+        return {
+          path: doc.id,
+          title: doc.title,
+          summary: doc.summary,
+          excerpt: doc.content.slice(0, 150).replace(/\n/g, ' '), // Simple excerpt
+          score: hit.score,
+          matchCount: 0, // Orama doesn't expose raw match count easily in hybrid
+        }
+      })
+    } catch (err) {
+      console.error(`[search] Orama search failed, falling back to manual scan: ${err}`)
+    }
+  }
+
   const terms = query
     .toLowerCase()
     .split(/\s+/)
@@ -26,7 +51,6 @@ export async function searchWiki(
 
   if (terms.length === 0) return []
 
-  const limit = options?.limit ?? 10
   const pagesDir = options?.category
     ? path.join(wikiDir, 'wiki/pages', options.category)
     : path.join(wikiDir, 'wiki/pages')

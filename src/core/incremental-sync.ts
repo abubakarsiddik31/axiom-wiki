@@ -5,6 +5,8 @@ import { resolveModel } from '../agent/index.js'
 import { pageCoversFile, markPageVerified, getGitHeadHash, type MapPageEntry, type MapState } from './sync.js'
 import { readPage, writePage, updateIndex, updateMOC, appendLog } from './wiki.js'
 import type { AxiomConfig } from '../config/index.js'
+import { indexWikiPage } from './indexing.js'
+import { persistOrama } from './search/orama-store.js'
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 
@@ -139,6 +141,15 @@ ${filesBlock}
       if (updatedContent && updatedContent !== existingContent) {
         await writePage(wikiDir, pagePath, updatedContent)
         result.pagesUpdated.push(page.slug)
+        
+        // Update Orama index
+        if (config.embeddings && config.embeddings.provider !== 'none') {
+          try {
+            await indexWikiPage(config, pagePath)
+          } catch (err) {
+            log(`Failed to index ${page.slug}: ${err}`)
+          }
+        }
       }
 
       const commitHash = getGitHeadHash(projectRoot) ?? ''
@@ -163,6 +174,7 @@ ${filesBlock}
     try {
       await updateIndex(wikiDir)
       await updateMOC(wikiDir)
+      await persistOrama(config)
       await appendLog(wikiDir, `incremental-sync: updated ${result.pagesUpdated.join(', ')}`, 'sync')
     } catch (err) {
       log(`Post-update maintenance failed: ${err instanceof Error ? err.message : String(err)}`)

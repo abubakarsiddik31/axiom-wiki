@@ -34,7 +34,7 @@ export function StatusScreen({ onExit }: Props) {
 
   useEffect(() => {
     if (!config) return
-    getStatus(config.wikiDir, config.rawDir)
+    getStatus(config)
       .then((s) => { setStatus(s); setTimeout(doExit, 100) })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : String(e))
@@ -77,6 +77,9 @@ export function StatusScreen({ onExit }: Props) {
 
       <Box marginTop={1} flexDirection="column">
         <Row label="Provider" value={`${prov.label} · ${modelLabel}`} />
+        <Row label="Embeddings" value={status.semanticHealth?.status !== 'disabled' 
+          ? `${status.semanticHealth?.provider} (${status.semanticHealth?.model}) [${status.semanticHealth?.status}]` 
+          : 'Disabled'} />
         <Row label="Wiki" value={`${config.wikiDir}/wiki/`} />
         <Row label="Raw" value={config.rawDir} />
       </Box>

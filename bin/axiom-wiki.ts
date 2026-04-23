@@ -156,6 +156,17 @@ program
     renderApp({ name: 'setup-agent' })
   })
 
+program
+  .command('embed')
+  .description('Manage semantic search embeddings')
+  .option('--setup', 'Setup embedding provider')
+  .option('--reindex', 'Re-index all wiki pages')
+  .option('--status', 'Show embedding status')
+  .action((opts: { setup?: boolean; reindex?: boolean; status?: boolean }) => {
+    requireConfig()
+    renderApp({ name: 'embed', ...opts })
+  })
+
 // No command given → home menu
 program.action(() => {
   if (hasConfig()) {

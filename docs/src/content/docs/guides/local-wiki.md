@@ -9,7 +9,7 @@ Axiom Wiki can run at two levels:
 - **Local** — a project-scoped wiki inside `axiom/` for codebase documentation
 
 :::note
-In versions before v0.5.0, the global wiki defaulted to `~/my-wiki/` and local wikis used `.axiom/`. See the [migration guide](/axiom-wiki/guides/migration/) if you're upgrading.
+In versions before v0.5.0, the global wiki defaulted to `~/my-wiki/` and local wikis used `.axiom/`. See the [migration guide](/axiom-wiki/guides/migration) if you're upgrading.
 :::
 
 ## Setting up a local wiki

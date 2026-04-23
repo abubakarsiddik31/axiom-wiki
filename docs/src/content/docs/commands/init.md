@@ -23,4 +23,4 @@ Running `init` again lets you reconfigure an existing wiki.
 
 ### Legacy wiki migration
 
-If you're upgrading from v0.4 and have an existing `~/my-wiki/` directory, `init` will detect it and offer to migrate it to `~/axiom/`. See the [migration guide](/axiom-wiki/guides/migration/) for details.
+If you're upgrading from v0.4 and have an existing `~/my-wiki/` directory, `init` will detect it and offer to migrate it to `~/axiom/`. See the [migration guide](/axiom-wiki/guides/migration) for details.

@@ -54,7 +54,7 @@ my-project/
 ```
 
 :::note
-Before v0.5.0 the default was `~/my-wiki/`. See the [migration guide](/axiom-wiki/guides/migration/) if upgrading.
+Before v0.5.0 the default was `~/my-wiki/`. See the [migration guide](/axiom-wiki/guides/migration) if upgrading.
 :::
 
 Global config lives in your OS config directory (`~/.config/axiom-wiki/` on macOS/Linux).

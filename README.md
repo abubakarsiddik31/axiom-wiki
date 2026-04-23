@@ -115,6 +115,14 @@ axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
 
 **Hybrid Semantic Search** — Axiom uses **Orama** to provide hybrid search (keyword + vector). Supports Google Gemini, OpenAI, and Ollama embeddings. Enable during `init` or run `axiom-wiki embed --setup`.
 
+**Live Maintenance** — The wiki updates itself when your code changes. Tier 1 (deterministic) handles renames and staleness; Tier 2 (agent-based) rewrites pages to reflect new logic. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
+
+**Agent Instructions** — `axiom-wiki setup-agent` generates instructions for Claude Code, Cursor, and Windsurf, teaching them how to use the wiki's MCP tools effectively.
+
+**Health Monitoring** — Track wiki staleness, confidence scores, and semantic index health via the CLI or MCP tools.
+
+**Interactive REPL** — A full-featured terminal UI with slash command autocomplete, real-time progress, and color-coded status badges.
+
 **Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 
 **Web clipper** — `axiom-wiki clip <url>` fetches articles via Readability and saves them for ingest. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/clip/)

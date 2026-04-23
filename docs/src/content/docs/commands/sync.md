@@ -11,7 +11,7 @@ Detects what changed since the last `autowiki` or `sync`, and lets the agent upd
 
 ## Prerequisites
 
-Run [`autowiki`](/axiom-wiki/commands/map/) first. Sync reads the map state (`axiom/map-state.json`) to know what was previously documented.
+Run [`autowiki`](/axiom-wiki/commands/map) first. Sync reads the map state (`axiom/map-state.json`) to know what was previously documented.
 
 ## How it works
 
@@ -31,4 +31,4 @@ The agent has the same tools as autowiki — it can read any project file, searc
 
 For non-git projects, sync treats all files as changed (equivalent to a full re-run).
 
-See the [Codebase Mapping guide](/axiom-wiki/guides/mapping/) for the full workflow.
+See the [Codebase Mapping guide](/axiom-wiki/guides/mapping) for the full workflow.

@@ -1,17 +1,18 @@
 ---
-title: Migration Guide
+title: Migration Guides
 description: Upgrade your wiki to the latest version of Axiom Wiki.
 ---
 
-## Latest Version
+As Axiom Wiki evolves, we occasionally introduce changes that require a migration step for existing wikis. Use the guides below to upgrade your wiki to the latest version.
 
-- **[Upgrading to v0.7.0 (Semantic Search)](/guides/v070-migration)** — Enable hybrid search for better agent planning.
+## Available Migration Guides
+
+- **[Upgrading to v0.7.0 (Semantic Search)](./v070-migration)** — Enable hybrid search and vector embeddings for your wiki.
+- **[Upgrading to v0.5.0 (Directory Rename)](./migration#migration-from-v04--v05)** — Transition from `.axiom/` to `axiom/` and `~/my-wiki/` to `~/axiom/`.
 
 ---
 
-## Legacy Migrations
-
-### Migration from v0.4 → v0.5
+## Migration from v0.4 → v0.5
 
 In v0.5.0, the default wiki directories changed:
 

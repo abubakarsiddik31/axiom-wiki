@@ -30,6 +30,7 @@ program
   .option('--client-id <id>', 'OAuth client ID override (or AXIOM_OPENAI_OAUTH_CLIENT_ID)')
   .option('--auth-url <url>', 'OAuth authorization URL override (or AXIOM_OPENAI_OAUTH_AUTH_URL)')
   .option('--token-url <url>', 'OAuth token URL override (or AXIOM_OPENAI_OAUTH_TOKEN_URL)')
+  .option('--issuer <url>', 'OAuth issuer URL for OIDC discovery (optional)')
   .option('--scope <scope>', 'OAuth scope override (or AXIOM_OPENAI_OAUTH_SCOPE)')
   .option('--redirect-port <port>', 'OAuth localhost callback port override (or AXIOM_OPENAI_OAUTH_PORT)')
   .action(async (subcommand?: string, opts?: {
@@ -40,6 +41,7 @@ program
     clientId?: string
     authUrl?: string
     tokenUrl?: string
+    issuer?: string
     scope?: string
     redirectPort?: string
   }) => {

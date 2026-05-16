@@ -94,12 +94,39 @@ axiom-wiki sources            Manage ingested sources
 axiom-wiki review             Resolve wiki contradictions
 axiom-wiki graph              Visualize the wiki page graph
 axiom-wiki embed              Manage semantic search embeddings
+axiom-wiki auth               Configure OpenAI auth (API key or OAuth)
 axiom-wiki model              Switch LLM provider or model
 axiom-wiki status             Wiki statistics
 axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
+axiom-wiki setup-agent        Add MCP instruction templates to agent config files
 ```
 
 `axwiki` is an alias for `axiom-wiki`.
+
+---
+
+## OpenAI OAuth
+
+You can authenticate OpenAI with either an API key or OAuth:
+
+```bash
+axiom-wiki auth openai
+axiom-wiki auth openai --oauth --activate
+```
+
+OAuth setup is interactive:
+
+- Missing OAuth values are prompted in the CLI.
+- You can provide an issuer URL for endpoint auto-discovery (`/.well-known/openid-configuration`).
+- Settings are saved for future runs.
+
+Check auth status:
+
+```bash
+axiom-wiki auth status
+```
+
+Note: OpenAI subscription billing and OpenAI API billing may still be separate depending on account/platform policy.
 
 ---
 

@@ -35,22 +35,28 @@ Use OAuth mode with:
 axiom-wiki auth openai --oauth
 ```
 
-Required OAuth settings (env vars):
+First run behavior:
+
+- If OAuth values are missing, the CLI prompts for them interactively.
+- Enter an issuer URL to auto-discover endpoints via `/.well-known/openid-configuration`.
+- If discovery fails or is skipped, you can enter auth/token URLs manually.
+- Settings are saved to Axiom config for future runs.
+
+Optional OAuth env defaults:
 
 - `AXIOM_OPENAI_OAUTH_CLIENT_ID`
 - `AXIOM_OPENAI_OAUTH_AUTH_URL`
 - `AXIOM_OPENAI_OAUTH_TOKEN_URL`
-
-Optional OAuth settings:
-
+- `AXIOM_OPENAI_OAUTH_ISSUER`
 - `AXIOM_OPENAI_OAUTH_SCOPE` (default: `openid profile email`)
 - `AXIOM_OPENAI_OAUTH_PORT` (default: `8787`)
 
-CLI overrides (optional):
+Optional CLI overrides:
 
 - `--client-id <id>`
 - `--auth-url <url>`
 - `--token-url <url>`
+- `--issuer <url>`
 - `--scope <scope>`
 - `--redirect-port <port>`
 - `--no-open` (do not auto-open browser)

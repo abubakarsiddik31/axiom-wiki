@@ -5,6 +5,18 @@ import path from 'path'
 export interface AxiomConfig {
   provider: 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'ollama'
   apiKey: string
+  providerApiKeys?: Partial<Record<'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral', string>>
+  auth?: {
+    openai?: {
+      method: 'apikey' | 'oauth'
+      accessToken?: string
+      refreshToken?: string
+      tokenType?: string
+      scope?: string
+      expiresAt?: string
+      configuredAt: string
+    }
+  }
   model: string
   wikiDir: string
   rawDir: string
@@ -28,15 +40,30 @@ const LEGACY_LOCAL_CONFIG_FILENAME = '.axiom/config.json'
 
 const store = new Conf<AxiomConfig>({ projectName: 'axiom-wiki' })
 
+function resolveProviderCredential(
+  provider: AxiomConfig['provider'] | undefined,
+  apiKey: string | undefined,
+  providerApiKeys: AxiomConfig['providerApiKeys'] | undefined,
+  auth: AxiomConfig['auth'] | undefined,
+): string {
+  if (!provider || provider === 'ollama') return ''
+  if (apiKey) return apiKey
+  if (provider === 'openai' && auth?.openai?.accessToken) return auth.openai.accessToken
+  return providerApiKeys?.[provider] ?? ''
+}
+
 function getGlobalConfig(): AxiomConfig | null {
   const provider = store.get('provider')
   const apiKey = store.get('apiKey')
+  const providerApiKeys = store.get('providerApiKeys')
+  const auth = store.get('auth')
   const model = store.get('model')
   const wikiDir = store.get('wikiDir')
   const rawDir = store.get('rawDir')
+  const resolvedApiKey = resolveProviderCredential(provider, apiKey, providerApiKeys, auth)
 
   if (!provider || !model || !wikiDir || !rawDir) return null
-  if (provider !== 'ollama' && !apiKey) return null
+  if (provider !== 'ollama' && !resolvedApiKey) return null
 
   const ollamaBaseUrl =
     process.env['OLLAMA_BASE_URL'] ||
@@ -46,7 +73,7 @@ function getGlobalConfig(): AxiomConfig | null {
   const ollamaNumCtx = store.get('ollamaNumCtx')
   const obsidianCompat = store.get('obsidianCompat')
   const embeddings = store.get('embeddings')
-  return { provider, apiKey: apiKey ?? '', model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings }
+  return { provider, apiKey: resolvedApiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings }
 }
 
 let _cachedLocalConfigPath: string | null | undefined = undefined
@@ -81,6 +108,8 @@ export function findLocalConfig(startDir?: string): string | null {
 interface LocalConfigFile {
   provider?: AxiomConfig['provider']
   apiKey?: string
+  providerApiKeys?: AxiomConfig['providerApiKeys']
+  auth?: AxiomConfig['auth']
   model?: string
   wikiDir?: string
   rawDir?: string
@@ -94,17 +123,20 @@ function readLocalConfig(configPath: string): AxiomConfig | null {
   try {
     const raw = fs.readFileSync(configPath, 'utf-8')
     const parsed: LocalConfigFile = JSON.parse(raw)
-    const { provider, apiKey, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings } = parsed
+    const { provider, apiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings } = parsed
+    const resolvedApiKey = resolveProviderCredential(provider, apiKey, providerApiKeys, auth)
 
     if (!provider || !model || !wikiDir || !rawDir) return null
-    if (provider !== 'ollama' && !apiKey) return null
+    if (provider !== 'ollama' && !resolvedApiKey) return null
 
     const resolvedOllamaUrl =
       process.env['OLLAMA_BASE_URL'] ?? ollamaBaseUrl ?? 'http://localhost:11434/v1'
 
     return {
       provider,
-      apiKey: apiKey ?? '',
+      apiKey: resolvedApiKey,
+      providerApiKeys,
+      auth,
       model,
       wikiDir,
       rawDir,
@@ -178,7 +210,10 @@ export function getLocalConfigError(): string | null {
     if (!provider || !model || !wikiDir || !rawDir) {
       return `Local config at ${configPath} is missing required fields (provider, model, wikiDir, rawDir).`
     }
-    if (provider !== 'ollama' && !parsed.apiKey) {
+    const providerApiKeys = parsed.providerApiKeys as AxiomConfig['providerApiKeys'] | undefined
+    const auth = parsed.auth as AxiomConfig['auth'] | undefined
+    const hasProviderKey = Boolean(resolveProviderCredential(provider, parsed.apiKey as string | undefined, providerApiKeys, auth))
+    if (provider !== 'ollama' && !hasProviderKey) {
       return `Local config at ${configPath} is missing apiKey for provider '${provider}'.`
     }
     return null

@@ -6,6 +6,7 @@ import { startMcpServer } from '../src/mcp/server.js'
 import { VERSION } from '../src/version.js'
 import { createAxiomAgent } from '../src/agent/index.js'
 import { getConfig } from '../src/config/index.js'
+import { runAuthCommand } from '../src/auth/command.js'
 
 function requireConfig() {
   if (!hasConfig()) {
@@ -18,6 +19,35 @@ const program = new Command()
   .name('axiom-wiki')
   .description('The wiki that maintains itself.')
   .version(VERSION)
+
+program
+  .command('auth [subcommand]')
+  .description('Authenticate providers (OpenAI first: auth openai, auth status, auth logout openai)')
+  .option('--api-key <key>', 'Set API key non-interactively')
+  .option('--activate', 'Switch active provider/model to OpenAI after auth')
+  .option('--oauth', 'Use OAuth flow instead of API key')
+  .option('--no-open', 'Do not auto-open browser in OAuth mode')
+  .option('--client-id <id>', 'OAuth client ID override (or AXIOM_OPENAI_OAUTH_CLIENT_ID)')
+  .option('--auth-url <url>', 'OAuth authorization URL override (or AXIOM_OPENAI_OAUTH_AUTH_URL)')
+  .option('--token-url <url>', 'OAuth token URL override (or AXIOM_OPENAI_OAUTH_TOKEN_URL)')
+  .option('--scope <scope>', 'OAuth scope override (or AXIOM_OPENAI_OAUTH_SCOPE)')
+  .option('--redirect-port <port>', 'OAuth localhost callback port override (or AXIOM_OPENAI_OAUTH_PORT)')
+  .action(async (subcommand?: string, opts?: {
+    apiKey?: string
+    activate?: boolean
+    oauth?: boolean
+    open?: boolean
+    clientId?: string
+    authUrl?: string
+    tokenUrl?: string
+    scope?: string
+    redirectPort?: string
+  }) => {
+    await runAuthCommand(subcommand, {
+      ...opts,
+      noOpen: opts?.open === false,
+    })
+  })
 
 program
   .command('init')

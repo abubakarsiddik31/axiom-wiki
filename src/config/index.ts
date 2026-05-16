@@ -9,6 +9,7 @@ export interface AxiomConfig {
   auth?: {
     openai?: {
       method: 'apikey' | 'oauth'
+      issuer?: string
       clientId?: string
       authUrl?: string
       tokenUrl?: string

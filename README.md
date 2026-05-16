@@ -117,7 +117,7 @@ axiom-wiki auth openai --oauth --activate
 OAuth setup is interactive:
 
 - Missing OAuth values are prompted in the CLI.
-- You can provide an issuer URL for endpoint auto-discovery (`/.well-known/openid-configuration`).
+- It defaults issuer discovery to `https://auth.openai.com` and can auto-fill endpoints from `/.well-known/openid-configuration`.
 - Settings are saved for future runs.
 
 Check auth status:
@@ -126,7 +126,10 @@ Check auth status:
 axiom-wiki auth status
 ```
 
-Note: OpenAI subscription billing and OpenAI API billing may still be separate depending on account/platform policy.
+Important:
+- OpenAI OAuth token flows and OpenAI API key billing are different auth/billing systems.
+- Subscription-backed Codex access may not behave like standard Platform API key usage in all clients.
+- If you need guaranteed production API behavior, use standard OpenAI Platform API keys.
 
 ---
 

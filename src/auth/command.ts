@@ -47,6 +47,7 @@ function maskToken(token: string): string {
 }
 
 interface OAuthSettings {
+  issuer?: string
   clientId: string
   authUrl: string
   tokenUrl: string
@@ -84,6 +85,8 @@ async function resolveOpenAiOAuthSettings(opts?: AuthOptions): Promise<OAuthSett
   let clientId = opts?.clientId || process.env['AXIOM_OPENAI_OAUTH_CLIENT_ID'] || process.env['OPENAI_OAUTH_CLIENT_ID'] || saved?.clientId || ''
   let authUrl = opts?.authUrl || process.env['AXIOM_OPENAI_OAUTH_AUTH_URL'] || saved?.authUrl || ''
   let tokenUrl = opts?.tokenUrl || process.env['AXIOM_OPENAI_OAUTH_TOKEN_URL'] || saved?.tokenUrl || ''
+  const issuerDefault = opts?.issuer || process.env['AXIOM_OPENAI_OAUTH_ISSUER'] || saved?.issuer || 'https://auth.openai.com'
+  let selectedIssuer = ''
   const scope = opts?.scope || process.env['AXIOM_OPENAI_OAUTH_SCOPE'] || saved?.scope || DEFAULT_SCOPE
   const redirectPortRaw = opts?.redirectPort || process.env['AXIOM_OPENAI_OAUTH_PORT'] || String(saved?.redirectPort ?? 8787)
   const redirectPort = Number.parseInt(redirectPortRaw, 10)
@@ -93,9 +96,9 @@ async function resolveOpenAiOAuthSettings(opts?: AuthOptions): Promise<OAuthSett
   }
 
   if (!authUrl || !tokenUrl) {
-    const issuerDefault = opts?.issuer || process.env['AXIOM_OPENAI_OAUTH_ISSUER'] || ''
     const issuer = await promptLine('OAuth issuer URL for auto-discovery (leave blank to enter URLs manually)', issuerDefault)
     if (issuer) {
+      selectedIssuer = issuer
       try {
         const discovered = await discoverOAuthEndpoints(issuer)
         authUrl = discovered.authUrl
@@ -117,7 +120,7 @@ async function resolveOpenAiOAuthSettings(opts?: AuthOptions): Promise<OAuthSett
     throw new Error(`Invalid redirect port: ${redirectPortRaw}`)
   }
 
-  return { clientId, authUrl, tokenUrl, scope, redirectPort }
+  return { issuer: selectedIssuer || issuerDefault || undefined, clientId, authUrl, tokenUrl, scope, redirectPort }
 }
 
 function getProviderKey(config: AxiomConfig | null, provider: AuthProvider): string {
@@ -341,6 +344,7 @@ async function runOpenAiOAuth(opts?: AuthOptions): Promise<void> {
       ...(existing?.auth ?? {}),
       openai: {
         method: 'oauth',
+        issuer: settings.issuer,
         clientId: settings.clientId,
         authUrl: settings.authUrl,
         tokenUrl: settings.tokenUrl,
@@ -412,6 +416,7 @@ export async function runAuthCommand(subcommand?: string, opts?: AuthOptions): P
       if (oauth.accessToken) console.log(`  OAuth token: ${maskToken(oauth.accessToken)}`)
       if (oauth.expiresAt) console.log(`  OAuth expiresAt: ${oauth.expiresAt}`)
       if (oauth.clientId) console.log(`  OAuth clientId: ${oauth.clientId}`)
+      if (oauth.issuer) console.log(`  OAuth issuer: ${oauth.issuer}`)
       if (oauth.authUrl) console.log(`  OAuth authUrl: ${oauth.authUrl}`)
       if (oauth.tokenUrl) console.log(`  OAuth tokenUrl: ${oauth.tokenUrl}`)
     } else if (oauth?.method === 'apikey') {

@@ -38,7 +38,7 @@ axiom-wiki auth openai --oauth
 First run behavior:
 
 - If OAuth values are missing, the CLI prompts for them interactively.
-- Enter an issuer URL to auto-discover endpoints via `/.well-known/openid-configuration`.
+- It defaults issuer discovery to `https://auth.openai.com` and can auto-discover endpoints via `/.well-known/openid-configuration`.
 - If discovery fails or is skipped, you can enter auth/token URLs manually.
 - Settings are saved to Axiom config for future runs.
 

@@ -12,6 +12,7 @@ description: Supported LLM providers and models.
 | **DeepSeek** | DeepSeek V3 (chat), DeepSeek R1 (reasoning) | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
 | **Groq** | Llama 3.3 70B, Gemma 2 9B, Llama 3.1 8B | Yes (generous free tier) | [console.groq.com](https://console.groq.com/keys) |
 | **Mistral AI** | Mistral Large, Medium, Small, Codestral | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| **xAI (Grok)** | Grok 4.6, 4.5, 4.3, 4.20 Reasoning, Build 0.1 | No | [console.x.ai](https://console.x.ai) |
 | **Ollama** *(local)* | Any model you pull locally | Free | [ollama.com](https://ollama.com) |
 
 Switch provider or model at any time:

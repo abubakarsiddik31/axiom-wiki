@@ -184,7 +184,7 @@ function createPkce() {
   return { codeVerifier, codeChallenge }
 }
 
-function openUrlInBrowser(url: string): boolean {
+export function openUrlInBrowser(url: string): boolean {
   const platform = process.platform
   const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'start' : 'xdg-open'
 

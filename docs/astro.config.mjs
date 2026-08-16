@@ -55,6 +55,7 @@ export default defineConfig({
             { label: 'sources', slug: 'commands/sources' },
             { label: 'review', slug: 'commands/review' },
             { label: 'graph', slug: 'commands/graph' },
+            { label: 'serve', slug: 'commands/serve' },
             { label: 'model', slug: 'commands/model' },
             { label: 'status', slug: 'commands/status' },
             { label: 'mcp', slug: 'commands/mcp' },

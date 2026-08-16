@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`serve` command**: Browse the wiki as a local read-only web UI (`axiom-wiki serve`) — dashboard with stats and semantic health, page list, rendered pages with rewritten wiki-links, hybrid search box, and an SVG link graph. Dark/light theme, `--port`/`--host`/`--open` flags, GET-only routes.
+
 ## [0.8.0] - 2026-08-16
 
 ### Added

@@ -26,8 +26,12 @@ npx tsx bin/axiom-wiki.ts <command>   # e.g., status, query, ingest
 Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 ### Entry & Routing
-- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining 12 commands (`init`, `ingest`, `query`, `model`, `status`, `lint`, `watch`, `clip`, `sources`, `review`, `mcp`, `embed`). Defaults to the home screen if no command is given.
+- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
+
+### Web UI Layer (`src/server/`)
+- **`index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Routes: `/` (dashboard), `/pages`, `/page/:category/:slug`, `/search?q=`, `/graph`, `/healthz`. Wraps core functions only (`getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`) — no wiki state of its own. GET/HEAD only; never writes.
+- **`render.ts`** — Pure rendering helpers: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), markdown→HTML via `marked`, HTML layout/theme, deterministic SVG graph. Unit-tested without sockets.
 
 ### CLI/UI Layer (`src/cli/`)
 - Built with **Ink 5 + React 18** (React for the terminal).

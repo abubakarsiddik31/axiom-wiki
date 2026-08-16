@@ -7,6 +7,7 @@ import { VERSION } from '../src/version.js'
 import { createAxiomAgent } from '../src/agent/index.js'
 import { getConfig } from '../src/config/index.js'
 import { runAuthCommand } from '../src/auth/command.js'
+import { startServer } from '../src/server/index.js'
 
 function requireConfig() {
   if (!hasConfig()) {
@@ -84,6 +85,19 @@ program
   .action(() => {
     requireConfig()
     renderApp({ name: 'status' })
+  })
+
+program
+  .command('serve')
+  .description('Serve the wiki as a local read-only web UI')
+  .option('-p, --port <port>', 'port to listen on', '1717')
+  .option('--host <host>', 'host to bind (use 0.0.0.0 to expose on the LAN)', '127.0.0.1')
+  .option('--open', 'open the browser after starting')
+  .action(async (opts: { port: string; host: string; open?: boolean }) => {
+    requireConfig()
+    const config = getConfig()
+    if (!config) return
+    await startServer({ config, port: Number(opts.port), host: opts.host, open: opts.open })
   })
 
 program

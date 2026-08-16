@@ -93,6 +93,7 @@ axiom-wiki clip [url]         Clip a URL to raw/
 axiom-wiki sources            Manage ingested sources
 axiom-wiki review             Resolve wiki contradictions
 axiom-wiki graph              Visualize the wiki page graph
+axiom-wiki serve              Browse the wiki in a local read-only web UI
 axiom-wiki embed              Manage semantic search embeddings
 axiom-wiki auth               Configure OpenAI auth (API key or OAuth)
 axiom-wiki model              Switch LLM provider or model
@@ -152,6 +153,8 @@ Important:
 **Health Monitoring** — Track wiki staleness, confidence scores, and semantic index health via the CLI or MCP tools.
 
 **Interactive REPL** — A full-featured terminal UI with slash command autocomplete, real-time progress, and color-coded status badges.
+
+**Local web UI** — `axiom-wiki serve` renders the wiki as a read-only browser UI: dashboard, hybrid search, page graph, and click-through wiki-links. Zero write endpoints, safe on your LAN. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/serve/)
 
 **Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 

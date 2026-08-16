@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-16
+
+### Added
+- **`auth` command**: Authenticate providers from the CLI — interactive API-key entry or a browser-based OAuth flow (`axiom-wiki auth openai`), with `auth status` and `auth logout` subcommands.
+- **OAuth for OpenAI**: PKCE-secured authorization-code flow with a localhost callback server, automatic OIDC discovery, and a default issuer — zero manual URL configuration required.
+- **Non-interactive auth**: `--api-key`, `--activate`, and `--oauth` flags for scripts and CI; OAuth endpoints overridable via `AXIOM_OPENAI_OAUTH_*` environment variables.
+- **Token persistence**: Access and refresh tokens are stored in config so authenticated sessions survive restarts.
+
 ## [0.7.2] - 2026-04-23
 
 ### Added

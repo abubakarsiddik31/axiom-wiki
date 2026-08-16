@@ -25,6 +25,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build before npm publish so bin files exist when npm validates
+      # the manifest — newer npm strips missing bin entries at pack time.
+      - name: Build
+        run: pnpm build
+
       - name: Publish
         run: npm publish --access public
         env:

@@ -38,3 +38,40 @@ describe('models config', () => {
     });
   });
 });
+
+describe('xai provider', () => {
+  it('is present in the registry with the expected shape', () => {
+    const provider = getProvider('xai');
+    expect(provider.id).toBe('xai');
+    expect(provider.label).toBe('xAI (Grok)');
+    expect(provider.keyEnv).toBe('XAI_API_KEY');
+    expect(provider.requiresApiKey).toBe(true);
+    expect(provider.defaultBaseUrl).toBe('https://api.x.ai/v1');
+  });
+
+  it('lists Grok models with context windows and pricing', () => {
+    const model = getModel('xai', 'grok-4.6');
+    expect(model?.label).toBe('Grok 4.6');
+    expect(model?.contextWindow).toBe(500_000);
+    expect(model?.pricing).toEqual({ input: 2.00, output: 6.00 });
+
+    const longContext = getModel('xai', 'grok-4.3');
+    expect(longContext?.contextWindow).toBe(1_000_000);
+  });
+
+  it('defaults to the recommended Grok model', () => {
+    const model = getDefaultModel('xai');
+    expect(model.id).toBe('grok-4.6');
+    expect(model.recommended).toBe(true);
+  });
+
+  it('registers every ProviderId in PROVIDERS', () => {
+    const ids: Array<keyof typeof PROVIDERS> = [
+      'google', 'openai', 'anthropic', 'openrouter', 'deepseek', 'groq', 'mistral', 'xai', 'ollama',
+    ];
+    for (const id of ids) {
+      expect(PROVIDERS[id].id).toBe(id);
+      expect(PROVIDERS[id].models.length).toBeGreaterThan(0);
+    }
+  });
+});

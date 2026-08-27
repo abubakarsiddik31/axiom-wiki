@@ -92,6 +92,8 @@ export function resolveModel(config: AxiomConfig): AnyModel {
       return createOpenAICompatible('https://api.groq.com/openai/v1', apiKey)(modelId)
     case 'mistral':
       return createOpenAICompatible('https://api.mistral.ai/v1', apiKey)(modelId)
+    case 'xai':
+      return createOpenAICompatible('https://api.x.ai/v1', apiKey)(modelId)
     case 'ollama': {
       const baseURL = config.ollamaBaseUrl ?? 'http://localhost:11434/v1'
       const numCtx = getOllamaNumCtx(modelId, config.ollamaNumCtx)

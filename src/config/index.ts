@@ -3,9 +3,9 @@ import fs from 'fs'
 import path from 'path'
 
 export interface AxiomConfig {
-  provider: 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'ollama'
+  provider: 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'xai' | 'ollama'
   apiKey: string
-  providerApiKeys?: Partial<Record<'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral', string>>
+  providerApiKeys?: Partial<Record<'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'xai', string>>
   auth?: {
     openai?: {
       method: 'apikey' | 'oauth'

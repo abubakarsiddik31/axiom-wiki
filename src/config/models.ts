@@ -1,4 +1,4 @@
-export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'ollama'
+export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'xai' | 'ollama'
 
 export interface ModelDef {
   id: string
@@ -120,6 +120,22 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
       { id: 'mistral-medium-latest', label: 'Mistral Medium', desc: 'Balanced speed and quality', pricing: { input: 0.40, output: 2.00 }, contextWindow: 128_000 },
       { id: 'mistral-small-latest',  label: 'Mistral Small',  desc: 'Fast and cost-efficient', pricing: { input: 0.10, output: 0.30 }, contextWindow: 128_000 },
       { id: 'codestral-latest',      label: 'Codestral',      desc: 'Code-specialized model', pricing: { input: 0.30, output: 0.90 }, contextWindow: 256_000 },
+    ],
+  },
+  xai: {
+    id: 'xai',
+    label: 'xAI (Grok)',
+    keyLabel: 'xAI API Key',
+    keyEnv: 'XAI_API_KEY',
+    keyUrl: 'https://console.x.ai',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.x.ai/v1',
+    models: [
+      { id: 'grok-4.6',                    label: 'Grok 4.6',                 desc: 'Flagship — most intelligent and fastest Grok, strong at code', recommended: true, pricing: { input: 2.00, output: 6.00 }, contextWindow: 500_000 },
+      { id: 'grok-4.5',                    label: 'Grok 4.5',                 desc: 'Previous flagship, balanced reasoning and speed', pricing: { input: 2.00, output: 6.00 }, contextWindow: 500_000 },
+      { id: 'grok-4.3',                    label: 'Grok 4.3',                 desc: '1M-token context at half the flagship price', pricing: { input: 1.25, output: 2.50 }, contextWindow: 1_000_000 },
+      { id: 'grok-4.20-0309-reasoning',    label: 'Grok 4.20 Reasoning',      desc: 'Fast-reasoning variant, 1M context', pricing: { input: 1.25, output: 2.50 }, contextWindow: 1_000_000 },
+      { id: 'grok-build-0.1',              label: 'Grok Build 0.1',           desc: 'Code-specialized model for agentic coding', pricing: { input: 1.00, output: 2.00 }, contextWindow: 256_000 },
     ],
   },
   ollama: {

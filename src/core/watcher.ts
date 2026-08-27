@@ -3,7 +3,7 @@ import path from 'path'
 import { watch, type FSWatcher } from 'chokidar'
 import ignore from 'ignore'
 
-const SUPPORTED_EXTS = new Set(['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx'])
+const SUPPORTED_EXTS = new Set(['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx', '.csv', '.tsv'])
 
 export function loadIgnorePatterns(rawDir: string): string[] {
   const ignoreFile = path.join(rawDir, '.axiomignore')

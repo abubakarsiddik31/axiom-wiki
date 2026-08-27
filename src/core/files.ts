@@ -15,7 +15,7 @@ export interface SourceFile {
   sizeBytes: number
 }
 
-export const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
+export const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx', '.csv', '.tsv']
 
 const MAX_FILE_SIZE_TEXT = 100 * 1024 * 1024    // 100 MB
 const MAX_FILE_SIZE_BINARY = 200 * 1024 * 1024  // 200 MB
@@ -91,6 +91,60 @@ export function checkContextBudget(
   return { fits: true, estimatedTokens: contentTokens, contextWindow }
 }
 
+/**
+ * RFC-4180-style delimited parser: quoted fields may contain delimiters,
+ * newlines and escaped quotes ("" → "). Bare quotes are kept literal.
+ */
+export function parseDelimited(input: string, delimiter: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+
+  while (i < input.length) {
+    const ch = input[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (input[i + 1] === '"') { field += '"'; i += 2; continue }
+        inQuotes = false; i++; continue
+      }
+      field += ch; i++; continue
+    }
+    if (ch === '"' && field === '') { inQuotes = true; i++; continue }
+    if (ch === delimiter) { row.push(field); field = ''; i++; continue }
+    if (ch === '\r' || ch === '\n') {
+      row.push(field); rows.push(row); row = []; field = ''
+      i += ch === '\r' && input[i + 1] === '\n' ? 2 : 1
+      continue
+    }
+    field += ch; i++
+  }
+
+  if (field !== '' || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows.filter(r => !(r.length === 1 && r[0] === ''))
+}
+
+/** Renders delimited rows as a Markdown table so the model can read them as text. */
+export function delimitedToMarkdown(input: string, delimiter: string): string {
+  const rows = parseDelimited(input.trimEnd(), delimiter)
+  if (rows.length === 0) return ''
+
+  const cols = Math.max(...rows.map(r => r.length))
+  const escape = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+  const pad = (r: string[]) => r.concat(Array(cols - r.length).fill(''))
+
+  const [header, ...body] = rows.map(r => pad(r).map(escape))
+  return [
+    `| ${header.join(' | ')} |`,
+    `| ${Array(cols).fill('---').join(' | ')} |`,
+    ...body.map(r => `| ${r.join(' | ')} |`),
+  ].join('\n')
+}
+
 export async function readSourceFile(filepath: string): Promise<SourceFile> {
   if (!fs.existsSync(filepath)) {
     throw new Error(`File not found: ${filepath}`)
@@ -102,7 +156,7 @@ export async function readSourceFile(filepath: string): Promise<SourceFile> {
 
   if (!SUPPORTED_EXTS.includes(ext)) {
     throw new Error(
-      `Unsupported file type: ${ext}. Supported: .md .txt .pdf .png .jpg .jpeg .webp .html .docx`,
+      `Unsupported file type: ${ext}. Supported: .md .txt .pdf .png .jpg .jpeg .webp .html .docx .csv .tsv`,
     )
   }
 
@@ -135,6 +189,16 @@ export async function readSourceFile(filepath: string): Promise<SourceFile> {
       return { content: markdown, mimeType: 'text/plain', isBase64: false, filename, extension: 'html', sizeBytes }
     } catch (err) {
       throw new ConversionError(filename, `HTML conversion failed: ${err instanceof Error ? err.message : String(err)}.`)
+    }
+  }
+
+  if (ext === '.csv' || ext === '.tsv') {
+    const delimiter = ext === '.tsv' ? '\t' : ','
+    try {
+      const markdown = delimitedToMarkdown(fs.readFileSync(filepath, 'utf-8'), delimiter)
+      return { content: markdown, mimeType: 'text/plain', isBase64: false, filename, extension: ext.slice(1), sizeBytes }
+    } catch (err) {
+      throw new ConversionError(filename, `Delimited conversion failed: ${err instanceof Error ? err.message : String(err)}. File may be malformed.`)
     }
   }
 

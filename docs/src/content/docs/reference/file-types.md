@@ -10,5 +10,6 @@ description: File formats that Axiom Wiki can ingest.
 | `.png`, `.jpg`, `.jpeg`, `.webp` | Uploaded to the provider's Files API (Google) or sent as base64 |
 | `.html` | Converted to Markdown via node-html-markdown |
 | `.docx` | Converted to Markdown via mammoth |
+| `.csv`, `.tsv` | Converted to a Markdown table (RFC-4180 parser: quoted fields, embedded delimiters/newlines) |
 
 For Google Gemini, binary files (PDFs and images) are uploaded to the Google Files API before ingestion — the file bytes are hosted server-side and referenced by URI, bypassing the model's inline token limit.

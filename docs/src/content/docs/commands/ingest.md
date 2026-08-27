@@ -74,4 +74,4 @@ See the [Interactive Ingest guide](/axiom-wiki/guides/interactive-ingest/) for d
 
 ## Supported file types
 
-`.md`, `.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.html`, `.docx`
+`.md`, `.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.html`, `.docx`, `.csv`, `.tsv`

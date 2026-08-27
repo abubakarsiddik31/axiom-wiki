@@ -19,7 +19,7 @@ import { fetchOpenRouterModels, pickPopularModels, formatModelLabel, type OpenRo
 // Steps: 0=welcome 0.5=migrate 1=scope 2=provider 3=apiKey(or ollamaUrl) 4=model 5=wikiDir 6=rawDir 6.5=embeddings 7=scaffold 8=done
 type Step = 0 | 0.5 | 1 | 2 | 3 | 4 | 5 | 6 | 6.5 | 7 | 8
 
-const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx']
+const SUPPORTED_EXTS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html', '.docx', '.csv', '.tsv']
 
 function expandTilde(p: string): string {
   if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))

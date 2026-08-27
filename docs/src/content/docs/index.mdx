@@ -22,7 +22,7 @@ Unlike RAG systems that re-derive answers from raw sources on every query, Axiom
 
 <CardGrid stagger>
   <Card title="Drop files, get a wiki" icon="document">
-    Drop PDFs, markdown, images, or URLs into your `raw/` folder. Axiom reads them, extracts entities and concepts, and creates cross-linked wiki pages automatically.
+    Drop PDFs, markdown, images, spreadsheets (CSV/TSV), or URLs into your `raw/` folder. Axiom reads them, extracts entities and concepts, and creates cross-linked wiki pages automatically.
   </Card>
   <Card title="Auto-wiki your codebase" icon="seti:folder">
     Run `axiom-wiki autowiki` inside any project to generate structured documentation — architecture, modules, tech stack — with one command.
@@ -36,7 +36,10 @@ Unlike RAG systems that re-derive answers from raw sources on every query, Axiom
   <Card title="Live Maintenance" icon="rocket">
     The wiki updates itself when your code changes. Tier 1 (deterministic) handles renames; Tier 2 (agent-based) rewrites pages to reflect new logic.
   </Card>
+  <Card title="Browse it like a real wiki" icon="window">
+    `axiom-wiki serve` opens a local read-only web UI with a dashboard, hybrid search, a link graph, and "what links here" backlinks on every page.
+  </Card>
   <Card title="Works everywhere" icon="laptop">
-    Google Gemini (free tier), OpenAI, Anthropic, or fully offline with Ollama. Your data stays local. Plain markdown files work with Obsidian, VS Code, or any editor.
+    Nine providers from Google Gemini's free tier to Grok, plus fully offline with Ollama. Your data stays local. Plain markdown files work with Obsidian, VS Code, or any editor.
   </Card>
 </CardGrid>

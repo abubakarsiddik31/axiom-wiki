@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Backlinks on page views**: `axiom-wiki serve` now shows a "Linked from" card at the bottom of every page view listing the pages that link to it ("what links here"), powered by a new `getBacklinks()` core API that reuses the existing link graph.
+
 ## [0.9.0] - 2026-08-27
 
 ### Added

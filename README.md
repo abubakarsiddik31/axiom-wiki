@@ -75,6 +75,7 @@ See the [full documentation](https://abubakarsiddik31.github.io/axiom-wiki) for 
 | **DeepSeek** | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
 | **Groq** | Yes | [console.groq.com](https://console.groq.com/keys) |
 | **Mistral AI** | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| **xAI (Grok)** | No | [console.x.ai](https://console.x.ai) |
 | **Ollama** *(local)* | Free | [ollama.com](https://ollama.com) |
 
 ---
@@ -136,7 +137,7 @@ Important:
 
 ## Key Features
 
-**Ingest documents** — Drop PDFs, markdown, images, DOCX, or HTML into `raw/`. The agent extracts entities, concepts, and creates cross-linked wiki pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/ingest/)
+**Ingest documents** — Drop PDFs, markdown, images, DOCX, HTML, or CSV/TSV into `raw/`. The agent extracts entities, concepts, and creates cross-linked wiki pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/ingest/)
 
 **Auto-wiki anything** — `axiom-wiki autowiki` lets an AI agent autonomously explore your project or document folder, decide what pages to create, and build a comprehensive wiki in batches. Works on codebases, company docs, personal notes — the agent adapts to the content. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
 
@@ -154,7 +155,7 @@ Important:
 
 **Interactive REPL** — A full-featured terminal UI with slash command autocomplete, real-time progress, and color-coded status badges.
 
-**Local web UI** — `axiom-wiki serve` renders the wiki as a read-only browser UI: dashboard, hybrid search, page graph, and click-through wiki-links. Zero write endpoints, safe on your LAN. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/serve/)
+**Local web UI** — `axiom-wiki serve` renders the wiki as a read-only browser UI: dashboard, hybrid search, page graph, click-through wiki-links, and "what links here" backlinks on every page. Zero write endpoints, safe on your LAN. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/serve/)
 
 **Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
 
@@ -199,7 +200,7 @@ axiom/
   config.json           Local config
   state.json            Compilation state (source hashes)
   map-state.json        Autowiki/sync state
-  raw/                  Source files (PDF, MD, DOCX, images, HTML)
+  raw/                  Source files (PDF, MD, DOCX, images, HTML, CSV/TSV)
   wiki/
     pages/
       entities/         People, places, organisations

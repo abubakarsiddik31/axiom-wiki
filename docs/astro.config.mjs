@@ -58,6 +58,8 @@ export default defineConfig({
             { label: 'serve', slug: 'commands/serve' },
             { label: 'model', slug: 'commands/model' },
             { label: 'status', slug: 'commands/status' },
+            { label: 'embed', slug: 'commands/embed' },
+            { label: 'auth', slug: 'commands/auth' },
             { label: 'mcp', slug: 'commands/mcp' },
           ],
         },

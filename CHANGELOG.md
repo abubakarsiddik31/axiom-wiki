@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-27
+
 ### Added
 - **`serve` command**: Browse the wiki as a local read-only web UI (`axiom-wiki serve`) — dashboard with stats and semantic health, page list, rendered pages with rewritten wiki-links, hybrid search box, and an SVG link graph. Dark/light theme, `--port`/`--host`/`--open` flags, GET-only routes.
+- **xAI (Grok) provider**: Grok model lineup (Grok 4.6 flagship through Grok Build 0.1) via the OpenAI-compatible API at `api.x.ai/v1`, with per-model context windows and pricing. Community contribution by @icn5381.
+- **CSV/TSV ingestion**: `.csv` and `.tsv` sources are converted into Markdown tables before ingestion (RFC-4180 parser — quoted fields, embedded delimiters/newlines, escaped quotes), so tabular data works with every provider.
 
 ## [0.8.0] - 2026-08-16
 

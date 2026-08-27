@@ -1,7 +1,7 @@
 import { marked } from 'marked'
 import type { PageMeta, WikiStatus } from '../core/wiki.js'
 import type { SearchResult } from '../core/search.js'
-import type { WikiGraph } from '../core/graph.js'
+import type { WikiGraph, Backlink } from '../core/graph.js'
 
 /**
  * Pure rendering helpers for the read-only web UI.
@@ -218,10 +218,20 @@ export interface PageFrontmatter {
   sources: string[]
 }
 
-export function renderWikiPage(id: string, frontmatter: PageFrontmatter, bodyMarkdown: string): string {
+export function renderWikiPage(
+  id: string,
+  frontmatter: PageFrontmatter,
+  bodyMarkdown: string,
+  backlinks: Backlink[] = [],
+): string {
   const tags = frontmatter.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join(' ')
   const sources = frontmatter.sources.length
     ? `<div class="meta"><span>sources: ${frontmatter.sources.map(escapeHtml).join(', ')}</span></div>`
+    : ''
+  const linkedFrom = backlinks.length
+    ? `<section class="card"><h2>Linked from (${backlinks.length})</h2><ul>${backlinks
+        .map((b) => `<li><a href="${pageHref(b.fromId)}">${escapeHtml(b.fromTitle)}</a></li>`)
+        .join('')}</ul></section>`
     : ''
   return layout(frontmatter.title, 'pages', `
 <p class="muted"><a href="/pages">${escapeHtml(frontmatter.category)}</a> / ${escapeHtml(id)}</p>
@@ -232,7 +242,8 @@ export function renderWikiPage(id: string, frontmatter: PageFrontmatter, bodyMar
 </div>
 ${frontmatter.summary ? `<p><em>${escapeHtml(frontmatter.summary)}</em></p>` : ''}
 ${sources}
-${renderMarkdown(bodyMarkdown)}`)
+${renderMarkdown(bodyMarkdown)}
+${linkedFrom}`)
 }
 
 export function renderSearchResults(query: string, results: SearchResult[]): string {

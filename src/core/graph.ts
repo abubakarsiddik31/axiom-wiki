@@ -123,3 +123,24 @@ export function buildGraph(wikiDir: string): WikiGraph {
 
   return { nodes, edges, orphans, deadLinks }
 }
+
+export interface Backlink {
+  fromId: string     // e.g. "entities/alan-turing"
+  fromTitle: string
+}
+
+/**
+ * Pages that link to the given page id ("what links here").
+ * The inbound counterpart of the edges buildGraph already computes.
+ */
+export function getBacklinks(wikiDir: string, pageId: string): Backlink[] {
+  const graph = buildGraph(wikiDir)
+  const backlinks: Backlink[] = []
+  for (const edge of graph.edges) {
+    if (edge.to !== pageId) continue
+    const node = graph.nodes.get(edge.from)
+    if (!node?.exists) continue
+    backlinks.push({ fromId: node.id, fromTitle: node.title })
+  }
+  return backlinks
+}

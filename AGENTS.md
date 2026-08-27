@@ -30,7 +30,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
 ### Web UI Layer (`src/server/`)
-- **`index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Routes: `/` (dashboard), `/pages`, `/page/:category/:slug`, `/search?q=`, `/graph`, `/healthz`. Wraps core functions only (`getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`) — no wiki state of its own. GET/HEAD only; never writes.
+- **`index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Routes: `/` (dashboard), `/pages`, `/page/:category/:slug`, `/search?q=`, `/graph`, `/healthz`. Wraps core functions only (`getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`, `getBacklinks`) — no wiki state of its own. GET/HEAD only; never writes.
 - **`render.ts`** — Pure rendering helpers: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), markdown→HTML via `marked`, HTML layout/theme, deterministic SVG graph. Unit-tested without sockets.
 
 ### CLI/UI Layer (`src/cli/`)

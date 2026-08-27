@@ -188,6 +188,21 @@ describe('serve integration', () => {
     expect(html).toContain('computing')
   })
 
+  it('shows "Linked from" for pages with inbound wiki-links', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/page/concepts/turing-completeness`)
+    const html = await res.text()
+    expect(html).toContain('Linked from (1)')
+    expect(html).toContain('href="/page/entities/alan-turing"')
+  })
+
+  it('omits the backlinks section when nothing links in', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/page/entities/alan-turing`)
+    const html = await res.text()
+    expect(html).not.toContain('Linked from')
+  })
+
   it('404s for missing pages', async () => {
     const b = await ensureServer()
     const res = await fetch(`${b}/page/entities/nope`)

@@ -13,7 +13,7 @@ Starts a local web server (default `http://127.0.0.1:1717`) that renders your wi
 
 - **Dashboard** — page counts by category, raw source count, semantic index health, and recently updated pages.
 - **Pages** — every page grouped by category, with summaries and last-updated dates.
-- **Page view** — rendered markdown with frontmatter (tags, sources, updatedAt) as a header, and wiki-links (`[[entities/foo]]`) rewritten to clickable internal links.
+- **Page view** — rendered markdown with frontmatter (tags, sources, updatedAt) as a header, wiki-links (`[[entities/foo]]`) rewritten to clickable internal links, and a **"Linked from"** section at the bottom listing every page that links to it ("what links here").
 - **Search** — a search box wired to the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled).
 - **Graph** — the page link graph as an SVG; orphan pages get dashed circles, dead links are listed below.
 

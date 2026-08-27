@@ -7,7 +7,7 @@ import matter from 'gray-matter'
 import type { AxiomConfig } from '../config/index.js'
 import { getStatus, listPages, readPage } from '../core/wiki.js'
 import { searchWiki } from '../core/search.js'
-import { buildGraph } from '../core/graph.js'
+import { buildGraph, getBacklinks } from '../core/graph.js'
 import { openUrlInBrowser } from '../auth/command.js'
 import {
   layout,
@@ -72,7 +72,7 @@ async function handlePage(config: AxiomConfig, url: URL, res: http.ServerRespons
   }
   const raw = await readPage(config.wikiDir, pagePath)
   const { data, body } = parseFrontmatter(raw, segments[segments.length - 1])
-  sendHtml(res, 200, renderWikiPage(id, data, body))
+  sendHtml(res, 200, renderWikiPage(id, data, body, getBacklinks(config.wikiDir, id)))
 }
 
 export function createHandler(config: AxiomConfig) {

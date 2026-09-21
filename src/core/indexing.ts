@@ -259,6 +259,7 @@ export async function reindexWiki(
           category: chunk.category,
           embedding: vector,
         };
+        // Cast required because Orama's TypedDocument uses dynamic template string for vector dimensions
         await insert(db, doc as any);
         indexedChunks++;
       }

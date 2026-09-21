@@ -143,8 +143,8 @@ export function HomeScreen() {
         return
       }
       if (parsed.command === 'query') {
-        const forensic = parsed.arg.includes('--forensic') || parsed.arg.includes('-g')
-        const prefill = parsed.arg.replace(/--forensic|-g/g, '').trim() || undefined
+        const forensic = /\b(--forensic|--grounded|-g|-f)\b/.test(parsed.arg)
+        const prefill = parsed.arg.replace(/\b(--forensic|--grounded|-g|-f)\b/g, '').trim() || undefined
         setScreen({ name: 'query', prefill, forensic })
         return
       }

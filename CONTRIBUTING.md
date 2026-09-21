@@ -79,7 +79,7 @@ bin/
 src/
   agent/
     index.ts            ← Creates the Mastra agent
-    tools.ts            ← All 14 agent tools
+    tools.ts            ← All 16 agent tools
     prompts.ts          ← System prompt and wiki conventions
     types.ts            ← Shared types (CoreMessage)
   cli/

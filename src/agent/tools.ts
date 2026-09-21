@@ -16,6 +16,10 @@ import { applyTier2Updates } from '../core/incremental-sync.js'
 import { indexWikiPage, persistOrama } from '../core/indexing.js'
 import { acquireLock, releaseLock } from '../core/lock.js'
 
+function normalizePageId(pageId: string): string {
+  return pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+}
+
 export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
   const { wikiDir, rawDir } = config
 
@@ -252,7 +256,7 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
     }),
     execute: async (input) => {
       if (input.pageId) {
-        const cleanId = input.pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+        const cleanId = normalizePageId(input.pageId)
         const backlinks = graph.getBacklinks(wikiDir, cleanId)
         const g = graph.buildGraph(wikiDir)
         const outgoing = g.edges.filter((e) => e.from === cleanId).map((e) => e.to)
@@ -279,7 +283,7 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
       pageId: z.string().describe('Page id relative to wiki/pages, e.g. "entities/alan-turing" or "concepts/cryptanalysis"'),
     }),
     execute: async (input) => {
-      const cleanId = input.pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+      const cleanId = normalizePageId(input.pageId)
       return graph.getBacklinks(wikiDir, cleanId)
     },
   })

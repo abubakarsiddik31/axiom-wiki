@@ -52,7 +52,9 @@ Or with pnpm dlx (no global install required):
 | `remove_source` | Remove a source summary page |
 | `get_contradictions` | Find all unresolved contradictions |
 | `resolve_contradiction` | Apply a resolution |
-| `analyze_graph` | Find orphan pages and dead links |
+| `analyze_graph` | Find orphan pages, dead links, or inspect page connections |
+| `get_backlinks` | Find all pages linking to a specific page ("what links here") |
+| `verify_citations` | Forensically verify citations against raw source files |
 
 ### Auto-update tools
 

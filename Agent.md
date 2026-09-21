@@ -36,7 +36,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 
 ### Agent Layer (`src/agent/`)
 - **`index.ts`** — Creates a Mastra `Agent` with the resolved LLM model, system prompt, and tools.
-- **`tools.ts`** — 14 Mastra tools (`read_page`, `write_page`, `list_pages`, `search_wiki`, `update_index`, `append_log`, `ingest_source`, `get_status`, `lint_wiki`, `list_sources`, `get_source`, `remove_source`, `get_contradictions`, `resolve_contradiction`).
+- **`tools.ts`** — 16 Mastra tools (`read_page`, `write_page`, `list_pages`, `search_wiki`, `update_index`, `append_log`, `ingest_source`, `get_status`, `lint_wiki`, `list_sources`, `get_source`, `remove_source`, `get_contradictions`, `resolve_contradiction`, `verify_citations`, `get_backlinks`).
 - **`prompts.ts`** — System prompt defining wiki conventions (page frontmatter schema, category taxonomy, naming rules, cross-reference rules).
 
 ### Core/Wiki Layer (`src/core/`)
@@ -55,7 +55,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
 - **`models.ts`** — Provider/model definitions for Google Gemini, OpenAI, Anthropic, and Ollama.
 
 ### MCP Layer (`src/mcp/server.ts`)
-- Exposes all 14 agent tools as MCP resources via stdio transport for Claude Code/Cursor integration.
+- Exposes all 16 agent tools as MCP resources via stdio transport for Claude Code/Cursor integration.
 - Sets a global `isMcpMode` flag to suppress terminal output.
 
 ## Key Conventions

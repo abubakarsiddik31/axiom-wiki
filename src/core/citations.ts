@@ -186,8 +186,11 @@ export function verifyLocatorInContent(locator: CitationLocator, content: string
     case 'line': {
       const lineNum = parseInt(locator.value, 10);
       if (isNaN(lineNum)) return false;
-      const totalLines = content.split('\n').length;
-      return lineNum >= 1 && lineNum <= totalLines;
+      const lines = content.split('\n');
+      if (lineNum < 1 || lineNum > lines.length) return false;
+      // Ensure the targeted line contains actual non-whitespace content
+      const targetLine = lines[lineNum - 1];
+      return targetLine.trim().length > 0;
     }
     case 'quote': {
       const targetQuote = locator.value.toLowerCase().trim();
@@ -245,29 +248,39 @@ export async function verifyCitations(
   // Cache source file contents to avoid redundant reads
   const sourceContentCache = new Map<string, string | null>();
 
+  const BINARY_EXTENSIONS = new Set([
+    '.pdf', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.webp', '.gif',
+    '.mp3', '.mp4', '.mov', '.wav', '.zip', '.tar', '.gz'
+  ]);
+
   function getSourceContent(filename: string): { content: string; fullPath: string } | null {
     if (sourceContentCache.has(filename)) {
       const cached = sourceContentCache.get(filename);
-      if (!cached) return null;
+      if (cached === null || cached === undefined) return null;
       return { content: cached, fullPath: path.join(rawDir, filename) };
     }
 
-    // Check raw/ directory first
+    const ext = path.extname(filename).toLowerCase();
+    const isBinary = BINARY_EXTENSIONS.has(ext);
     const rawPath = path.join(rawDir, filename);
-    if (fs.existsSync(rawPath)) {
+
+    // If file is text-based and exists in raw/, read directly
+    if (!isBinary && fs.existsSync(rawPath)) {
       try {
         const text = fs.readFileSync(rawPath, 'utf-8');
         sourceContentCache.set(filename, text);
         return { content: text, fullPath: rawPath };
-      } catch {
-        // Binary file (e.g. PDF/DOCX) - check if wiki/pages/sources summary page exists
-      }
+      } catch { /* skip */ }
     }
 
-    // Check wiki/pages/sources/ summary page as a proxy
+    // For binary files or files without raw text, inspect proxy summary or companion text
+    const cleanExt = ext.replace(/^\./, '');
     const sourceSlug = filename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
     const possibleSummaryPaths = [
+      path.join(rawDir, `${filename}.txt`),
       path.join(sourcePagesDir, `${sourceSlug}.md`),
+      path.join(sourcePagesDir, `${sourceSlug}-${cleanExt}.md`),
+      path.join(sourcePagesDir, `${sourceSlug}_${cleanExt}.md`),
       path.join(sourcePagesDir, `${filename}.md`),
     ];
 
@@ -276,9 +289,34 @@ export async function verifyCitations(
         try {
           const text = fs.readFileSync(sp, 'utf-8');
           sourceContentCache.set(filename, text);
-          return { content: text, fullPath: sp };
+          return { content: text, fullPath: fs.existsSync(rawPath) ? rawPath : sp };
         } catch { /* skip */ }
       }
+    }
+
+    // Fallback: scan source summary pages by frontmatter declared sources
+    if (fs.existsSync(sourcePagesDir)) {
+      try {
+        const summaryEntries = fs.readdirSync(sourcePagesDir).filter((f) => f.endsWith('.md'));
+        for (const entry of summaryEntries) {
+          const sp = path.join(sourcePagesDir, entry);
+          try {
+            const raw = fs.readFileSync(sp, 'utf-8');
+            const parsed = matter(raw);
+            const sList = Array.isArray(parsed.data['sources']) ? (parsed.data['sources'] as string[]).map(String) : [];
+            if (sList.includes(filename)) {
+              sourceContentCache.set(filename, parsed.content);
+              return { content: parsed.content, fullPath: fs.existsSync(rawPath) ? rawPath : sp };
+            }
+          } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+    }
+
+    // If binary file exists in raw/ but has no textual proxy/summary, return empty content with fullPath
+    if (isBinary && fs.existsSync(rawPath)) {
+      sourceContentCache.set(filename, '');
+      return { content: '', fullPath: rawPath };
     }
 
     sourceContentCache.set(filename, null);

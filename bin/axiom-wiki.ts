@@ -119,7 +119,7 @@ program
   .action(async (opts: { forensic?: boolean; strict?: boolean }) => {
     requireConfig()
     const config = getConfig()!
-    if (opts.forensic || config.forensicCitations) {
+    if (opts.forensic || opts.strict || config.forensicCitations) {
       const { verifyCitations, formatCitationAuditReport } = await import('../src/core/citations.js')
       console.log('Running forensic citation audit...\n')
       const report = await verifyCitations(config.wikiDir, {

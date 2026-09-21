@@ -204,6 +204,7 @@ export async function indexPageChunks(
   const db = await getOrama(config);
   await deletePageChunks(config, pageRelPath);
   for (const doc of docs) {
+    // Cast required because Orama's TypedDocument uses dynamic template string for vector dimensions
     await insert(db, doc as any);
   }
 }

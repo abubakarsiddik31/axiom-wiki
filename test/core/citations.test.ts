@@ -214,6 +214,37 @@ This claim cites a timestamp that does not exist in the transcript.^[interview.m
     expect(report.results[0].message).toContain('59:45');
   });
 
+  it('verifies locators in binary files via source summary page', async () => {
+    // Write actual binary bytes to raw/sample.pdf
+    fs.writeFileSync(path.join(tmpDir, 'raw/sample.pdf'), Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]));
+    await writePage(
+      tmpDir,
+      'wiki/pages/sources/sample-pdf.md',
+      `---
+title: "Sample PDF Summary"
+category: sources
+sources: ["sample.pdf"]
+---
+**p. 25** · Supervised fine-tuning optimizes cross-entropy loss.`
+    );
+
+    await writePage(
+      tmpDir,
+      'wiki/pages/concepts/sft.md',
+      `---
+title: "Supervised Fine-Tuning"
+summary: "SFT concept"
+category: concepts
+sources: ["sample.pdf"]
+---
+SFT optimizes cross-entropy loss.^[sample.pdf#p. 25 | grade: data]`
+    );
+
+    const report = await verifyCitations(tmpDir);
+    expect(report.passed).toBe(true);
+    expect(report.verifiedCount).toBe(1);
+  });
+
   it('formats clean audit report string', async () => {
     await writePage(
       tmpDir,

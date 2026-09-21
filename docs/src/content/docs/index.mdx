@@ -36,6 +36,12 @@ Unlike RAG systems that re-derive answers from raw sources on every query, Axiom
   <Card title="Live Maintenance" icon="rocket">
     The wiki updates itself when your code changes. Tier 1 (deterministic) handles renames; Tier 2 (agent-based) rewrites pages to reflect new logic.
   </Card>
+  <Card title="Forensic Citation Proofs" icon="approve-check">
+    Zero hallucinated citations. Mechanically audit paragraph citations against raw files — timestamps (`[mm:ss]`), pages (`[p. N]`), and quotes. Run `axiom-wiki lint --forensic` in CI or git pre-commit hooks.
+  </Card>
+  <Card title="Strict Grounded Querying" icon="open-book">
+    Query your wiki with zero extrapolation. In strict forensic mode (`axiom-wiki query --forensic`), the model is strictly barred from pre-trained knowledge and only speaks from verified docs.
+  </Card>
   <Card title="Browse it like a real wiki" icon="window">
     `axiom-wiki serve` opens a local read-only web UI with a dashboard, hybrid search, a link graph, and "what links here" backlinks on every page.
   </Card>

@@ -86,7 +86,8 @@ See the [full documentation](https://abubakarsiddik31.github.io/axiom-wiki) for 
 axiom-wiki                    Launch interactive shell
 axiom-wiki init               First-time setup wizard
 axiom-wiki ingest [file|url]  Ingest a file, URL, or scan raw/
-axiom-wiki query              Chat against your wiki
+axiom-wiki query [question]   Chat against your wiki (--forensic for zero trained knowledge)
+axiom-wiki lint [options]     Check wiki health (--forensic for deterministic citation audit)
 axiom-wiki autowiki           Agent explores and builds a wiki
 axiom-wiki sync               Agent updates stale wiki pages
 axiom-wiki watch              Auto-ingest new files in raw/
@@ -145,7 +146,11 @@ Important:
 
 **Incremental sync** — `axiom-wiki sync` detects changes and lets the agent update stale pages and document new areas. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
 
-**Hybrid Semantic Search** — Axiom uses **Orama** to provide hybrid search (keyword + vector). Supports Google Gemini, OpenAI, and Ollama embeddings. Enable during `init` or run `axiom-wiki embed --setup`.
+**Hybrid Semantic Search & Section Chunking** — Axiom uses **Orama** for hybrid BM25 and vector search with two-stage candidate deduplication. Large documents are automatically split into heading-aware section chunks (`[Document > Section]`). Supports Google Gemini (up to 3072d), OpenAI (1536d), and local Ollama embeddings with dynamic dimension probing and index consistency manifests. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/embed/)
+
+**Forensic Citation Proof Mode** — Mechanically verify every citation against raw files in `raw/` to ensure zero hallucinated citations. Supports page locators (`#p. 14`), timestamps (`#12:45`), lines (`#L42`), exact quotes (`#"..."`), and claim grades (`data`, `anecdote`, `outcome`, `assertion`). Run `axiom-wiki lint --forensic` (exits code 1 on failure for pre-commit git hooks and CI). [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/lint/)
+
+**Strict Grounded Querying** — `axiom-wiki query --forensic` completely bars the AI agent from using pre-trained parametric knowledge. If a fact isn't explicitly in your wiki pages or raw documents, the agent refuses to answer from memory and requires inline proof for every sentence. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/query/)
 
 **Live Maintenance** — The wiki updates itself when your code changes. Tier 1 (deterministic) handles renames and staleness; Tier 2 (agent-based) rewrites pages to reflect new logic. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
 

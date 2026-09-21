@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-21
+
 ### Added
+- **Markdown Section Chunking (Parent-Child Indexing)**: Large pages and dense documents are automatically divided along markdown headings (`##`, `###`) into section chunks with hierarchical context (`[Document > Section]`). Prevents token truncation and allows pinpoint section-level search retrieval.
+- **Embedding Consistency Manifest**: Dedicated `wiki/search.manifest.json` tracks `(provider, model, dimensions)` to prevent silent index wipes and coordinate space pollution across different embedding models.
+- **Dynamic Dimension Probing**: Automatically probes embedding vectors during setup and reindexing, supporting any custom or newer embedding model without hardcoded dimension guesses.
+- **Google Gemini 3072d Embeddings**: Added built-in support for Google's newest `gemini-embedding-001`, `gemini-embedding-2`, and `gemini-embedding-2-preview` (3,072 dimensions).
+- **Two-Stage Search Retrieval**: Hybrid search over-fetches candidates and groups by document path to eliminate single-document chunk crowding and result starvation, resolving clean section anchors.
+- **High-Performance Batch Reindexing**: Processes chunks in batches of up to 50 with provider-aware rate pacing (e.g. 3.5s delay on Google to honor 15 RPM).
+- **Structural Tree Outline & Backlink Navigation**: Added `list_pages({ mode: 'tree' })` and `get_backlinks` tools, enabling AI agents to navigate large wikis via category/tag hierarchies and graph connections instead of reading flat indexes.
 - **Backlinks on page views**: `axiom-wiki serve` now shows a "Linked from" card at the bottom of every page view listing the pages that link to it ("what links here"), powered by a new `getBacklinks()` core API that reuses the existing link graph.
+
+### Fixed
+- **Config Storage for Undefined Values**: `setConfig` now removes keys with `undefined` values instead of throwing in Conf v15.
 
 ## [0.9.0] - 2026-08-27
 

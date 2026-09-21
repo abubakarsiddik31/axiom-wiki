@@ -1,256 +1,380 @@
 <p align="center">
-  <img src="images/icon.svg" width="120" alt="Axiom Wiki" />
+  <a href="https://abubakarsiddik31.github.io/axiom-wiki">
+    <img src="images/icon.svg" width="120" alt="Axiom Wiki Logo" />
+  </a>
 </p>
 
 <h1 align="center">Axiom Wiki</h1>
 
 <p align="center">
   <strong>The wiki that maintains itself.</strong><br/>
-  AI-powered personal knowledge base that ingests documents, extracts entities,<br/>and keeps an interconnected wiki of markdown pages — automatically.
+  An AI-powered knowledge compiler that transforms unstructured documents and codebases into an interconnected, self-updating Markdown wiki.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/v/axiom-wiki" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/dm/axiom-wiki" alt="npm downloads" /></a>
-  <a href="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml"><img src="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://www.elastic.co/licensing/elastic-license"><img src="https://img.shields.io/badge/License-Elastic%20v2-blue.svg" alt="License: ELv2" /></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18" /></a>
+  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/v/axiom-wiki?color=blue" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/axiom-wiki"><img src="https://img.shields.io/npm/dm/axiom-wiki?color=5c7cfa" alt="npm downloads" /></a>
+  <a href="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml"><img src="https://github.com/abubakarsiddik31/axiom-wiki/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Compatible-9333ea.svg" alt="MCP Compatible" /></a>
+  <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-Ready-7c3aed.svg" alt="Obsidian Compatible" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-10b981.svg" alt="Node.js >= 18" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Elastic%202.0-0ea5e9.svg" alt="License: ELv2" /></a>
 </p>
 
 <p align="center">
-  <a href="https://abubakarsiddik31.github.io/axiom-wiki">Documentation</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#commands">Commands</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="https://github.com/abubakarsiddik31/axiom-wiki/issues">Issues</a>
+  <a href="https://abubakarsiddik31.github.io/axiom-wiki"><strong>Documentation</strong></a> ·
+  <a href="#quick-start"><strong>Quick Start</strong></a> ·
+  <a href="#why-axiom-knowledge-compilation-vs-rag"><strong>Why Axiom?</strong></a> ·
+  <a href="#key-features"><strong>Features</strong></a> ·
+  <a href="#cli-commands"><strong>Commands</strong></a> ·
+  <a href="#mcp-server-for-ai-agents"><strong>MCP Integration</strong></a> ·
+  <a href="#supported-llm-providers"><strong>Providers</strong></a>
 </p>
 
 <br/>
 
-![Axiom Wiki init screen](images/init.png)
+<p align="center">
+  <img src="images/init.png" width="840" alt="Axiom Wiki Interactive CLI" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);" />
+</p>
 
 <br/>
 
-> Unlike RAG systems that re-derive answers from raw sources on every query, Axiom **compiles** knowledge into an interconnected wiki of markdown pages and keeps it current as new sources arrive. Inspired by Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+> *"Instead of repeatedly querying a raw database with RAG, what if an AI continuously reads, extracts, synthesizes, and compiles your knowledge into a clean, cross-linked, living wiki?"*  
+> — Inspired by Andrej Karpathy's [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) thesis.
+
+---
+
+## Why Axiom? (Knowledge Compilation vs. RAG)
+
+Traditional **Retrieval-Augmented Generation (RAG)** searches raw document chunks at query time and re-derives answers from scratch on every prompt. As knowledge bases grow, traditional RAG suffers from high latency, lost context, missing relationships, and silent hallucinations.
+
+**Axiom takes a fundamentally different approach: Knowledge Compilation.**
+
+```
+   Raw Sources                                Compilation Pipeline                            Interconnected Wiki
+ ┌───────────────┐                            ┌────────────────────────┐                    ┌─────────────────────────┐
+ │ PDFs, Docs    │                            │ ⚡ Incremental Ingest   │                    │ 📂 pages/entities/       │
+ │ Markdown      │ ─── axiom-wiki ingest ───► │ 🔗 Entity Resolution   │ ─────────────────► │ 📂 pages/concepts/       │
+ │ Codebases     │     or autowiki            │ 🏷️ Cross-linking       │                    │ 📂 pages/sources/        │
+ │ URLs / HTML   │                            │ 🛡️ Forensic Citations  │                    │ 📂 pages/analyses/       │
+ └───────────────┘                            └────────────────────────┘                    └────────────┬────────────┘
+                                                                                                         │
+                                     ┌───────────────────────────────────────────────────────────────────┴────────────────────────┐
+                                     ▼                                                                   ▼                        ▼
+                          Interactive Terminal UI                                                  Local Web Server          MCP Server
+                       • Slash-command autocomplete                                              • Full-text & vector      • Claude Code
+                       • Real-time compile status                                                • Interactive SVG graph   • Cursor
+                       • Grounded query mode                                                     • Backlink explorer       • Windsurf
+```
+
+| Dimension | Traditional Vector RAG | Axiom Wiki Knowledge Compilation |
+| :--- | :--- | :--- |
+| **Synthesis Timing** | On-demand at query time (slow, costly) | **Compiled once** at ingest time, updated incrementally |
+| **Data Format** | Opaque vector embeddings in proprietary DBs | **Plain, human-readable Markdown** with YAML frontmatter |
+| **Relationships** | Fragmented chunks with lost document hierarchy | **Bi-directional `[[wiki-links]]`**, backlinks & tags |
+| **Verification** | Hallucinations masked within answers | **Forensic Proofs**: line, page & timestamp locators verified in CI |
+| **Tool Ecosystem** | Trapped in RAG pipeline | Open in **Obsidian**, browse via **Local Web UI**, query via **MCP** |
+| **Cost & Latency** | Pays LLM context costs on every query | Instant local reading; tokens spent only when sources change |
 
 ---
 
 ## Quick Start
 
+Get your personal or project wiki running in **under 60 seconds**:
+
+### 1. Install & Initialize
 ```bash
+# Global installation (or use: npx axiom-wiki init)
 npm install -g axiom-wiki
+
+# Run interactive setup wizard (Scope, LLM Provider, API Key, Directories)
 axiom-wiki init
 ```
 
-The setup wizard configures your LLM provider, wiki directory, and source folder. Then drop files into `raw/` and ingest:
-
+### 2. Add Sources & Ingest
+Drop PDFs, Markdown, images, DOCX, CSV/TSV, or HTML files into your `raw/` folder, then compile:
 ```bash
 axiom-wiki ingest
 ```
+*Or clip any web article directly:*
+```bash
+axiom-wiki clip https://example.com/article --ingest
+```
 
-Or auto-wiki a project folder:
-
+### 3. Or Auto-Wiki an Entire Codebase
+Generate architectural blueprints, module guides, and domain concepts for any project folder:
 ```bash
 axiom-wiki autowiki
 ```
 
-Launch the interactive shell:
-
+### 4. Explore & Query
 ```bash
+# Launch full interactive terminal shell
 axiom-wiki
+
+# Query directly with strict zero-hallucination grounding
+axiom-wiki query "How does authentication work across our microservices?" --forensic
+
+# Launch local browser UI with interactive graph and backlinks
+axiom-wiki serve --open
 ```
 
-See the [full documentation](https://abubakarsiddik31.github.io/axiom-wiki) for detailed guides.
-
----
-
-## Supported LLM Providers
-
-| Provider | Free Tier | Get API Key |
-|---|---|---|
-| **Google Gemini** *(recommended)* | Yes | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
-| **OpenAI** | No | [platform.openai.com](https://platform.openai.com/api-keys) |
-| **Anthropic** | No | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| **OpenRouter** | Yes (free models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| **DeepSeek** | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
-| **Groq** | Yes | [console.groq.com](https://console.groq.com/keys) |
-| **Mistral AI** | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
-| **xAI (Grok)** | No | [console.x.ai](https://console.x.ai) |
-| **Ollama** *(local)* | Free | [ollama.com](https://ollama.com) |
-
----
-
-## Commands
-
-```
-axiom-wiki                    Launch interactive shell
-axiom-wiki init               First-time setup wizard
-axiom-wiki ingest [file|url]  Ingest a file, URL, or scan raw/
-axiom-wiki query [question]   Chat against your wiki (--forensic for zero trained knowledge)
-axiom-wiki lint [options]     Check wiki health (--forensic for deterministic citation audit)
-axiom-wiki autowiki           Agent explores and builds a wiki
-axiom-wiki sync               Agent updates stale wiki pages
-axiom-wiki watch              Auto-ingest new files in raw/
-axiom-wiki clip [url]         Clip a URL to raw/
-axiom-wiki sources            Manage ingested sources
-axiom-wiki review             Resolve wiki contradictions
-axiom-wiki graph              Visualize the wiki page graph
-axiom-wiki serve              Browse the wiki in a local read-only web UI
-axiom-wiki embed              Manage semantic search embeddings
-axiom-wiki auth               Configure OpenAI auth (API key or OAuth)
-axiom-wiki model              Switch LLM provider or model
-axiom-wiki status             Wiki statistics
-axiom-wiki mcp                Start MCP server (Claude Code / Cursor)
-axiom-wiki setup-agent        Add MCP instruction templates to agent config files
-```
-
-`axwiki` is an alias for `axiom-wiki`.
-
----
-
-## OpenAI OAuth
-
-You can authenticate OpenAI with either an API key or OAuth:
-
-```bash
-axiom-wiki auth openai
-axiom-wiki auth openai --oauth --activate
-```
-
-OAuth setup is interactive:
-
-- Missing OAuth values are prompted in the CLI.
-- It defaults issuer discovery to `https://auth.openai.com` and can auto-fill endpoints from `/.well-known/openid-configuration`.
-- Settings are saved for future runs.
-
-Check auth status:
-
-```bash
-axiom-wiki auth status
-```
-
-Important:
-- OpenAI OAuth token flows and OpenAI API key billing are different auth/billing systems.
-- Subscription-backed Codex access may not behave like standard Platform API key usage in all clients.
-- If you need guaranteed production API behavior, use standard OpenAI Platform API keys.
+> **Tip:** You can use `axwiki` as a shorthand alias for `axiom-wiki`.
 
 ---
 
 ## Key Features
 
-**Ingest documents** — Drop PDFs, markdown, images, DOCX, HTML, or CSV/TSV into `raw/`. The agent extracts entities, concepts, and creates cross-linked wiki pages. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/ingest/)
+### 🤖 Autonomous Project Mapping (`autowiki` & `sync`)
+Point Axiom at any codebase or document folder. An AI agent explores your file tree, plans an architecture catalog, and constructs comprehensive wiki pages in structured batches. When code evolves, `axiom-wiki sync` detects Git and content diffs to update only stale documentation.
 
-**Auto-wiki anything** — `axiom-wiki autowiki` lets an AI agent autonomously explore your project or document folder, decide what pages to create, and build a comprehensive wiki in batches. Works on codebases, company docs, personal notes — the agent adapts to the content. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
+### ⚡ Incremental Compilation & State Tracking
+Source files are tracked using cryptographically secure **SHA-256 content hashes** in `state.json`. Subsequent runs skip unchanged files instantly. PID-based compilation locks guarantee concurrency safety during automated runs.
 
-**Incremental compilation** — Source files are tracked by SHA-256 hash. Re-running `axiom-wiki ingest` skips unchanged files and only processes new or modified sources — fast even on large wikis.
+### 🛡️ Forensic Citation Proofs & Grounded Querying
+Never wonder if an AI hallucinated a fact:
+* **Strict Paragraph Citations:** Claims cite exact locations: pages (`^[book.pdf#p. 42]`), timestamps (`^[talk.mp4#14:20]`), lines (`^[auth.ts#L88]`), or exact quotes (`^[rfc.txt#"MUST NOT"]`).
+* **Claim Grading:** Annotate claims by evidence strength (`| grade: data`, `anecdote`, `outcome`, `assertion`).
+* **Deterministic Audit:** `axiom-wiki lint --forensic` mechanically verifies locators against raw source text, exiting with code `1` on invalid references. Perfect for pre-commit hooks and CI pipelines.
+* **Zero-Knowledge Query Mode:** `axiom-wiki query --forensic` completely bars parametric LLM memory, answering *strictly* from verified wiki pages and raw sources.
 
-**Incremental sync** — `axiom-wiki sync` detects changes and lets the agent update stale pages and document new areas. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/sync/)
+### 🔍 Orama Hybrid Search & Heading-Aware Chunking
+Combines lexical **BM25 keyword search** with dense **vector embeddings** using an embedded Orama engine:
+* Automatically chunks long documents by markdown headings (`[Document > Section]`).
+* Two-stage candidate deduplication and dynamic dimension probing.
+* Seamless embedding support for **Google Gemini** (up to 3072d), **OpenAI** (1536d), or **Ollama** (100% offline).
 
-**Hybrid Semantic Search & Section Chunking** — Axiom uses **Orama** for hybrid BM25 and vector search with two-stage candidate deduplication. Large documents are automatically split into heading-aware section chunks (`[Document > Section]`). Supports Google Gemini (up to 3072d), OpenAI (1536d), and local Ollama embeddings with dynamic dimension probing and index consistency manifests. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/embed/)
+### 🌐 Local Web UI & Link Graph (`serve`)
+Run `axiom-wiki serve` to launch a zero-dependency, lightweight web dashboard (`http://127.0.0.1:1717`):
+* **Dashboard & Metrics:** Category distributions, raw document counts, and index health.
+* **Deterministic SVG Graph:** Visualize page connections, identify orphan nodes, and spot broken links.
+* **"Linked From" Backlinks:** Native bi-directional backlinks on every page.
+* **Read-Only Safety:** Zero write endpoints; safe for LAN sharing via `--host 0.0.0.0`.
 
-**Forensic Citation Proof Mode** — Mechanically verify every citation against raw files in `raw/` to ensure zero hallucinated citations. Supports page locators (`#p. 14`), timestamps (`#12:45`), lines (`#L42`), exact quotes (`#"..."`), and claim grades (`data`, `anecdote`, `outcome`, `assertion`). Run `axiom-wiki lint --forensic` (exits code 1 on failure for pre-commit git hooks and CI). [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/lint/)
+### 🔌 Native Model Context Protocol (MCP) Server
+Integrate Axiom Wiki directly with **Claude Code**, **Cursor**, **Windsurf**, or custom AI agents.
+* **16 Core Agent Tools:** `read_page`, `write_page`, `search_wiki`, `ingest_source`, `get_backlinks`, `verify_citations`, and more.
+* **Agent Planning Tools:** `get_architecture_brief`, `plan_with_wiki`, `check_before_commit`.
+* **Ambient Context Resources:** Exposes `axiom://overview`, `axiom://index`, and `axiom://recent-changes`.
+* Run `axiom-wiki setup-agent` to automatically configure your favorite developer tools.
 
-**Strict Grounded Querying** — `axiom-wiki query --forensic` completely bars the AI agent from using pre-trained parametric knowledge. If a fact isn't explicitly in your wiki pages or raw documents, the agent refuses to answer from memory and requires inline proof for every sentence. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/query/)
-
-**Live Maintenance** — The wiki updates itself when your code changes. Tier 1 (deterministic) handles renames and staleness; Tier 2 (agent-based) rewrites pages to reflect new logic. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mapping/)
-
-**Agent Instructions** — `axiom-wiki setup-agent` generates instructions for Claude Code, Cursor, and Windsurf, teaching them how to use the wiki's MCP tools effectively.
-
-**Health Monitoring** — Track wiki staleness, confidence scores, and semantic index health via the CLI or MCP tools.
-
-**Interactive REPL** — A full-featured terminal UI with slash command autocomplete, real-time progress, and color-coded status badges.
-
-**Local web UI** — `axiom-wiki serve` renders the wiki as a read-only browser UI: dashboard, hybrid search, page graph, click-through wiki-links, and "what links here" backlinks on every page. Zero write endpoints, safe on your LAN. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/serve/)
-
-**Local project wikis** — Scope a wiki to a single project inside `axiom/`. Auto-detected, no flags needed. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/local-wiki/)
-
-**Web clipper** — `axiom-wiki clip <url>` fetches articles via Readability and saves them for ingest. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/commands/clip/)
-
-**MCP integration** — Use all wiki tools from Claude Code or Cursor. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/mcp/)
-
-**Obsidian compatible** — Plain markdown with frontmatter. Open `wiki/` as a vault. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/guides/obsidian/)
-
-**Cost tracking** — Every operation logs tokens and cost to `wiki/usage.log`. [Docs](https://abubakarsiddik31.github.io/axiom-wiki/reference/cost-tracking/)
+### 💎 Obsidian Compatible & Unix-Friendly
+* **Pure Markdown:** Every page is standard Markdown with clean YAML frontmatter. Open `wiki/` as an [Obsidian vault](https://abubakarsiddik31.github.io/axiom-wiki/guides/obsidian/) with full graph and tag support.
+* **Maps of Content (`moc.md`):** Automatically compiled tag hierarchies.
+* **Unix Pipelines:** Parse operation logs and token expenditures using standard utilities (`grep`, `tail`, `awk` on `log.md` and `usage.log`).
 
 ---
 
-## Installation
+## Supported LLM Providers
 
+Axiom Wiki supports 9 providers, from zero-cost free tiers to offline local inference:
+
+| Provider | Supported Models | Embeddings | Free Tier | Setup Link |
+| :--- | :--- | :---: | :---: | :--- |
+| **Google Gemini** *(Recommended)* | `gemini-2.5-pro`, `gemini-2.5-flash` | ✅ (3072d) | **Yes** | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **OpenAI** | `gpt-4.1`, `gpt-4o`, `gpt-4o-mini` | ✅ (1536d) | No | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Anthropic** | `claude-3-7-sonnet`, `claude-3-5-haiku` | Via fallback | No | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **Ollama** *(100% Local / Offline)* | `llama3.3`, `qwen2.5`, `mistral`, custom | ✅ (nomic/bge) | **Free** | [ollama.com](https://ollama.com) |
+| **OpenRouter** | Any OpenRouter model identifier | Via fallback | **Yes** | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **Groq** | `llama-3.3-70b-versatile`, `mixtral-8x7b` | Via fallback | **Yes** | [console.groq.com](https://console.groq.com/keys) |
+| **DeepSeek** | `deepseek-chat`, `deepseek-reasoner` | Via fallback | No | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| **Mistral AI** | `mistral-large`, `mistral-small` | Via fallback | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| **xAI (Grok)** | `grok-2`, `grok-2-mini` | Via fallback | No | [console.x.ai](https://console.x.ai) |
+
+### OpenAI OAuth Support
+Authenticate OpenAI using either standard API keys or browser OAuth:
 ```bash
-npm install -g axiom-wiki    # or: yarn, pnpm
-npx axiom-wiki init          # run without installing
+axiom-wiki auth openai --oauth --activate
+axiom-wiki auth status
 ```
 
-**From source:**
-```bash
-git clone https://github.com/abubakarsiddik31/axiom-wiki.git
-cd axiom-wiki && pnpm install && pnpm build && pnpm link --global
+---
+
+## CLI Commands
+
+```
+Usage: axiom-wiki [command] [options] (or: axwiki)
+
+Knowledge Ingestion & Compilation
+  init                         Run the interactive first-time setup wizard
+  ingest [file|url]            Ingest a file, URL, or scan raw/ for new files (--interactive)
+  autowiki (alias: map)        Autonomously map and build a wiki from a project folder
+  sync                         Detect codebase changes and update stale wiki pages
+  watch                        Continuously monitor raw/ and auto-ingest incoming files
+  clip [url]                   Extract clean article text via Readability into raw/
+
+Exploration & Querying
+  query [question]             Interactive chat against your wiki (-f, --forensic for zero trained knowledge)
+  serve                        Browse wiki in a local read-only web UI (-p 1717, --open, --host 0.0.0.0)
+  graph                        Display ASCII link graph and diagnose broken/orphan links
+  sources                      Inspect, reingest, or delete ingested sources
+  review                       Audit and resolve conflicting or contradictory facts
+
+Verification & Health
+  lint                         Perform wiki health check (--forensic for citation audits, --strict)
+  status                       Display wiki page counts, storage size, and index metrics
+
+AI, Embeddings & Agents
+  model                        Switch LLM provider or active model interactively
+  embed                        Manage vector embeddings (--setup, --reindex, --status)
+  auth [provider]              Configure authentication (e.g. auth openai --oauth)
+  mcp                          Launch stdio MCP server for Claude Code / Cursor / Windsurf
+  setup-agent                  Generate MCP configuration templates for your AI assistants
 ```
 
-**Docker:**
+---
+
+## MCP Server for AI Agents
+
+Turn your wiki into a real-time external memory module for IDE agents like **Claude Code**, **Cursor**, and **Windsurf**.
+
+### Automatic Agent Setup
+```bash
+axiom-wiki setup-agent
+```
+
+### Manual Configuration
+Add Axiom Wiki to your Claude Code configuration (`.claude/mcp_settings.json`):
+
+```json
+{
+  "axiom-wiki": {
+    "command": "axiom-wiki",
+    "args": ["mcp"]
+  }
+}
+```
+
+*Or via `pnpm dlx` (without global install):*
+```json
+{
+  "axiom-wiki": {
+    "command": "pnpm",
+    "args": ["dlx", "axiom-wiki", "mcp"]
+  }
+}
+```
+
+Now your AI assistant can read pages, search concepts, log decisions, and update wiki pages in real time while you write code!
+
+---
+
+## Wiki Directory Structure
+
+When scoped to a project (`Local Wiki`), everything lives in an isolated `axiom/` directory. For global personal knowledge, files reside in `~/axiom/`.
+
+```
+axiom/
+├── config.json              # Local configuration (provider, model, paths, embeddings)
+├── state.json               # Compilation state (SHA-256 hashes, source-to-page mappings)
+├── map-state.json           # Autowiki & codebase sync tracker (git commit hashes)
+├── search.index             # Orama hybrid BM25 + vector search index
+├── lock                     # Transient PID lock preventing concurrent writes
+├── raw/                     # Ingestion dropzone (PDF, MD, DOCX, CSV, HTML, Images)
+│   ├── .axiomignore         # File ignore patterns (respects gitignore syntax)
+│   └── assets/
+└── wiki/                    # The compiled Markdown knowledge base
+    ├── pages/
+    │   ├── entities/        # People, organizations, repos, tools, services
+    │   ├── concepts/        # Core ideas, architectural patterns, theories
+    │   ├── sources/         # One structured summary page per ingested source
+    │   └── analyses/        # Syntheses, comparisons, historical answers
+    ├── index.md             # Categorized catalog of all wiki pages
+    ├── moc.md               # Map of Content: auto-grouped by tags
+    ├── log.md               # Append-only chronological audit log
+    ├── usage.log            # Granular token consumption and cost tracking
+    └── schema.md            # Wiki conventions and frontmatter schema
+```
+
+### Anatomy of a Compiled Wiki Page
+
+Every page generated or maintained by Axiom follows a strict YAML frontmatter convention with bidirectional wiki-links and paragraph-level citations:
+
+```markdown
+---
+title: "Distributed Consensus"
+summary: "Protocols enabling distributed nodes to agree on a shared state."
+tags: [systems, distributed-computing, consensus]
+category: concepts
+sources: ["raft-paper.pdf", "paxos-simple.md"]
+updatedAt: "2026-04-12"
+---
+
+Distributed consensus algorithms ensure fault-tolerant state machine replication
+across a cluster of unreliable machines. ^[raft-paper.pdf#p. 3 | grade: data]
+
+Unlike [[entities/paxos]], [[concepts/raft]] decomposes consensus into leader election,
+log replication, and safety guarantees to enhance understandability. ^[raft-paper.pdf#p. 7]
+
+## Related Concepts
+- [[concepts/byzantine-fault-tolerance]]
+- [[entities/etcd]]
+```
+
+---
+
+## Installation Options
+
+### Package Managers
+```bash
+# npm
+npm install -g axiom-wiki
+
+# pnpm
+pnpm add -g axiom-wiki
+
+# yarn
+yarn global add axiom-wiki
+```
+
+### Docker
+Run Axiom Wiki in any environment with Docker:
 ```bash
 docker run -it -v $(pwd):/wiki axiomwiki/axiom-wiki init
 ```
 
-See [Installation docs](https://abubakarsiddik31.github.io/axiom-wiki/getting-started/installation/) for Docker Compose and Ollama setup.
-
----
-
-## Wiki Structure
-
-For local wikis (inside a project), everything lives in `axiom/`:
-
-```
-axiom/
-  config.json           Local config
-  state.json            Compilation state (source hashes)
-  map-state.json        Autowiki/sync state
-  raw/                  Source files (PDF, MD, DOCX, images, HTML, CSV/TSV)
-  wiki/
-    pages/
-      entities/         People, places, organisations
-      concepts/         Ideas, topics, theories
-      sources/          One summary per source file
-      analyses/         Filed answers, comparisons
-    index.md            Page catalog
-    log.md              Operation history
-    usage.log           Token usage and cost
+### From Source
+```bash
+git clone https://github.com/abubakarsiddik31/axiom-wiki.git
+cd axiom-wiki
+pnpm install
+pnpm build
+pnpm link --global
 ```
 
 ---
 
-## Sponsoring
+## Community & Sponsoring
 
-Axiom Wiki is free and open source. If it saves you time, consider supporting development:
+Axiom Wiki is free and open source software under the [Elastic License 2.0 (ELv2)](LICENSE). If Axiom saves you time or empowers your knowledge workflow, consider supporting ongoing development:
 
-- **[GitHub Sponsors](https://github.com/sponsors/abubakarsiddik)** — recurring or one-time
-- **[Ko-fi](https://ko-fi.com/abubakarsiddik)** — buy me a coffee
-- **[Open Collective](https://opencollective.com/axiom-wiki)** — transparent, supports teams
+* 💖 **[Sponsor on GitHub](https://github.com/sponsors/abubakarsiddik)**
+* ☕ **[Buy a Coffee on Ko-fi](https://ko-fi.com/abubakarsiddik)**
+* 🌐 **[Support on Open Collective](https://opencollective.com/axiom-wiki)**
 
----
+### Contributing
+Contributions of all forms are warmly welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, coding guidelines, and pull request workflows.
 
-## Contributing
-
-PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
-
-- [Report a bug](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=bug_report.md)
-- [Request a feature](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=feature_request.md)
-- [Good first issues](https://github.com/abubakarsiddik31/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+* 🐛 [Report a Bug](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=bug_report.md)
+* 💡 [Request a Feature](https://github.com/abubakarsiddik31/axiom-wiki/issues/new?template=feature_request.md)
+* 🚀 [Explore Good First Issues](https://github.com/abubakarsiddik31/axiom-wiki/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 
 ---
-
-## License
-
-[Elastic License 2.0 (ELv2)](LICENSE) — Free to use, self-host, and modify. See [LICENSE](LICENSE) for details.
-
-*Axiom Wiki — The wiki that maintains itself.*
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=abubakarsiddik31%2Faxiom-wiki&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=date&legend=top-left" />
- </picture>
-</a>
+<p align="center">
+  <a href="https://star-history.com/#abubakarsiddik31/axiom-wiki&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=abubakarsiddik31/axiom-wiki&type=Date" width="800" />
+    </picture>
+  </a>
+</p>
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/abubakarsiddik31">Abubakar Siddik</a> and open source contributors.</sub>
+</p>

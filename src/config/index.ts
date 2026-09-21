@@ -239,7 +239,11 @@ export function setConfig(cfg: Partial<AxiomConfig>): void {
     setLocalConfig(cfg, localPath)
   } else {
     for (const [key, value] of Object.entries(cfg)) {
-      store.set(key as keyof AxiomConfig, value)
+      if (value === undefined) {
+        store.delete(key as any)
+      } else {
+        store.set(key as keyof AxiomConfig, value)
+      }
     }
   }
 }

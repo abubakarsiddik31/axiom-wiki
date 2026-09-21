@@ -135,6 +135,9 @@ export function getDefaultModel(provider: string): string {
 export const KNOWN_DIMENSIONS: Record<string, number> = {
   // Google
   'text-embedding-004': 768,
+  'gemini-embedding-001': 3072,
+  'gemini-embedding-2': 3072,
+  'gemini-embedding-2-preview': 3072,
   // OpenAI
   'text-embedding-3-small': 1536,
   'text-embedding-3-large': 3072,

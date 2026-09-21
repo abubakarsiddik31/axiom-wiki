@@ -33,7 +33,7 @@ wiki/
     concepts/     ← Ideas, topics, themes, theories
     sources/      ← One summary page per raw source file
     analyses/     ← Filed answers, comparisons, syntheses
-  index.md        ← Catalog of all pages — always read this first
+  index.md        ← Catalog of all pages (use list_pages or search_wiki to explore)
   log.md          ← Append-only operation history
   schema.md       ← This conventions document
 raw/              ← Immutable source documents — NEVER modify
@@ -127,10 +127,12 @@ Do not be conservative — if a source mentions 15 entities, create or update 15
 When the user asks a question:
 
 1. **Check analyses first.** Call \`search_wiki\` with \`category: "analyses"\` to check if this question (or a similar one) has already been answered and filed. If a relevant analysis exists, use it as a starting point.
-2. Call \`read_page\` on \`wiki/index.md\` to find relevant pages
-3. Call \`read_page\` on each relevant page to read its full content
-4. Synthesize a clear, thorough answer
-5. Cite sources explicitly
+2. **Search structurally.** Do not attempt to read the entire \`wiki/index.md\` on large wikis. Instead:
+   - Call \`search_wiki\` across all pages or filtered by category to locate relevant candidate pages and specific sections.
+   - Use \`list_pages\` with \`mode: "tree"\` if you need a high-level structural map of categories, top tags, and key hub pages.
+3. Call \`read_page\` on the most relevant candidate pages to read their content.
+4. **Explore graph connections.** Follow \`[[wiki-links]]\` or call \`analyze_graph\` with \`pageId\` (or \`get_backlinks\`) to explore related entities, concepts, and sources.
+5. Synthesize a clear, thorough answer citing internal links and source files explicitly.
 6. After answering, always ask: "Would you like me to file this as an analysis page in \`wiki/pages/analyses/\`?"
 7. If the user says yes: create the analysis page with full frontmatter, call \`update_index\`, call \`append_log\` with type \`query\`
 

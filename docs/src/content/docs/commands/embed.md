@@ -27,9 +27,13 @@ Axiom supports three embedding providers:
 
 ### How it works
 
-When enabled, Axiom generates a vector embedding for every wiki page and stores them in a local **Orama** index (`search.index`). 
+When enabled, Axiom indexes your wiki pages in a local **Orama** hybrid index (`search.index`) and tracks metadata in `search.manifest.json`:
 
-Search queries are automatically converted to vectors, and the results are merged with keyword matches using **Reciprocal Rank Fusion (RRF)**. This ensures that exact matches still rank highly while semantically related pages are surfaced.
+1. **Markdown Section Chunking**: Large documents are automatically split along markdown headings (`##`, `###`) into section chunks with hierarchical context (`[Document > Section]`). This prevents token truncation on long documents and provides precise section-level search results without result crowding.
+2. **Dynamic Dimension Probing**: Axiom automatically inspects and probes the exact vector dimensions of your chosen model (e.g. 768d, 1024d, 1536d, 3072d), eliminating hardcoded assumptions.
+3. **Consistency Verification**: An index manifest (`wiki/search.manifest.json`) locks the active embedding configuration `(provider, model, dimensions)`. If you change your model, Axiom prevents vector pollution and warns you to re-index.
+4. **Batch Indexing**: Reindexing processes pages in batches of up to 50 chunks with provider-aware rate pacing (e.g. respecting Google's 15 RPM limit).
+5. **Reciprocal Rank Fusion (RRF)**: Search queries run both semantic vector similarity and BM25 full-text keyword matching, deduplicating hits by document while preserving section anchors.
 
 ### Migration for Existing Users
 

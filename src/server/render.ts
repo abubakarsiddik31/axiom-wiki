@@ -253,10 +253,14 @@ export function renderSearchResults(query: string, results: SearchResult[]): str
       ? `<p class="muted">No results for “${escapeHtml(query)}”.</p>`
       : results
         .map(
-          (r) => `<div class="result">
-<a href="${pageHref(idFromPath(r.path))}">${escapeHtml(r.title)}</a>
+          (r) => {
+            const anchor = r.sectionAnchor ? `#${escapeHtml(r.sectionAnchor)}` : ''
+            const sectionBadge = r.sectionTitle ? ` <span class="badge">${escapeHtml(r.sectionTitle)}</span>` : ''
+            return `<div class="result">
+<a href="${pageHref(idFromPath(r.path))}${anchor}">${escapeHtml(r.title)}${sectionBadge}</a>
 <div class="summary">${escapeHtml(r.excerpt)}</div>
-</div>`,
+</div>`
+          },
         )
         .join('')
   return layout(query ? `Search: ${query}` : 'Search', 'search', `

@@ -7,6 +7,8 @@ import type { AxiomConfig } from '../config/index.js'
 export interface SearchResult {
   path: string
   title: string
+  sectionTitle?: string
+  sectionAnchor?: string
   summary: string
   excerpt: string
   score: number
@@ -27,18 +29,45 @@ export async function searchWiki(
   // Try Orama hybrid search if config is provided
   if (options?.config) {
     try {
-      const results = await hybridSearch(options.config, query, limit)
-      return results.hits.map((hit) => {
+      // Overfetch chunks to avoid chunk crowding from single long documents
+      const overfetchLimit = Math.max(limit * 3, 20)
+      const results = await hybridSearch(options.config, query, overfetchLimit)
+
+      const pageMap = new Map<string, SearchResult>()
+
+      for (const hit of results.hits) {
         const doc = hit.document as any
-        return {
-          path: doc.id,
-          title: doc.title,
-          summary: doc.summary,
-          excerpt: doc.content.slice(0, 150).replace(/\n/g, ' '), // Simple excerpt
-          score: hit.score,
-          matchCount: 0, // Orama doesn't expose raw match count easily in hybrid
+        const pagePath = String(doc.pagePath || (typeof doc.id === 'string' ? doc.id.split('#')[0] : ''))
+
+        if (!pagePath) continue
+
+        // Category filter if specified
+        if (options.category && doc.category && doc.category !== options.category) {
+          continue
         }
-      })
+
+        const existing = pageMap.get(pagePath)
+        if (!existing || hit.score > existing.score) {
+          pageMap.set(pagePath, {
+            path: pagePath,
+            title: String(doc.title || path.basename(pagePath, '.md')),
+            sectionTitle: doc.sectionTitle ? String(doc.sectionTitle) : undefined,
+            sectionAnchor: doc.sectionAnchor ? String(doc.sectionAnchor) : undefined,
+            summary: String(doc.summary || ''),
+            excerpt: String(doc.content || '').slice(0, 150).replace(/\n/g, ' '),
+            score: hit.score,
+            matchCount: 0,
+          })
+        }
+      }
+
+      const deduplicated = Array.from(pageMap.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+
+      if (deduplicated.length > 0) {
+        return deduplicated
+      }
     } catch (err) {
       console.error(`[search] Orama search failed, falling back to manual scan: ${err}`)
     }

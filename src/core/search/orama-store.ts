@@ -2,11 +2,14 @@ import { create, insert, search, save, load, remove, type AnyOrama, type Results
 import fs from 'fs';
 import path from 'path';
 import type { AxiomConfig } from '../../config/index.js';
-import { generateEmbedding } from '../embeddings.js';
+import { generateEmbedding, getDefaultModel } from '../embeddings.js';
 
 export interface SearchDoc {
   id: string;
+  pagePath: string;
   title: string;
+  sectionTitle?: string;
+  sectionAnchor?: string;
   summary: string;
   content: string;
   tags: string[];
@@ -14,7 +17,119 @@ export interface SearchDoc {
   embedding: number[];
 }
 
+export interface SearchManifest {
+  version: 1;
+  provider: 'google' | 'openai' | 'ollama' | 'none';
+  model: string;
+  dimensions: number;
+  lastReindexAt: string;
+  pageCount?: number;
+  chunkCount?: number;
+  migratedFromLegacy?: boolean;
+}
+
+export interface ConsistencyCheckResult {
+  consistent: boolean;
+  reason?: 'missing_index' | 'missing_manifest' | 'provider_mismatch' | 'model_mismatch' | 'dimension_mismatch' | 'disabled';
+  message?: string;
+  manifest?: SearchManifest | null;
+}
+
 let _orama: AnyOrama | null = null;
+
+export function resetOramaInMemory(): void {
+  _orama = null;
+}
+
+export function getManifestPath(wikiDir: string): string {
+  return path.join(wikiDir, 'wiki/search.manifest.json');
+}
+
+export function loadSearchManifest(wikiDir: string): SearchManifest | null {
+  const manifestPath = getManifestPath(wikiDir);
+  if (!fs.existsSync(manifestPath)) return null;
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf-8');
+    const parsed = JSON.parse(raw) as SearchManifest;
+    if (parsed.version === 1) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSearchManifest(wikiDir: string, manifest: SearchManifest): void {
+  const manifestPath = getManifestPath(wikiDir);
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  const tmp = manifestPath + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
+  fs.renameSync(tmp, manifestPath);
+}
+
+export function checkEmbeddingConsistency(config: AxiomConfig): ConsistencyCheckResult {
+  const { embeddings, wikiDir } = config;
+  if (!embeddings || embeddings.provider === 'none') {
+    return { consistent: true, reason: 'disabled' };
+  }
+
+  const indexPath = getIndexPath(config);
+  if (!fs.existsSync(indexPath)) {
+    return {
+      consistent: false,
+      reason: 'missing_index',
+      message: 'No search index found. Run "axiom-wiki embed --reindex" to initialize.',
+    };
+  }
+
+  const manifest = loadSearchManifest(wikiDir);
+  const currentProvider = embeddings.provider;
+  const currentModel = embeddings.model || getDefaultModel(currentProvider);
+  const currentDims = embeddings.dimensions || 768;
+
+  // Legacy index upgrade: index exists but manifest was not created yet
+  if (!manifest) {
+    const backfilledManifest: SearchManifest = {
+      version: 1,
+      provider: currentProvider,
+      model: currentModel,
+      dimensions: currentDims,
+      lastReindexAt: new Date().toISOString(),
+      migratedFromLegacy: true,
+    };
+    saveSearchManifest(wikiDir, backfilledManifest);
+    return { consistent: true, manifest: backfilledManifest };
+  }
+
+  if (manifest.provider !== currentProvider) {
+    return {
+      consistent: false,
+      reason: 'provider_mismatch',
+      message: `Search index was built with provider "${manifest.provider}", but current config uses "${currentProvider}". Run "axiom-wiki embed --reindex" to synchronize.`,
+      manifest,
+    };
+  }
+
+  const manifestModel = manifest.model || getDefaultModel(manifest.provider);
+  if (manifestModel !== currentModel) {
+    return {
+      consistent: false,
+      reason: 'model_mismatch',
+      message: `Search index was built with model "${manifestModel}", but current config uses "${currentModel}". Run "axiom-wiki embed --reindex" to synchronize.`,
+      manifest,
+    };
+  }
+
+  if (manifest.dimensions !== currentDims) {
+    return {
+      consistent: false,
+      reason: 'dimension_mismatch',
+      message: `Search index was built with ${manifest.dimensions}-dim vectors, but current config expects ${currentDims}-dim vectors. Run "axiom-wiki embed --reindex" to synchronize.`,
+      manifest,
+    };
+  }
+
+  return { consistent: true, manifest };
+}
 
 export async function getOrama(config: AxiomConfig): Promise<AnyOrama> {
   if (_orama) return _orama;
@@ -22,7 +137,10 @@ export async function getOrama(config: AxiomConfig): Promise<AnyOrama> {
   const dimensions = config.embeddings?.dimensions || 768;
   const schema = {
     id: 'string',
+    pagePath: 'string',
     title: 'string',
+    sectionTitle: 'string',
+    sectionAnchor: 'string',
     summary: 'string',
     content: 'string',
     tags: 'string[]',
@@ -38,8 +156,8 @@ export async function getOrama(config: AxiomConfig): Promise<AnyOrama> {
       load(_orama, data);
       return _orama!;
     } catch (err) {
-      console.error(`[orama] Failed to load index (possibly due to dimension mismatch): ${err}. Recreating...`);
-      _orama = null; // Reset so we create a fresh one below
+      console.error(`[orama] Failed to load index: ${err}.`);
+      throw err;
     }
   }
 
@@ -52,30 +170,56 @@ export async function persistOrama(config: AxiomConfig): Promise<void> {
   const indexPath = getIndexPath(config);
   const data = save(_orama);
   fs.mkdirSync(path.dirname(indexPath), { recursive: true });
-  fs.writeFileSync(indexPath, JSON.stringify(data), 'utf-8');
+  const tmp = indexPath + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data), 'utf-8');
+  fs.renameSync(tmp, indexPath);
+}
+
+export async function deletePageChunks(config: AxiomConfig, pageRelPath: string): Promise<void> {
+  const db = await getOrama(config);
+  // Broad search by pagePath or id to find candidate hits in Orama
+  const results = await search(db, {
+    where: { pagePath: pageRelPath },
+    limit: 1000,
+  });
+
+  // Filter with strict JS check to avoid false-positive deletions
+  const exactHits = results.hits.filter(
+    (hit) =>
+      hit.document['pagePath'] === pageRelPath ||
+      hit.document['id'] === pageRelPath ||
+      (typeof hit.document['id'] === 'string' && hit.document['id'].startsWith(pageRelPath + '#'))
+  );
+
+  for (const hit of exactHits) {
+    await remove(db, hit.id);
+  }
+}
+
+export async function indexPageChunks(
+  config: AxiomConfig,
+  pageRelPath: string,
+  docs: SearchDoc[],
+): Promise<void> {
+  const db = await getOrama(config);
+  await deletePageChunks(config, pageRelPath);
+  for (const doc of docs) {
+    await insert(db, doc as any);
+  }
 }
 
 export async function indexPage(config: AxiomConfig, doc: SearchDoc): Promise<void> {
-  const db = await getOrama(config);
-  // Orama 3 supports removing by ID if we use the internal ID or if we find it.
-  // We'll use a search to find the internal ID first.
-  const results = await search(db, {
-    where: { id: doc.id },
-  });
-
-  if (results.hits.length > 0) {
-    for (const hit of results.hits) {
-      await remove(db, hit.id);
-    }
-  }
-
-  await insert(db, doc as any);
+  await indexPageChunks(config, doc.pagePath || doc.id, [doc]);
 }
 
 export async function clearIndex(config: AxiomConfig): Promise<void> {
   const indexPath = getIndexPath(config);
   if (fs.existsSync(indexPath)) {
     fs.unlinkSync(indexPath);
+  }
+  const manifestPath = getManifestPath(config.wikiDir);
+  if (fs.existsSync(manifestPath)) {
+    fs.unlinkSync(manifestPath);
   }
   _orama = null;
 }
@@ -85,6 +229,16 @@ export async function hybridSearch(config: AxiomConfig, query: string, limit = 1
   const { embeddings } = config;
   
   if (!embeddings || embeddings.provider === 'none') {
+    return search(db, {
+      term: query,
+      limit,
+    });
+  }
+
+  // Check consistency before vector search
+  const consistency = checkEmbeddingConsistency(config);
+  if (!consistency.consistent) {
+    console.warn(`[orama] Warning: ${consistency.message}. Falling back to keyword search.`);
     return search(db, {
       term: query,
       limit,

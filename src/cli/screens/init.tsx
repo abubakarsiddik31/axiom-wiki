@@ -13,6 +13,7 @@ import { withRetry } from '../../core/retry.js'
 import { scaffoldWiki } from '../../core/wiki.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { reindexWiki } from '../../core/indexing.js'
+import { getKnownDimensions, probeEmbeddingDimensions } from '../../core/embeddings.js'
 import { fetchOllamaModels, ollamaModelsToSelectItems, pullOllamaModel, formatPullProgress, OLLAMA_SUGGESTED_MODELS, type OllamaModel } from '../../core/ollama.js'
 import { fetchOpenRouterModels, pickPopularModels, formatModelLabel, type OpenRouterModel } from '../../core/openrouter.js'
 
@@ -125,11 +126,17 @@ export function InitScreen({ onExit }: { onExit?: () => void }) {
         if (enableEmbeddings) {
           const embProvider = (provider === 'google' || provider === 'openai' || provider === 'ollama') ? provider : 'google'
           const embModel = embProvider === 'google' ? 'text-embedding-004' : embProvider === 'openai' ? 'text-embedding-3-small' : 'nomic-embed-text'
-          const dimensions = embProvider === 'openai' ? 1536 : 768
+          const knownDim = getKnownDimensions(embModel, embProvider) || (embProvider === 'openai' ? 1536 : 768)
           configToSave.embeddings = {
             provider: embProvider,
             model: embModel,
-            dimensions
+            dimensions: knownDim
+          }
+          try {
+            const probedDim = await probeEmbeddingDimensions(configToSave)
+            configToSave.embeddings.dimensions = probedDim
+          } catch {
+            // Keep knownDim fallback
           }
         }
 

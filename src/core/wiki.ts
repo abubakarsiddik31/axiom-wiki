@@ -3,6 +3,7 @@ import path from 'path'
 import matter from 'gray-matter'
 
 import { loadMapState } from './sync.js'
+import { buildGraph } from './graph.js'
 import type { AxiomConfig } from '../config/index.js'
 
 export interface PageMeta {
@@ -153,10 +154,18 @@ export async function writePage(wikiDir: string, pagePath: string, content: stri
   fs.renameSync(tmp, abs)
 }
 
+export interface WikiTreeOutline {
+  totalPages: number
+  categories: Record<string, number>
+  topTags: Array<{ tag: string; count: number }>
+  hubPages: Array<{ path: string; title: string; linkCount: number }>
+}
+
 export async function listPages(
   wikiDir: string,
   filter?: string,
   category?: string,
+  tag?: string,
 ): Promise<PageMeta[]> {
   const pagesDir = path.join(wikiDir, 'wiki/pages')
   if (!fs.existsSync(pagesDir)) return []
@@ -175,11 +184,15 @@ export async function listPages(
 
     if (category && cat !== category) continue
 
+    const tags = Array.isArray(data['tags']) ? (data['tags'] as string[]).map(String) : []
+
+    if (tag && !tags.includes(tag)) continue
+
     const meta: PageMeta = {
       path: rel,
       title: String(data['title'] ?? path.basename(abs, '.md')),
       summary: String(data['summary'] ?? ''),
-      tags: Array.isArray(data['tags']) ? data['tags'] : [],
+      tags,
       category: String(data['category'] ?? cat),
       updatedAt: String(data['updatedAt'] ?? stat.mtime.toISOString().slice(0, 10)),
     }
@@ -195,6 +208,58 @@ export async function listPages(
   }
 
   return results
+}
+
+export async function getWikiTreeOutline(wikiDir: string): Promise<WikiTreeOutline> {
+  const pages = await listPages(wikiDir)
+  const categories: Record<string, number> = {
+    entities: 0,
+    concepts: 0,
+    sources: 0,
+    analyses: 0,
+  }
+  const tagCounts = new Map<string, number>()
+
+  for (const p of pages) {
+    categories[p.category] = (categories[p.category] ?? 0) + 1
+    for (const tag of p.tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+    }
+  }
+
+  const topTags = Array.from(tagCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([t, count]) => ({ tag: t, count }))
+
+  let hubPages: Array<{ path: string; title: string; linkCount: number }> = []
+  try {
+    const g = buildGraph(wikiDir)
+    const inbound = new Map<string, number>()
+    for (const edge of g.edges) {
+      inbound.set(edge.to, (inbound.get(edge.to) ?? 0) + 1)
+    }
+    hubPages = Array.from(inbound.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([id, linkCount]) => {
+        const node = g.nodes.get(id)
+        return {
+          path: node?.path ?? `wiki/pages/${id}.md`,
+          title: node?.title ?? id,
+          linkCount,
+        }
+      })
+  } catch {
+    // If graph fails, skip hubs
+  }
+
+  return {
+    totalPages: pages.length,
+    categories,
+    topTags,
+    hubPages,
+  }
 }
 
 export function buildIndex(pages: PageMeta[]): string {

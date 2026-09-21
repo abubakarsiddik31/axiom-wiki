@@ -5,7 +5,8 @@ import TextInput from 'ink-text-input'
 import { count } from '@orama/orama'
 import { getConfig, setConfig, type AxiomConfig } from '../../config/index.js'
 import { reindexWiki } from '../../core/indexing.js'
-import { getOrama } from '../../core/search/orama-store.js'
+import { getOrama, checkEmbeddingConsistency, loadSearchManifest } from '../../core/search/orama-store.js'
+import { getKnownDimensions, probeEmbeddingDimensions } from '../../core/embeddings.js'
 import path from 'path'
 import fs from 'fs'
 
@@ -170,16 +171,26 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
             value={model}
             placeholder={def}
             onChange={setModel}
-            onSubmit={(val) => {
+            onSubmit={async (val) => {
               const m = val.trim() || def
-              const dimensions = provider === 'openai' ? 1536 : 768
+              const knownDim = getKnownDimensions(m, provider) || (provider === 'openai' ? 1536 : 768)
+              const tempConfig = {
+                ...config,
+                embeddings: {
+                  provider,
+                  apiKey: apiKey || undefined,
+                  model: m,
+                  dimensions: knownDim,
+                },
+              }
+              const dimensions = await probeEmbeddingDimensions(tempConfig)
               setConfig({
                 embeddings: {
                   provider,
                   apiKey: apiKey || undefined,
                   model: m,
                   dimensions,
-                }
+                },
               })
               setStep('reindexing')
             }}
@@ -203,6 +214,8 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
 
   if (step === 'status') {
     const emb = config.embeddings
+    const consistency = checkEmbeddingConsistency(config)
+    const manifest = config ? loadSearchManifest(config.wikiDir) : null
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold underline>Semantic Search Status</Text>
@@ -210,7 +223,12 @@ export function EmbedScreen({ setup, reindex, status, onExit }: Props) {
           <Text>  Enabled    : {emb?.provider !== 'none' ? <Text color="green">Yes</Text> : <Text color="red">No</Text>}</Text>
           <Text>  Provider   : <Text color="cyan">{emb?.provider ?? 'none'}</Text></Text>
           <Text>  Model      : <Text color="cyan">{emb?.model ?? 'N/A'}</Text></Text>
-          <Text>  Index Size : <Text color="cyan">{oramaStatus?.totalPages ?? 0} pages</Text></Text>
+          <Text>  Dimensions : <Text color="cyan">{emb?.dimensions ?? 'N/A'}</Text></Text>
+          <Text>  Index Size : <Text color="cyan">{oramaStatus?.totalPages ?? 0} indexed chunks</Text></Text>
+          {manifest && (
+            <Text>  Indexed At : <Text color="gray">{manifest.lastReindexAt}</Text></Text>
+          )}
+          <Text>  Consistency: {consistency.consistent ? <Text color="green">✓ Synchronized</Text> : <Text color="yellow">⚠ Mismatch ({consistency.message})</Text>}</Text>
         </Box>
         <Box marginTop={1}>
           <Text color="gray">Press Esc or Enter to return</Text>

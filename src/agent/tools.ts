@@ -53,17 +53,29 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
 
   const list_pages = createTool({
     id: 'list_pages',
-    description: 'List wiki pages with metadata. Optionally filter by category or text.',
+    description:
+      'List wiki pages with metadata, or view high-level tree outline. Filter by category, tag, or text.',
     inputSchema: z.object({
       category: z.enum(['entities', 'concepts', 'sources', 'analyses']).optional(),
       filter: z.string().optional().describe('Text to match in title or summary'),
+      tag: z.string().optional().describe('Filter pages by tag'),
+      mode: z
+        .enum(['list', 'tree'])
+        .optional()
+        .describe('Use "tree" for a compact structural overview of categories, top tags, and central hub pages.'),
     }),
-    execute: async (input) => wiki.listPages(wikiDir, input.filter, input.category),
+    execute: async (input) => {
+      if (input.mode === 'tree') {
+        return wiki.getWikiTreeOutline(wikiDir)
+      }
+      return wiki.listPages(wikiDir, input.filter, input.category, input.tag)
+    },
   })
 
   const search_wiki = createTool({
     id: 'search_wiki',
-    description: 'Full-text search across all wiki pages. Returns ranked results with excerpts.',
+    description:
+      'Hybrid semantic and keyword search across wiki pages. Returns ranked results with section excerpts and anchors.',
     inputSchema: z.object({
       query: z.string().describe('Search query'),
       limit: z.number().optional().describe('Max results to return (default: 10)'),
@@ -208,9 +220,22 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
   const analyze_graph = createTool({
     id: 'analyze_graph',
     description:
-      'Perform static analysis of the wiki graph to find orphans (pages with no inbound links) and dead links (links to non-existent pages).',
-    inputSchema: z.object({}),
-    execute: async () => {
+      'Perform graph analysis of the wiki: find orphans and dead links, or inspect backlinks and connections for a page.',
+    inputSchema: z.object({
+      pageId: z.string().optional().describe('Optional page id (e.g. "entities/alan-turing") to inspect its backlinks and outgoing links'),
+    }),
+    execute: async (input) => {
+      if (input.pageId) {
+        const cleanId = input.pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+        const backlinks = graph.getBacklinks(wikiDir, cleanId)
+        const g = graph.buildGraph(wikiDir)
+        const outgoing = g.edges.filter((e) => e.from === cleanId).map((e) => e.to)
+        return {
+          pageId: cleanId,
+          backlinks,
+          outgoingLinks: outgoing,
+        }
+      }
       const g = graph.buildGraph(wikiDir)
       return {
         nodeCount: g.nodes.size,
@@ -218,6 +243,18 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
         orphans: g.orphans.map((id) => ({ id, title: g.nodes.get(id)?.title })),
         deadLinks: g.deadLinks,
       }
+    },
+  })
+
+  const get_backlinks = createTool({
+    id: 'get_backlinks',
+    description: 'Find all pages that link to a specific wiki page ("what links here").',
+    inputSchema: z.object({
+      pageId: z.string().describe('Page id relative to wiki/pages, e.g. "entities/alan-turing" or "concepts/cryptanalysis"'),
+    }),
+    execute: async (input) => {
+      const cleanId = input.pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
+      return graph.getBacklinks(wikiDir, cleanId)
     },
   })
 
@@ -453,6 +490,7 @@ _Append-only record of key decisions made during development._
     resolve_contradiction,
     update_moc,
     analyze_graph,
+    get_backlinks,
     notify_code_change,
     report_task_complete,
     log_decision,

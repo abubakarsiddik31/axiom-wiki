@@ -67,11 +67,14 @@ program
   })
 
 program
-  .command('query')
+  .command('query [question]')
   .description('Interactive chat against your wiki')
-  .action(() => {
+  .option('-f, --forensic', 'Enable strict forensic grounded mode (zero trained knowledge)')
+  .option('-g, --grounded', 'Alias for --forensic')
+  .action((question?: string, opts?: { forensic?: boolean; grounded?: boolean }) => {
     requireConfig()
-    renderApp({ name: 'query' })
+    const forensic = Boolean(opts?.forensic || opts?.grounded)
+    renderApp({ name: 'query', prefill: question, forensic })
   })
 
 program

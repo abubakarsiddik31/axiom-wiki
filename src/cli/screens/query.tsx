@@ -27,14 +27,16 @@ function slugify(text: string): string {
 interface Props {
   onExit?: () => void
   prefill?: string
+  forensic?: boolean
 }
 
-export function QueryScreen({ onExit, prefill }: Props) {
+export function QueryScreen({ onExit, prefill, forensic }: Props) {
   const { exit } = useApp()
   const doExit = onExit ?? exit
   const config = getConfig()
 
   const [state, setState] = useState<QueryState>('idle')
+  const [isForensic, setIsForensic] = useState(forensic ?? config?.forensicCitations ?? false)
   const [input, setInput] = useState(prefill ?? '')
   const [streamText, setStreamText] = useState('')
   const [history, setHistory] = useState<QAPair[]>([])
@@ -52,9 +54,18 @@ export function QueryScreen({ onExit, prefill }: Props) {
     })
   }, [])
 
-  // Handle y/n at filing prompt + global escape
+  // Handle y/n at filing prompt + global escape + mode toggle
   useInput((char, key) => {
     if (key.escape && state === 'idle') { doExit(); return }
+    if (key.ctrl && (char === 'g' || char === 'G' || char === 'f' || char === 'F') && state === 'idle') {
+      setIsForensic((prev) => {
+        const next = !prev
+        setStatusLine(next ? '🛡️ Strict Grounded Mode enabled' : 'Standard Query Mode enabled')
+        setTimeout(() => setStatusLine(''), 2000)
+        return next
+      })
+      return
+    }
     if (state === 'filing_prompt') {
       if (char === 'y' || char === 'Y') {
         const suggested = slugify(currentQ)
@@ -79,13 +90,24 @@ export function QueryScreen({ onExit, prefill }: Props) {
     const q = question.trim()
     if (!q || q === 'exit') { doExit(); return }
 
+    if (q === '/forensic' || q === '/grounded') {
+      setIsForensic((prev) => {
+        const next = !prev
+        setStatusLine(next ? '🛡️ Strict Grounded Mode enabled' : 'Standard Query Mode enabled')
+        setTimeout(() => setStatusLine(''), 2000)
+        return next
+      })
+      setInput('')
+      return
+    }
+
     setInput('')
     setCurrentQ(q)
     setCurrentA('')
     setStreamText('')
     setState('thinking')
 
-    const agent = createAxiomAgent(config)
+    const agent = createAxiomAgent(config, { forensic: isForensic })
 
     // Build context messages from history (max last 10 exchanges)
     const contextMessages: Array<{ role: 'user' | 'assistant'; content: string }> = []
@@ -172,11 +194,18 @@ ${currentA}
     )
   }
 
-  const divider = '─'.repeat(50)
+  const divider = '─'.repeat(55)
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Text bold>Axiom Wiki — Query</Text>
+      <Box justifyContent="space-between">
+        <Text bold>Axiom Wiki — Query</Text>
+        {isForensic ? (
+          <Text color="green" bold>🛡️ STRICT GROUNDED (Zero trained knowledge)</Text>
+        ) : (
+          <Text color="gray">Standard Mode (Ctrl+G to toggle Grounded)</Text>
+        )}
+      </Box>
       <Text color="gray">{divider}</Text>
 
       {/* Chat history (last 5) */}

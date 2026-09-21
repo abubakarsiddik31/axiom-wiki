@@ -21,7 +21,7 @@ import { InitScreen } from './init.js'
 
 type ActiveScreen =
   | { name: 'shell' }
-  | { name: 'query'; prefill?: string }
+  | { name: 'query'; prefill?: string; forensic?: boolean }
   | { name: 'ingest'; file?: string; interactive?: boolean }
   | { name: 'status' }
   | { name: 'model' }
@@ -138,6 +138,16 @@ export function HomeScreen() {
       }
 
       if (parsed.command === 'help') { addLog(...HELP_LINES); return }
+      if (parsed.command === 'forensic') {
+        setScreen({ name: 'query', prefill: parsed.arg || undefined, forensic: true })
+        return
+      }
+      if (parsed.command === 'query') {
+        const forensic = parsed.arg.includes('--forensic') || parsed.arg.includes('-g')
+        const prefill = parsed.arg.replace(/--forensic|-g/g, '').trim() || undefined
+        setScreen({ name: 'query', prefill, forensic })
+        return
+      }
       if (parsed.command === 'status')  { setScreen({ name: 'status' }); return }
       if (parsed.command === 'model')   { setScreen({ name: 'model' }); return }
       if (parsed.command === 'watch')   { setScreen({ name: 'watch' }); return }
@@ -225,7 +235,7 @@ export function HomeScreen() {
   }
 
   // ── Sub-screens ───────────────────────────────────────────────────────────
-  if (screen.name === 'query')   return <QueryScreen prefill={screen.prefill} onExit={goHome} />
+  if (screen.name === 'query')   return <QueryScreen prefill={screen.prefill} forensic={screen.forensic} onExit={goHome} />
   if (screen.name === 'ingest')  return <IngestScreen file={screen.file} interactive={screen.interactive} onExit={goHome} />
   if (screen.name === 'status')  return <StatusScreen onExit={goHome} />
   if (screen.name === 'model')   return <ModelScreen onExit={goHome} />

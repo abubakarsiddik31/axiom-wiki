@@ -27,3 +27,27 @@ For large wikis with thousands of pages, the query agent avoids dumping the enti
 - Inspects high-level category and tag trees using `list_pages({ mode: "tree" })`.
 - Runs targeted hybrid searches with section-level anchor resolution.
 - Explores graph connections and backlinks (`get_backlinks`) to trace relationships between concepts and entities.
+
+## Strict Forensic Grounded Mode (Zero Trained Knowledge)
+
+To enforce strict, zero-hallucination answers where the AI is **strictly barred from using pre-trained parametric knowledge**:
+
+```bash
+# Launch interactive chat in forensic grounded mode:
+axiom-wiki query --forensic
+# Or using the -g alias:
+axiom-wiki query -g
+# Or pass a question directly:
+axiom-wiki query --forensic "What was the initial revenue in paper 1?"
+```
+
+Inside the interactive shell or Query screen:
+- Type `/forensic [question]` or press `Ctrl+G` to toggle Strict Grounded Mode on and off.
+- The UI displays a `🛡️ STRICT GROUNDED (Zero trained knowledge)` status banner.
+
+### Grounding Rules Enforced:
+1. **Absolute Pre-Training Ban**: The model is forbidden from using outside world knowledge or guessing facts not explicitly in the wiki.
+2. **Mandatory Inline Proof**: Every claim must directly cite a retrieved wiki page or source locator: `(→ [[page]], source: doc#locator)`.
+3. **Refusal on Insufficient Evidence**: If the retrieved documents do not contain the answer, the model explicitly states:
+   *"The wiki does not contain sufficient information to answer this question."*
+   and states what sources would be needed. Never guesses from memory.

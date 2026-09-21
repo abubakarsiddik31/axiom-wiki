@@ -234,3 +234,22 @@ Verified claim here.^[interview.md#12:45 | grade: data]`
     expect(formatted).toContain('Audit Status: ✓ PASSED');
   });
 });
+
+describe('Forensic Query Grounding Prompts', () => {
+  it('injects strict forensic contract when forensic is enabled', async () => {
+    const { buildSystemPrompt } = await import('../../src/agent/prompts.js');
+    const prompt = buildSystemPrompt({ forensic: true });
+    expect(prompt).toContain('STRICT FORENSIC GROUNDING CONTRACT');
+    expect(prompt).toContain('ABSOLUTE BAN ON PRE-TRAINED KNOWLEDGE');
+    expect(prompt).toContain('ZERO SPECULATION OR GENERAL ADVICE');
+    expect(prompt).toContain('INSUFFICIENT INFORMATION MANDATE');
+    expect(prompt).toContain('The wiki does not contain sufficient information to answer this question');
+  });
+
+  it('omits strict forensic contract when forensic is false', async () => {
+    const { buildSystemPrompt } = await import('../../src/agent/prompts.js');
+    const prompt = buildSystemPrompt({ forensic: false });
+    expect(prompt).not.toContain('STRICT FORENSIC GROUNDING CONTRACT');
+    expect(prompt).not.toContain('ABSOLUTE BAN ON PRE-TRAINED KNOWLEDGE');
+  });
+});

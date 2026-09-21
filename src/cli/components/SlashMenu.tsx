@@ -8,6 +8,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { name: 'forensic', args: '[question]', desc: 'Strictly grounded query (zero trained knowledge)' },
   { name: 'ingest',   args: '[file|url]', desc: 'Ingest a file, URL, or scan raw/' },
   { name: 'autowiki',                     desc: 'Auto-generate wiki from a project folder' },
   { name: 'sync',                         desc: 'Update wiki pages for codebase changes' },

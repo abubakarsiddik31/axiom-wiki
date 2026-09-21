@@ -10,14 +10,19 @@ import { getOllamaNumCtx } from '../config/models.js'
 import type { ProjectSnapshot } from '../core/mapper.js'
 import { autoCommit } from '../core/git.js'
 
-export function createAxiomAgent(config: AxiomConfig) {
+export interface CreateAgentOptions {
+  forensic?: boolean
+}
+
+export function createAxiomAgent(config: AxiomConfig, options?: CreateAgentOptions) {
   const model = resolveModel(config)
   const tools = createAxiomTools(config)
+  const forensic = options?.forensic ?? config.forensicCitations ?? false
 
   const agent = new Agent({
     id: 'axiom',
     name: 'axiom',
-    instructions: buildSystemPrompt({ obsidianCompat: config.obsidianCompat }),
+    instructions: buildSystemPrompt({ obsidianCompat: config.obsidianCompat, forensic }),
     model,
     tools,
   })

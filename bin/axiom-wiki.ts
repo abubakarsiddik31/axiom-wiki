@@ -110,16 +110,31 @@ program
 
 program
   .command('lint')
-  .description('Check wiki health')
-  .action(async () => {
+  .description('Check wiki health and forensic citation proofs')
+  .option('--forensic', 'Run deterministic forensic citation audit (zero hallucinated citations)')
+  .option('--strict', 'Strict mode: fail on uncited paragraphs or unlisted frontmatter')
+  .action(async (opts: { forensic?: boolean; strict?: boolean }) => {
     requireConfig()
     const config = getConfig()!
+    if (opts.forensic || config.forensicCitations) {
+      const { verifyCitations, formatCitationAuditReport } = await import('../src/core/citations.js')
+      console.log('Running forensic citation audit...\n')
+      const report = await verifyCitations(config.wikiDir, {
+        strict: Boolean(opts.strict),
+        requireLocators: Boolean(opts.strict),
+      })
+      console.log(formatCitationAuditReport(report))
+      if (!report.passed) {
+        process.exit(1)
+      }
+      return
+    }
     const agent = createAxiomAgent(config)
     console.log('Running wiki lint...\n')
     try {
       const result = await agent.generate([{
         role: 'user',
-        content: 'Run a full lint check on the wiki. Report all issues found.',
+        content: 'Run a full lint check on the wiki. Report all issues found including citation verification.',
       }])
       console.log(result.text)
     } catch (err: unknown) {

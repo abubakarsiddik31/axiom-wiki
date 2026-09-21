@@ -30,6 +30,8 @@ export interface AxiomConfig {
   ollamaNumCtx?: number
   /** Use [[page-name]] instead of [[category/page-name]] for Obsidian compatibility. */
   obsidianCompat?: boolean
+  /** Enforce forensic citation verification (zero hallucinated citations). */
+  forensicCitations?: boolean
   embeddings?: {
     provider: 'google' | 'openai' | 'ollama' | 'none'
     apiKey?: string

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.1] - 2026-09-21
 
 ### Added
+- **Forensic Citation Proof Mode**: Deterministic citation verification engine in `src/core/citations.ts` that audits all paragraph citations (`^[source#locator]`) against raw source files to guarantee zero hallucinated citations. Supports page locators (`#p. 14`), timestamps (`#12:45`), line numbers (`#L42`), exact quotes (`#"..."`), and claim grading (`data`, `anecdote`, `outcome`, `assertion`). Run via `axiom-wiki lint --forensic` or `--strict` (exiting with code 1 on failures for CI and pre-commit hooks).
 - **Markdown Section Chunking (Parent-Child Indexing)**: Large pages and dense documents are automatically divided along markdown headings (`##`, `###`) into section chunks with hierarchical context (`[Document > Section]`). Prevents token truncation and allows pinpoint section-level search retrieval.
 - **Embedding Consistency Manifest**: Dedicated `wiki/search.manifest.json` tracks `(provider, model, dimensions)` to prevent silent index wipes and coordinate space pollution across different embedding models.
 - **Dynamic Dimension Probing**: Automatically probes embedding vectors during setup and reindexing, supporting any custom or newer embedding model without hardcoded dimension guesses.

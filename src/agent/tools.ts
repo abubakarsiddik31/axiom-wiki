@@ -6,6 +6,7 @@ import * as search from '../core/search.js'
 import * as files from '../core/files.js'
 import * as sources from '../core/sources.js'
 import * as graph from '../core/graph.js'
+import * as citations from '../core/citations.js'
 import {
   loadMapState, saveMapState, getGitHeadHash, getGitChangedFiles,
   updateStaleness, getStalePages, deriveProjectRoot,
@@ -132,12 +133,37 @@ export function createAxiomTools(config: AxiomConfig, projectRoot?: string) {
   const lint_wiki = createTool({
     id: 'lint_wiki',
     description:
-      'Scan the wiki for health issues: orphan pages, broken links, stale claims, missing pages, data gaps.',
+      'Scan the wiki for health issues: orphan pages, broken links, stale claims, missing pages, data gaps, and forensic citation status.',
     inputSchema: z.object({}),
     execute: async () => {
       const pages = await wiki.listPages(wikiDir)
       const allContent = await Promise.all(pages.map((p) => wiki.readPage(wikiDir, p.path)))
-      return { pages, allContent }
+      const citationReport = await citations.verifyCitations(wikiDir, {
+        strict: config.forensicCitations ?? false,
+      })
+      return { pages, allContent, citationReport }
+    },
+  })
+
+  const verify_citations = createTool({
+    id: 'verify_citations',
+    description:
+      'Forensically verify every source citation across the wiki against raw source files (zero hallucination audit). Checks source file existence, page/timestamp/quote locators, and uncited claims.',
+    inputSchema: z.object({
+      strict: z
+        .boolean()
+        .optional()
+        .describe('If true, enforce that every factual paragraph has a citation and source is declared in frontmatter'),
+      requireLocators: z
+        .boolean()
+        .optional()
+        .describe('If true, require explicit locators (#p. N, #mm:ss, or #"quote") for all citations'),
+    }),
+    execute: async (input) => {
+      return citations.verifyCitations(wikiDir, {
+        strict: input.strict ?? config.forensicCitations ?? false,
+        requireLocators: input.requireLocators ?? false,
+      })
     },
   })
 
@@ -491,6 +517,7 @@ _Append-only record of key decisions made during development._
     update_moc,
     analyze_graph,
     get_backlinks,
+    verify_citations,
     notify_code_change,
     report_task_complete,
     log_decision,

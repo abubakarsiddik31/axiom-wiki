@@ -86,14 +86,17 @@ updatedAt: "2026-04-10"
 
 ---
 
-## Citation Style
+## Citation Style & Forensic Proof
 
 When writing wiki page content, append inline source citations at the end of each paragraph:
 - Single source: \`^[source-filename.ext]\`
-- Multiple sources: \`^[source-a.pdf] ^[source-b.md]\`
+- With precise locator: \`^[source-filename.pdf#p. 14]\`, \`^[transcript.md#12:45]\`, \`^[paper.md#section-name]\`, or \`^[doc.md#"exact quote fragment"]\`
+- With claim grading: \`^[source.pdf#p. 14 | grade: data]\`, \`^[interview.md#12:45 | grade: anecdote]\`, \`^[report.pdf | grade: outcome]\`, \`^[article.md | grade: assertion]\`
+- Multiple sources: \`^[source-a.pdf#p. 12] ^[source-b.md#05:30]\`
 - Place citations after the final period, before the blank line between paragraphs.
-- Every factual paragraph must cite at least one source.
-- Do not cite sources in the frontmatter — only in body text.
+- Every factual paragraph must cite at least one verifiable source.
+- Zero hallucinated citations: every cited filename, page number, timestamp, or quote must genuinely exist in the source document.
+- Do not cite sources in the frontmatter — only in body text (list the raw filenames in \`sources: [...]\`).
 
 ---
 
@@ -144,11 +147,13 @@ If the wiki does not contain enough information to answer the question, say so c
 
 When asked to lint the wiki, you MUST follow this sequence:
 
-1. Call \`analyze_graph\` to get a deterministic report on orphans and dead links.
-2. Call \`lint_wiki\` to get all pages and content for checking semantic issues.
-3. Call \`get_contradictions\` to find unresolved contradiction blocks.
-4. Report findings across these categories:
+1. Call \`verify_citations\` to run a deterministic forensic citation audit (detecting missing sources, hallucinated locators, and uncited claims).
+2. Call \`analyze_graph\` to get a deterministic report on orphans and dead links.
+3. Call \`lint_wiki\` to get all pages and content for checking semantic issues.
+4. Call \`get_contradictions\` to find unresolved contradiction blocks.
+5. Report findings across these categories:
 
+**Citation Audit** — report verified citations, missing raw sources, unverified locators, and claim grade distributions from \`verify_citations\`.
 **Orphan pages** — use the list from \`analyze_graph\` (existing nodes with no inbound links).
 **Broken/Dead links** — use the list from \`analyze_graph\` (links to non-existent pages).
 **Stale claims** — use the report from \`get_contradictions\`.

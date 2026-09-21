@@ -101,18 +101,31 @@ With `obsidianCompat: true` in config, links use bare names instead:
 
 Axiom's graph parser handles both formats — bare names default to the `entities/` category.
 
-## Source citations
+## Source citations & Forensic Proof
 
 Wiki pages use paragraph-level citations to trace information back to source files:
 
-```
+```markdown
 Alan Turing was a British mathematician who made foundational contributions
-to computer science and artificial intelligence. ^[turing-biography.pdf]
+to computer science and artificial intelligence. ^[turing-biography.pdf#p. 14 | grade: data]
 
-His work at Bletchley Park was instrumental in breaking the Enigma code. ^[turing-biography.pdf] ^[intelligence-trap.md]
+His work at Bletchley Park was instrumental in breaking the Enigma code. ^[turing-biography.pdf#p. 82] ^[intelligence-trap.md#14:20 | grade: anecdote]
 ```
 
 Every factual paragraph cites the source file(s) it was derived from.
+
+### Citation Locators & Claim Grading
+
+In **Forensic Mode**, Axiom mechanically verifies citations against raw source files to guarantee **zero hallucinated citations**:
+
+- **Page locators**: `^[paper.pdf#p. 14]` or `^[paper.pdf#page 14]`
+- **Timestamps**: `^[interview.md#12:45]`
+- **Section slugs**: `^[spec.md#architecture]`
+- **Line numbers**: `^[code.ts#L42]`
+- **Exact quotes**: `^[transcript.md#"founder sales"]`
+- **Claim grades**: `| grade: data` (empirical evidence), `| grade: anecdote` (individual story with sample count), `| grade: outcome` (measurable result), or `| grade: assertion` (unsupported claim).
+
+Run `axiom-wiki lint --forensic` (or `--strict`) to execute a deterministic citation audit. It exits with code `1` if any missing source files or unverified locators are detected, making it ideal as a CI check or pre-commit git hook.
 
 ## Map of Content (moc.md)
 

@@ -55,8 +55,18 @@ export function rewriteWikiLinks(markdown: string): string {
   return out
 }
 
+export function rewriteCitations(markdown: string): string {
+  return markdown.replace(/\^\[([^\]]+)\]/g, (_match, inner) => {
+    const parts = inner.split('|')
+    const sourcePart = parts[0].trim()
+    const gradePart = parts[1] ? parts[1].replace(/grade:\s*/i, '').trim() : ''
+    const gradeBadge = gradePart ? ` <span class="cite-grade">${escapeHtml(gradePart)}</span>` : ''
+    return `<cite class="citation" title="${escapeHtml(inner)}">↗ ${escapeHtml(sourcePart)}${gradeBadge}</cite>`
+  })
+}
+
 export function renderMarkdown(markdown: string): string {
-  return marked.parse(rewriteWikiLinks(markdown), { async: false }) as string
+  return marked.parse(rewriteCitations(rewriteWikiLinks(markdown)), { async: false }) as string
 }
 
 const CSS = `
@@ -73,6 +83,20 @@ body {
   .card, .muted-box { border-color: #2a2a30 !important; background: #1a1a1f; }
   .tag { background: #26262c; }
   .dead { color: #ff8f8f; }
+  .citation { background: rgba(157, 180, 255, 0.15) !important; color: #9db4ff !important; }
+  .cite-grade { background: rgba(157, 180, 255, 0.25) !important; }
+}
+.citation {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.78rem; padding: 1px 6px; border-radius: 4px;
+  background: rgba(59, 91, 219, 0.1); color: #3b5bdb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  vertical-align: baseline; margin: 0 2px;
+}
+.cite-grade {
+  font-size: 0.7rem; padding: 0 4px; border-radius: 3px;
+  background: rgba(59, 91, 219, 0.2); font-weight: 600;
+  text-transform: uppercase;
 }
 a { color: #3b5bdb; text-decoration: none; }
 a:hover { text-decoration: underline; }

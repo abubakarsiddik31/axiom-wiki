@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input'
 import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { clipUrl, type ClipResult } from '../../core/clip.js'
+import { parseYouTubeUrl } from '../../core/youtube.js'
 import { buildIngestMessage, contextLimitMessage } from '../../core/files.js'
 import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from '../../core/wiki.js'
 import { calcCost, appendUsageLog } from '../../core/usage.js'
@@ -13,6 +14,7 @@ import { withRetry } from '../../core/retry.js'
 
 interface Props {
   url?: string
+  lang?: string
   onExit?: () => void
 }
 
@@ -26,7 +28,7 @@ interface IngestState {
   error: string | null
 }
 
-export function ClipScreen({ url: initialUrl, onExit }: Props) {
+export function ClipScreen({ url: initialUrl, lang, onExit }: Props) {
   const { exit } = useApp()
   const doExit = onExit ?? exit
   const config = getConfig()
@@ -35,6 +37,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
   const [urlInput, setUrlInput] = useState(initialUrl ?? '')
   const [clipResult, setClipResult] = useState<ClipResult | null>(null)
   const [clipError, setClipError] = useState('')
+  const [clipStatus, setClipStatus] = useState('')
   const [spinnerTick, setSpinnerTick] = useState(0)
   const [ingest, setIngest] = useState<IngestState>({
     liveLines: [],
@@ -46,7 +49,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
   useEffect(() => {
-    if (step !== 'ingesting') return
+    if (step !== 'ingesting' && step !== 'clipping') return
     const id = setInterval(() => setSpinnerTick((t) => t + 1), 100)
     return () => clearInterval(id)
   }, [step])
@@ -56,7 +59,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
     if (step !== 'clipping' || !urlInput || !config) return
     void (async () => {
       try {
-        const result = await clipUrl(urlInput, config.rawDir)
+        const result = await clipUrl(urlInput, config.rawDir, { lang, onStatus: setClipStatus })
         setClipResult(result)
         setStep('confirm-ingest')
       } catch (err) {
@@ -198,8 +201,14 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
       <Box flexDirection="column" padding={1}>
         <Text bold color="cyan">axiom clip</Text>
         <Box marginTop={1}>
-          <Text color="gray">⠸ Clipping </Text><Text>{urlInput}</Text><Text color="gray">…</Text>
+          <Text color="gray">{parseYouTubeUrl(urlInput) ? '⠸ Fetching transcript ' : '⠸ Clipping '}</Text><Text>{urlInput}</Text><Text color="gray">…</Text>
         </Box>
+        {clipStatus && (
+          <Box marginTop={1} marginLeft={2}>
+            <Text color="yellow">{spinnerFrames[spinnerTick % spinnerFrames.length]} </Text>
+            <Text color="gray">{clipStatus}</Text>
+          </Box>
+        )}
       </Box>
     )
   }
@@ -210,7 +219,7 @@ export function ClipScreen({ url: initialUrl, onExit }: Props) {
       <Box flexDirection="column" padding={1}>
         <Text bold color="cyan">axiom clip</Text>
         <Box marginTop={1} flexDirection="column">
-          <Text color="green">✓ Saved: <Text color="cyan">{clipResult.filename}</Text>
+          <Text color="green">{clipResult.reused ? '↺ Already saved: ' : '✓ Saved: '}<Text color="cyan">{clipResult.filename}</Text>
             <Text color="gray"> ({sizeKb} KB · {clipResult.type})</Text>
           </Text>
           <Text color="gray">Title: {clipResult.title}</Text>

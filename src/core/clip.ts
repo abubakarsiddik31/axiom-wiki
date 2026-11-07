@@ -4,13 +4,24 @@ import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
 import { NodeHtmlMarkdown } from 'node-html-markdown'
 import slugify from 'slugify'
+import matter from 'gray-matter'
+import { fetchYouTubeTranscript, parseYouTubeUrl, transcriptToMarkdown } from './youtube.js'
 
 export interface ClipResult {
   filepath: string
   filename: string
   title: string
-  type: 'article' | 'pdf' | 'image'
+  type: 'article' | 'pdf' | 'image' | 'video'
   sizeBytes: number
+  /** True when an identical source was already in raw/ and nothing was downloaded. */
+  reused?: boolean
+}
+
+export interface ClipOptions {
+  /** Preferred subtitle language for YouTube transcripts (default: en). */
+  lang?: string
+  /** Progress callback (transcript download, one-time yt-dlp install, retry waits). */
+  onStatus?: (message: string) => void
 }
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
@@ -78,7 +89,82 @@ async function checkRobots(url: string): Promise<void> {
   }
 }
 
-export async function clipUrl(url: string, rawDir: string): Promise<ClipResult> {
+/** Finds an existing transcript for this video so repeat clips cost nothing. */
+function findExistingTranscript(
+  rawDir: string,
+  videoId: string,
+): { filepath: string; title: string; sizeBytes: number } | null {
+  if (!fs.existsSync(rawDir)) return null
+
+  for (const entry of fs.readdirSync(rawDir)) {
+    if (!entry.endsWith('.md')) continue
+    const filepath = path.join(rawDir, entry)
+    try {
+      if (!fs.statSync(filepath).isFile()) continue
+      const raw = fs.readFileSync(filepath, 'utf-8')
+      if (!raw.startsWith('---')) continue
+      if (!new RegExp(`^video_id:\\s*${videoId}\\s*$`, 'm').test(raw.slice(0, 2000))) continue
+      const { data } = matter(raw)
+      return {
+        filepath,
+        title: String(data['title'] ?? entry),
+        sizeBytes: Buffer.byteLength(raw, 'utf-8'),
+      }
+    } catch {
+      // unreadable file — keep looking
+    }
+  }
+  return null
+}
+
+async function clipYouTube(
+  url: string,
+  rawDir: string,
+  options: ClipOptions,
+): Promise<ClipResult> {
+  const ref = parseYouTubeUrl(url)
+  if (!ref) throw new Error(`Not a YouTube URL: ${url}`)
+
+  const existing = findExistingTranscript(rawDir, ref.id)
+  if (existing) {
+    options.onStatus?.(`Transcript already in raw/ — reusing ${path.basename(existing.filepath)}`)
+    return {
+      filepath: existing.filepath,
+      filename: path.basename(existing.filepath),
+      title: existing.title,
+      type: 'video',
+      sizeBytes: existing.sizeBytes,
+      reused: true,
+    }
+  }
+
+  const transcript = await fetchYouTubeTranscript(url, {
+    lang: options.lang,
+    onStatus: options.onStatus,
+  })
+  const content = transcriptToMarkdown(transcript)
+
+  const date = today()
+  const filename = makeFilename(transcript.title, date, '.md')
+  const filepath = uniqueFilepath(rawDir, filename)
+  fs.mkdirSync(rawDir, { recursive: true })
+  fs.writeFileSync(filepath, content, 'utf-8')
+
+  return {
+    filepath,
+    filename: path.basename(filepath),
+    title: transcript.title,
+    type: 'video',
+    sizeBytes: Buffer.byteLength(content, 'utf-8'),
+  }
+}
+
+export async function clipUrl(url: string, rawDir: string, options: ClipOptions = {}): Promise<ClipResult> {
+  // YouTube is handled before robots/HTML: the payload is a transcript, not a page.
+  if (parseYouTubeUrl(url)) {
+    return clipYouTube(url, rawDir, options)
+  }
+
   await checkRobots(url)
 
   const controller = new AbortController()

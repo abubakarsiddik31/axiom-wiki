@@ -18,13 +18,13 @@ import { EmbedScreen } from './screens/embed.js'
 
 export type AxiomCommand =
   | { name: 'init' }
-  | { name: 'ingest'; file?: string; interactive?: boolean }
+  | { name: 'ingest'; file?: string; interactive?: boolean; lang?: string }
   | { name: 'query'; prefill?: string; forensic?: boolean }
   | { name: 'home' }
   | { name: 'status' }
   | { name: 'model' }
   | { name: 'watch' }
-  | { name: 'clip'; url?: string }
+  | { name: 'clip'; url?: string; lang?: string }
   | { name: 'sources' }
   | { name: 'review' }
   | { name: 'graph' }
@@ -39,7 +39,7 @@ export function renderApp(command: AxiomCommand): void {
       render(<InitScreen />)
       break
     case 'ingest':
-      render(<IngestScreen file={command.file} interactive={command.interactive} />)
+      render(<IngestScreen file={command.file} interactive={command.interactive} lang={command.lang} />)
       break
     case 'query':
       render(<QueryScreen prefill={command.prefill} forensic={command.forensic} />)
@@ -57,7 +57,7 @@ export function renderApp(command: AxiomCommand): void {
       render(<WatchScreen />)
       break
     case 'clip':
-      render(<ClipScreen url={command.url} />)
+      render(<ClipScreen url={command.url} lang={command.lang} />)
       break
     case 'sources':
       render(<SourcesScreen />)

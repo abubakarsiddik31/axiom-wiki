@@ -61,9 +61,10 @@ program
   .command('ingest [file-or-url]')
   .description('Ingest a file or URL, or scan raw/ for new files')
   .option('--interactive', 'Enable interactive ingest mode')
-  .action((file: string | undefined, opts: { interactive?: boolean }) => {
+  .option('--lang <code>', 'Preferred transcript language for YouTube URLs (default: en)')
+  .action((file: string | undefined, opts: { interactive?: boolean; lang?: string }) => {
     requireConfig()
-    renderApp({ name: 'ingest', file, interactive: opts.interactive })
+    renderApp({ name: 'ingest', file, interactive: opts.interactive, lang: opts.lang })
   })
 
 program
@@ -157,9 +158,10 @@ program
 program
   .command('clip [url]')
   .description('Clip a URL and save it to raw/ for ingest')
-  .action((url?: string) => {
+  .option('--lang <code>', 'Preferred transcript language for YouTube URLs (default: en)')
+  .action((url?: string, opts?: { lang?: string }) => {
     requireConfig()
-    renderApp({ name: 'clip', url })
+    renderApp({ name: 'clip', url, lang: opts?.lang })
   })
 
 program

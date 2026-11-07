@@ -15,10 +15,13 @@ Ingest a local file, a URL, or scan `raw/` for anything not yet processed.
 ```bash
 axiom-wiki ingest path/to/file.pdf           # ingest a local file
 axiom-wiki ingest https://example.com/article # clip URL and ingest in one step
+axiom-wiki ingest https://youtu.be/zjkBMFhNj_g --lang en  # YouTube transcript
 axiom-wiki ingest                             # scan raw/ and ingest new files
 ```
 
 When given a URL, Axiom fetches the page, extracts the article content (using Readability), saves it to `raw/`, and immediately ingests it — no separate `clip` step needed.
+
+YouTube URLs are handled as transcripts: subtitles are fetched with `yt-dlp` (timestamps included, no video download) and saved as Markdown. See [clip](/axiom-wiki/commands/clip/#youtube-transcripts) for the transcript format, `--lang`, and the yt-dlp requirement.
 
 ## What happens
 

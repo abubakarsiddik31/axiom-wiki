@@ -13,7 +13,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'autowiki',                     desc: 'Auto-generate wiki from a project folder' },
   { name: 'sync',                         desc: 'Update wiki pages for codebase changes' },
   { name: 'watch',                        desc: 'Watch raw/ and auto-ingest new files' },
-  { name: 'clip',     args: '[url]',      desc: 'Clip a URL to raw/ without ingesting' },
+  { name: 'clip',     args: '[url]',      desc: 'Clip an article or YouTube transcript to raw/' },
   { name: 'sources',                      desc: 'Browse and manage ingested sources' },
   { name: 'review',                       desc: 'Review and resolve contradictions' },
   { name: 'graph',                        desc: 'Visualize the wiki page graph' },

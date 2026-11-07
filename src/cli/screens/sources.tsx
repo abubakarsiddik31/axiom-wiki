@@ -3,6 +3,7 @@ import { Box, Text, useInput, useApp } from 'ink'
 import { getConfig } from '../../config/index.js'
 import { listSources, getSource, removeSource, markForReingest, type SourceRecord } from '../../core/sources.js'
 import { loadState, saveState } from '../../core/state.js'
+import { acquireLock, releaseLock, getLockInfo } from '../../core/lock.js'
 
 type View = 'list' | 'viewing' | 'confirm-delete' | 'confirm-reingest' | 'loading'
 
@@ -76,10 +77,26 @@ export function SourcesScreen({ onExit }: Props) {
     }
   }
 
+  function showBusyMessage() {
+    if (!config) return
+    const { info } = getLockInfo(config.wikiDir)
+    const holder = info ? ` (pid ${info.pid})` : ''
+    setMessage({ text: `Another operation is running${holder} — try again.`, color: 'yellow' })
+    setTimeout(() => setMessage(null), 3000)
+  }
+
   async function handleDelete() {
     if (!config || sources.length === 0) return
     const src = sources[selected]
     if (!src) return
+
+    // State removal is a writer path: never race an ingest/watch process.
+    if (!acquireLock(config.wikiDir)) {
+      showBusyMessage()
+      setView('list')
+      return
+    }
+
     try {
       // Load state so removeSource can freeze shared concepts
       const state = loadState(config.wikiDir)
@@ -98,26 +115,43 @@ export function SourcesScreen({ onExit }: Props) {
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : String(err), color: 'red' })
       setTimeout(() => setMessage(null), 3000)
+    } finally {
+      releaseLock(config.wikiDir)
+      setView('list')
     }
-    setView('list')
   }
 
   async function handleReingest() {
     if (!config || sources.length === 0) return
     const src = sources[selected]
     if (!src) return
-    await markForReingest(config.wikiDir, src.filename)
 
-    // Clear hash from state so next ingest picks it up as "changed"
-    const state = loadState(config.wikiDir)
-    if (state.sources[src.filename]) {
-      state.sources[src.filename].sha256 = ''
-      saveState(config.wikiDir, state)
+    // Clearing the hash mutates shared compilation state — hold the lock.
+    if (!acquireLock(config.wikiDir)) {
+      showBusyMessage()
+      setView('list')
+      return
     }
 
-    setMessage({ text: `Marked ${src.filename} for re-ingest`, color: 'green' })
-    setTimeout(() => setMessage(null), 3000)
-    setView('list')
+    try {
+      await markForReingest(config.wikiDir, src.filename)
+
+      // Clear hash from state so next ingest picks it up as "changed"
+      const state = loadState(config.wikiDir)
+      if (state.sources[src.filename]) {
+        state.sources[src.filename].sha256 = ''
+        saveState(config.wikiDir, state)
+      }
+
+      setMessage({ text: `Marked ${src.filename} for re-ingest`, color: 'green' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : String(err), color: 'red' })
+      setTimeout(() => setMessage(null), 3000)
+    } finally {
+      releaseLock(config.wikiDir)
+      setView('list')
+    }
   }
 
   if (!config) {

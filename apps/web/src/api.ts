@@ -1,9 +1,17 @@
 import type {
+  CitationAuditReport,
+  ConfigPayload,
   GraphPayload,
+  IntegrityPayload,
+  Job,
+  JobPayload,
+  JobsPayload,
   OverviewPayload,
   PagePayload,
   PagesPayload,
   SearchResult,
+  SourcesPayload,
+  WatchPayload,
 } from './types'
 
 export class ApiError extends Error {
@@ -16,10 +24,10 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
-    headers: { Accept: 'application/json' },
-    signal,
+    ...init,
+    headers: { Accept: 'application/json', ...init.headers },
   })
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`
@@ -32,6 +40,22 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
     throw new ApiError(res.status, message)
   }
   return (await res.json()) as T
+}
+
+async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { signal })
+}
+
+/** Mutation transport. The custom header is required by write mode. */
+export async function runAction<T = unknown>(action: string, body: unknown): Promise<T> {
+  return requestJson<T>(`/api/v1/actions/${action}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Axiom-Write': '1',
+    },
+    body: JSON.stringify(body),
+  })
 }
 
 function pagePath(id: string): string {
@@ -85,7 +109,43 @@ export const api = {
     const suffix = query.toString()
     return request<GraphPayload>(`/api/v1/graph${suffix ? `?${suffix}` : ''}`, signal)
   },
+
+  sources: (signal?: AbortSignal) => request<SourcesPayload>('/api/v1/sources', signal),
+
+  watch: (signal?: AbortSignal) => request<WatchPayload>('/api/v1/watch', signal),
+
+  startWatch: () => runAction<WatchPayload>('watch/start', {}),
+
+  stopWatch: () => runAction<WatchPayload>('watch/stop', {}),
+
+  config: (signal?: AbortSignal) => request<ConfigPayload>('/api/v1/config', signal),
+
+  integrity: (signal?: AbortSignal) => request<IntegrityPayload>('/api/v1/integrity', signal),
+
+  jobs: (signal?: AbortSignal) => request<JobsPayload>('/api/v1/jobs', signal),
+
+  job: (id: string, signal?: AbortSignal) =>
+    request<JobPayload>(`/api/v1/jobs/${encodeURIComponent(id)}`, signal),
+
+  cancelJob: (id: string) =>
+    requestJson<JobPayload>(`/api/v1/jobs/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'X-Axiom-Write': '1' },
+    }),
+
+  citationAudit: (strict: boolean) =>
+    runAction<CitationAuditReport>('lint', { mode: 'citations', strict }),
+
+  integrityAction: () => runAction<IntegrityPayload>('lint', { mode: 'integrity' }),
 }
+
+export function jobEventsUrl(id: string): string {
+  return `/api/v1/jobs/${encodeURIComponent(id)}/events`
+}
+
+export const WIKI_EVENTS_URL = '/api/v1/events'
+
+export type { Job }
 
 /** "wiki/pages/entities/alan-turing.md" -> "entities/alan-turing" */
 export function idFromPath(path: string): string {

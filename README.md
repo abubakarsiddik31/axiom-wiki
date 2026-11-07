@@ -148,10 +148,11 @@ Combines lexical **BM25 keyword search** with dense **vector embeddings** using 
 ### 🌐 Local Web App, JSON API & Link Graph (`serve`)
 Run `axiom-wiki serve` to launch the Axiom web app (`http://127.0.0.1:1717`), built with React and shipped pre-compiled with the CLI:
 * **Overview, pages, page view, search, and graph** — a dense, keyboard-friendly browser UI over the same Markdown on disk.
+* **Ask, Sources, Integrity, and Settings** — stream a query answer, clip or ingest from `raw/`, watch for new files, verify citations, review contradictions, and rebuild the semantic index without leaving the browser.
 * **Interactive link graph** — zoom, pan, and click nodes; orphan pages are dashed and dead links are listed inline.
-* **"Linked From" Backlinks:** Native bi-directional backlinks on every page.
-* **Read-only JSON API** at `/api/v1` — the UI is just a client, so scripts and integrations can use it too.
-* **Read-Only Safety:** GET/HEAD only; safe for LAN sharing via `--host 0.0.0.0`.
+* **Live updates** — an SSE stream refreshes the current view when an ingest or agent write lands.
+* **JSON API** at `/api/v1` — the UI is just a client, so scripts and integrations can use it too.
+* **Read-only by default, write mode on demand:** GET/HEAD is always safe for LAN sharing via `--host 0.0.0.0`; mutating actions require `--allow-write` on a loopback bind plus the `X-Axiom-Write: 1` header.
 
 ### 🔌 Native Model Context Protocol (MCP) Server
 Integrate Axiom Wiki directly with **Claude Code**, **Cursor**, **Windsurf**, or custom AI agents.

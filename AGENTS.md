@@ -33,13 +33,16 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
 ### Web UI Layer (`src/server/` + `apps/web/`)
-- **`src/server/index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). GET/HEAD only; never writes.
-- **`src/server/api.ts`** — Read-only JSON API under `/api/v1` (`overview`, paginated `pages`, page payload, `search`, bounded `graph`). Thin wrappers over `getStatus`, `readPage`, `searchWiki`, and the snapshot; no wiki state of its own.
-- **`src/server/cache.ts`** — `WikiReadCache`: one snapshot per process, invalidated by a chokidar watcher on `wiki/`. Reads are O(1) after the first request; the snapshot rebuilds once per Markdown change.
+- **`src/server/index.ts`** — Bare `node:http` server behind `axiom-wiki serve` (`--port`, `--host`, `--open`, `--allow-write`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). Read-only by default; `--allow-write` is loopback-only and gates mutation routes.
+- **`src/server/api.ts`** — JSON API under `/api/v1`: read routes (`overview`, paginated `pages`, page payload, `search`, bounded `graph`, `sources`, `integrity`, `config`), SSE (`events`, job streams), and `POST /actions/*` / `DELETE /jobs/:id`. Read actions stay available in read-only mode; write actions require `--allow-write` plus `X-Axiom-Write: 1`.
+- **`src/server/actions.ts`** — Action router. Validates bodies, restricts web ingest paths to `raw/`, acquires the compilation lock for mutations, and delegates to the same core functions as the CLI (`ingest`, `clipUrl`, `reindexWiki`, `removeSource`, `markForReingest`, citation verification). Actions: `ingest`, `clip`, `query`, `lint`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`.
+- **`src/server/watch.ts`** — `WatchController` wraps the CLI's chokidar watcher for `serve`: each dropped file becomes a job, and server shutdown stops the watcher.
+- **`src/server/jobs.ts`** — Process-local job registry for long-running actions (`queued/running/succeeded/failed/cancelled`), bounded log lines, cancellation via `AbortController`, and per-job SSE subscribers. Jobs are intentionally non-durable.
+- **`src/server/cache.ts`** — `WikiReadCache`: one snapshot per process, invalidated by a debounced chokidar watcher on `wiki/`. Reads are O(1) after the first request; watcher bursts rebuild once and notify `onChange` listeners (SSE).
 - **`src/core/snapshot.ts`** — `buildWikiSnapshot`: single pass over `wiki/pages` that returns page metadata, the link graph, and the wiki size, so consumers no longer walk and parse the corpus once each.
 - **`src/server/static.ts`** — Serves the built SPA from `dist/web` (or `apps/web/dist`), with hashed-asset caching and `index.html` fallback for client routes. `AXIOM_WEB_DIR` overrides the location.
 - **`src/server/render.ts`** — Pure rendering helpers shared by the API and the legacy SSR fallback: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), citations, markdown→HTML via `marked`, and the SVG graph. Unit-tested without sockets.
-- **`apps/web/`** — Vite + React + TypeScript + Tailwind SPA (`@axiom-wiki/web`). Routes: overview, pages, page view, search, graph. Styling follows `DESIGN.md`. `vite build` outputs to the root `dist/web` so the npm package (`files: ["dist"]`) ships it. During development, Vite proxies `/api` to a running `axiom-wiki serve` on `:1717`.
+- **`apps/web/`** — Vite + React + TypeScript + Tailwind SPA (`@axiom-wiki/web`). Routes: overview, pages, page view, search, graph, ask, sources, integrity, settings. Styling follows `DESIGN.md`. `vite build` outputs to the root `dist/web` so the npm package (`files: ["dist"]`) ships it. During development, Vite proxies `/api` to a running `axiom-wiki serve` on `:1717`. `WikiEventsProvider` feeds a version counter into `useAsync`, so SSE changes refresh mounted views.
 
 ### CLI/UI Layer (`src/cli/`)
 - Built with **Ink 5 + React 18** (React for the terminal).
@@ -52,7 +55,8 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 - **`prompts.ts`** — System prompt defining wiki conventions (page frontmatter schema, category taxonomy, naming rules, cross-reference rules).
 
 ### Core/Wiki Layer (`src/core/`)
-- **`wiki.ts`** — Atomic wiki I/O: `readPage`, `writePage`, `listPages`, `updateIndex`, `appendLog`, `getStatus`. Pages are Markdown with YAML frontmatter parsed by `gray-matter`.
+- **`wiki.ts`** — Atomic wiki I/O: `readPage`, `writePage`, `listPages`, `updateIndex`, `updateMOC`, `appendLog`, `getStatus`. Pages are Markdown with YAML frontmatter parsed by `gray-matter`.
+- **`ingest.ts`** — Non-interactive ingest pipeline shared by the web action API: clip URLs, resolve `raw/` changes, pre-flight size/context checks, run the agent, update index/MOC, index pages, append the log, record state, and append usage. Acquires/releases the compilation lock internally.
 - **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `{wikiDir}/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
 - **`lock.ts`** — PID-based compilation lock (`{wikiDir}/lock`). Prevents concurrent ingest/compile operations. Stale locks from dead processes are auto-reclaimed. Key functions: `acquireLock`, `releaseLock`, `getLockInfo`, `forceReleaseLock`.
 - **`files.ts`** — Normalizes source files into `SourceFile` objects. Supported: `.md`, `.txt`, `.pdf`, `.docx`, `.html`, `.png/.jpg/.jpeg/.webp`, `.csv/.tsv`. PDF/images → base64; HTML → Markdown via `node-html-markdown`; DOCX → Markdown via `mammoth`; CSV/TSV → Markdown table via `delimitedToMarkdown`.
@@ -135,6 +139,7 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 - **Every code path that acquires the lock must release it** — including early returns, error catches, user cancellation ("n"), and Escape key. This is the most common source of bugs.
 - The `watch` screen uses `try/finally` to guarantee release.
 - The `ingest` screen has multiple async pause points (reingest-confirm, interactive-reply, interactive-confirm) where the lock stays held until the user responds — release on both "y" and "n" paths.
+- The `sources` screen acquires the lock before any `saveState` or log append (delete and reingest) and releases it in `finally`. If another process holds it, the action is refused with the holder's PID rather than racing.
 
 **Commands that must track state:**
 | Command | lock | log.md | index.md | moc.md | state.json | usage.log |
@@ -142,8 +147,8 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 | `ingest` | yes | yes | yes | yes | yes | yes |
 | `watch` | yes | yes | yes | yes | yes | yes |
 | `clip` (with ingest) | yes | yes | yes | yes | yes | yes |
-| `sources` → delete | no | no | no | no | yes (remove) | no |
-| `sources` → reingest | no | yes | no | no | yes (clear hash) | no |
+| `sources` → delete | yes | no | no | no | yes (remove) | no |
+| `sources` → reingest | yes | yes | no | no | yes (clear hash) | no |
 | `query` | no | yes | no | no | no | yes |
 | `autowiki` / `sync` | no | yes | yes | yes | no (own state) | yes |
 

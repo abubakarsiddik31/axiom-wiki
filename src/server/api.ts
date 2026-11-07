@@ -2,23 +2,31 @@ import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
 import type http from 'http'
-import type { URL } from 'url'
+import { URL } from 'url'
 
 import type { AxiomConfig } from '../config/index.js'
 import { getStatus, readPage } from '../core/wiki.js'
 import { searchWiki } from '../core/search.js'
 import { backlinksFromGraph, type WikiGraph } from '../core/graph.js'
 import type { WikiSnapshot } from '../core/snapshot.js'
+import { listSources } from '../core/sources.js'
+import { loadState } from '../core/state.js'
+import { getLockInfo } from '../core/lock.js'
+import { checkEmbeddingConsistency, loadSearchManifest } from '../core/search/orama-store.js'
 import { renderMarkdown } from './render.js'
 import type { PageFrontmatter } from './render.js'
+import { BadRequestError, actionRequiresWrite, handleAction, readJsonBody } from './actions.js'
+import { jobs as defaultJobs, type JobManager } from './jobs.js'
+import type { WatchController } from './watch.js'
 
 /**
- * Read-only JSON API consumed by the web frontend in `apps/web`.
+ * JSON API consumed by the web frontend in `apps/web`.
  *
- * Every route is a thin wrapper over the same core functions the CLI uses, so
- * the browser sees exactly what `axiom-wiki status|graph|query` sees. All paths
- * are namespaced under `/api/v1`. Page bodies are read fresh from disk; the
- * page list and link graph come from the server's watched snapshot cache.
+ * Read routes are thin wrappers over the same core functions the CLI uses, so
+ * the browser sees exactly what `axiom-wiki status|graph|query` sees. Mutations
+ * live under `/actions/*`, require write mode, and delegate to `actions.ts`.
+ * All paths are namespaced under `/api/v1`. Page bodies are read fresh from
+ * disk; the page list and link graph come from the watched snapshot cache.
  */
 
 const API_PREFIX = '/api/v1'
@@ -28,21 +36,62 @@ export function isSafeSegment(segment: string): boolean {
   return SEGMENT_RE.test(segment) && !segment.includes('..')
 }
 
+interface JsonHeaders {
+  etag?: string
+  lastModified?: string
+  cacheControl?: string
+}
+
 function sendJson(
   res: http.ServerResponse,
   status: number,
   body: unknown,
   headOnly = false,
+  options: JsonHeaders = {},
 ): void {
-  res.writeHead(status, {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
-  })
+    'Cache-Control': options.cacheControl ?? 'no-store',
+  }
+  if (options.etag) headers['ETag'] = options.etag
+  if (options.lastModified) headers['Last-Modified'] = options.lastModified
+  res.writeHead(status, headers)
   res.end(headOnly ? undefined : JSON.stringify(body))
 }
 
 function fail(res: http.ServerResponse, status: number, message: string, headOnly = false): void {
   sendJson(res, status, { error: message }, headOnly)
+}
+
+/**
+ * Weak validator derived from the file's mtime and size. The page body is read
+ * immediately after stat, so a client that revalidates saves the read, YAML
+ * parse, Markdown render, and graph lookup on every navigation it repeats.
+ */
+function statEtag(stat: fs.Stats): string {
+  return `W/"${Math.trunc(stat.mtimeMs).toString(36)}-${stat.size.toString(36)}"`
+}
+
+function matchesEtag(header: string | string[] | undefined, etag: string): boolean {
+  if (!header) return false
+  const value = Array.isArray(header) ? header.join(',') : header
+  return value.split(',').some((candidate) => {
+    const trimmed = candidate.trim()
+    return trimmed === '*' || trimmed === etag
+  })
+}
+
+function sendNotModified(
+  res: http.ServerResponse,
+  etag: string,
+  lastModified: string,
+): void {
+  res.writeHead(304, {
+    ETag: etag,
+    'Last-Modified': lastModified,
+    'Cache-Control': 'no-cache',
+  })
+  res.end()
 }
 
 /** Parses frontmatter into the header fields the page view needs. */
@@ -77,6 +126,78 @@ async function readPagePayload(config: AxiomConfig, id: string, graph?: WikiGrap
   }
 }
 
+export interface ApiOptions {
+  /** Enables POST/DELETE action routes. Off by default. */
+  allowWrite?: boolean
+  /** Wiki-change subscription used by the SSE endpoint. */
+  subscribe?: (listener: () => void) => () => void
+  jobs?: JobManager
+  watch?: WatchController
+}
+
+function openSse(req: http.IncomingMessage, res: http.ServerResponse): {
+  send: (event: string, data: unknown) => void
+  close: () => void
+} {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.flushHeaders?.()
+
+  let closed = false
+  const heartbeat = setInterval(() => {
+    if (!closed) res.write(': ping\n\n')
+  }, 20_000)
+  heartbeat.unref?.()
+
+  const close = () => {
+    if (closed) return
+    closed = true
+    clearInterval(heartbeat)
+    res.end()
+  }
+  req.on('close', close)
+
+  return {
+    send(event, data) {
+      if (closed) return
+      try {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+      } catch {
+        close()
+      }
+    },
+    close,
+  }
+}
+
+function checkWriteRequest(
+  req: http.IncomingMessage,
+  allowWrite: boolean,
+): string | null {
+  if (!allowWrite) {
+    return 'Write mode is disabled. Restart with: axiom-wiki serve --allow-write'
+  }
+  if (req.headers['x-axiom-write'] !== '1') {
+    return 'Missing X-Axiom-Write: 1 header.'
+  }
+  const origin = req.headers.origin
+  if (origin) {
+    try {
+      const parsed = new URL(origin)
+      if (!req.headers.host || parsed.host !== req.headers.host) {
+        return 'Cross-origin writes are not allowed.'
+      }
+    } catch {
+      return 'Cross-origin writes are not allowed.'
+    }
+  }
+  return null
+}
+
 /**
  * Handles a request if it targets the JSON API.
  * Returns true when the response was written, false otherwise.
@@ -87,16 +208,46 @@ export async function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   snapshot: () => Promise<WikiSnapshot>,
+  options: ApiOptions = {},
 ): Promise<boolean> {
   const { pathname } = url
   if (pathname !== '/api' && !pathname.startsWith('/api/')) return false
 
   const headOnly = req.method === 'HEAD'
+  const method = req.method ?? 'GET'
+  const jobManager = options.jobs ?? defaultJobs
+  const isActionRoute = pathname.startsWith(`${API_PREFIX}/actions/`)
+  const isJobRoute = pathname.startsWith(`${API_PREFIX}/jobs`)
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: 'Method not allowed — the API is read-only.' }))
+  if (!['GET', 'HEAD', 'POST', 'DELETE'].includes(method)) {
+    res.writeHead(405, { Allow: 'GET, HEAD, POST, DELETE', 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Method not allowed.' }))
     return true
+  }
+
+  if (method === 'POST' && !isActionRoute) {
+    res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'POST is only allowed under /api/v1/actions/.' }))
+    return true
+  }
+
+  if (method === 'DELETE' && !(isJobRoute && pathname !== `${API_PREFIX}/jobs`)) {
+    res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'DELETE is only allowed for a job id.' }))
+    return true
+  }
+
+  const actionName = isActionRoute
+    ? pathname.slice(`${API_PREFIX}/actions/`.length)
+    : ''
+  const requiresWrite =
+    method === 'DELETE' || (method === 'POST' && actionRequiresWrite(actionName))
+  if (requiresWrite) {
+    const problem = checkWriteRequest(req, Boolean(options.allowWrite))
+    if (problem) {
+      fail(res, 403, problem, headOnly)
+      return true
+    }
   }
 
   if (pathname !== API_PREFIX && !pathname.startsWith(`${API_PREFIX}/`)) {
@@ -107,6 +258,189 @@ export async function handleApi(
   const route = pathname.slice(API_PREFIX.length) || '/'
 
   try {
+    if (route.startsWith('/actions/')) {
+      const action = route.slice('/actions/'.length)
+      const body = await readJsonBody(req)
+      const result = await handleAction(action, body, {
+        config,
+        snapshot,
+        jobs: jobManager,
+        watch: options.watch,
+        allowWrite: options.allowWrite,
+      })
+      sendJson(res, result.status, result.body, headOnly)
+      return true
+    }
+
+    if (route === '/jobs') {
+      // Jobs can contain query answers and ingest logs. A LAN-safe read-only
+      // server should not expose its process-local work queue.
+      sendJson(res, 200, { jobs: options.allowWrite ? jobManager.list() : [] }, headOnly)
+      return true
+    }
+
+    if (route.startsWith('/jobs/')) {
+      if (!options.allowWrite) {
+        fail(res, 404, 'No such job.', headOnly)
+        return true
+      }
+      const rest = route.slice('/jobs/'.length)
+      const slash = rest.indexOf('/')
+      const id = slash === -1 ? rest : rest.slice(0, slash)
+      const suffix = slash === -1 ? '' : rest.slice(slash + 1)
+      const job = id ? jobManager.get(id) : null
+      if (!job) {
+        fail(res, 404, 'No such job.', headOnly)
+        return true
+      }
+
+      if (method === 'DELETE') {
+        sendJson(res, 200, { job: jobManager.cancel(id) }, headOnly)
+        return true
+      }
+
+      if (suffix === 'events') {
+        const stream = openSse(req, res)
+        let unsubscribe = () => {}
+        unsubscribe = jobManager.subscribe(id, (event) => {
+          if (event.type === 'snapshot' || event.type === 'status') {
+            stream.send('job', event.job)
+          } else if (event.type === 'log') {
+            stream.send('log', { line: event.line })
+          } else if (event.type === 'delta') {
+            stream.send('delta', { text: event.text })
+          } else if (event.type === 'done') {
+            stream.send('done', event.job)
+            unsubscribe()
+            stream.close()
+          }
+        })
+        req.on('close', () => unsubscribe())
+        if (job.status !== 'running' && job.status !== 'queued') {
+          unsubscribe()
+          stream.close()
+        }
+        return true
+      }
+
+      if (suffix) {
+        fail(res, 404, 'Unknown job route.', headOnly)
+        return true
+      }
+
+      sendJson(res, 200, { job }, headOnly)
+      return true
+    }
+
+    if (route === '/events') {
+      const stream = openSse(req, res)
+      stream.send('ready', { at: new Date().toISOString() })
+      const unsubscribe = options.subscribe?.(() => {
+        stream.send('wiki-changed', { at: new Date().toISOString() })
+      })
+      req.on('close', () => unsubscribe?.())
+      return true
+    }
+
+    if (route === '/config') {
+      sendJson(
+        res,
+        200,
+        {
+          provider: config.provider,
+          model: config.model,
+          wikiDir: path.basename(config.wikiDir),
+          rawDir: path.basename(config.rawDir),
+          obsidianCompat: Boolean(config.obsidianCompat),
+          forensicCitations: Boolean(config.forensicCitations),
+          writeMode: Boolean(options.allowWrite),
+          embeddings: {
+            provider: config.embeddings?.provider ?? 'none',
+            model: config.embeddings?.model ?? null,
+            dimensions: config.embeddings?.dimensions ?? null,
+            manifest: loadSearchManifest(config.wikiDir),
+            consistency: checkEmbeddingConsistency(config),
+          },
+        },
+        headOnly,
+      )
+      return true
+    }
+
+    if (route === '/watch') {
+      sendJson(
+        res,
+        200,
+        options.watch?.status() ?? { running: false, startedAt: null, lastEvent: null },
+        headOnly,
+      )
+      return true
+    }
+
+    if (route === '/sources') {
+      const records = await listSources(config.wikiDir)
+      const state = loadState(config.wikiDir)
+      const rawFiles = fs.existsSync(config.rawDir)
+        ? fs.readdirSync(config.rawDir).filter((name) => fs.statSync(path.join(config.rawDir, name)).isFile())
+        : []
+      sendJson(
+        res,
+        200,
+        {
+          sources: records.map((record) => ({
+            ...record,
+            sha256: state.sources[record.filename]?.sha256 ?? '',
+            lastIngestedAt: state.sources[record.filename]?.lastIngestedAt ?? record.ingestedAt,
+            truncated: state.sources[record.filename]?.truncated ?? false,
+            concepts: state.sources[record.filename]?.concepts.length ?? 0,
+          })),
+          rawFiles,
+          lock: getLockInfo(config.wikiDir),
+        },
+        headOnly,
+      )
+      return true
+    }
+
+    if (route === '/integrity') {
+      const snap = await snapshot()
+      const pagesWithoutSummary = snap.pages.filter((page) => !page.summary).map((page) => page.path)
+      const pagesWithoutTags = snap.pages.filter((page) => page.tags.length === 0).map((page) => page.path)
+      const contradictions: Array<{ path: string; title: string }> = []
+      for (const page of snap.pages) {
+        try {
+          const content = await readPage(config.wikiDir, page.path)
+          if (content.includes('⚠️ Contradiction:')) {
+            contradictions.push({ path: page.path, title: page.title })
+          }
+        } catch {
+          // vanished mid-scan
+        }
+      }
+      sendJson(
+        res,
+        200,
+        {
+          generatedAt: new Date().toISOString(),
+          counts: {
+            pages: snap.pages.length,
+            deadLinks: snap.graph.deadLinks.length,
+            orphans: snap.graph.orphans.length,
+            pagesWithoutSummary: pagesWithoutSummary.length,
+            pagesWithoutTags: pagesWithoutTags.length,
+            contradictions: contradictions.length,
+          },
+          deadLinks: snap.graph.deadLinks,
+          orphans: snap.graph.orphans,
+          pagesWithoutSummary,
+          pagesWithoutTags,
+          contradictions,
+        },
+        headOnly,
+      )
+      return true
+    }
+
     if (route === '/overview') {
       const snap = await snapshot()
       const status = await getStatus(config, snap.pages, snap.wikiSizeBytes)
@@ -273,19 +607,47 @@ export async function handleApi(
         fail(res, 404, 'Unknown page address.', headOnly)
         return true
       }
-      const { graph } = await snapshot()
-      const payload = await readPagePayload(config, segments.join('/'), graph)
-      if (!payload) {
-        fail(res, 404, `No wiki page at “${segments.join('/')}”.`, headOnly)
+      const id = segments.join('/')
+      const abs = path.join(config.wikiDir, 'wiki', 'pages', `${id}.md`)
+
+      let stat: fs.Stats
+      try {
+        stat = fs.statSync(abs)
+      } catch {
+        fail(res, 404, `No wiki page at “${id}”.`, headOnly)
         return true
       }
-      sendJson(res, 200, payload, headOnly)
+
+      const etag = statEtag(stat)
+      const lastModified = stat.mtime.toUTCString()
+      if (matchesEtag(req.headers['if-none-match'], etag)) {
+        sendNotModified(res, etag, lastModified)
+        return true
+      }
+
+      const { graph } = await snapshot()
+      const payload = await readPagePayload(config, id, graph)
+      if (!payload) {
+        fail(res, 404, `No wiki page at “${id}”.`, headOnly)
+        return true
+      }
+      sendJson(res, 200, payload, headOnly, {
+        etag,
+        lastModified,
+        // Storeable, but every reuse must revalidate — a page body can change
+        // while the SPA is open.
+        cacheControl: 'no-cache',
+      })
       return true
     }
 
     fail(res, 404, `No API route for “${pathname}”.`, headOnly)
     return true
   } catch (err) {
+    if (err instanceof BadRequestError) {
+      fail(res, 400, err.message, headOnly)
+      return true
+    }
     fail(res, 500, err instanceof Error ? err.message : String(err), headOnly)
     return true
   }

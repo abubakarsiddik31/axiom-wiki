@@ -174,6 +174,43 @@ export function DatabaseIcon(props: IconProps) {
   )
 }
 
+export function AskIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 5h16v11H9l-5 4z" />
+      <path d="M8 10h8M8 13h5" />
+    </Icon>
+  )
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3l7 3v6c0 4.2-2.8 7.4-7 9-4.2-1.6-7-4.8-7-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </Icon>
+  )
+}
+
+export function SlidersIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h6M14 7h6M4 17h10M18 17h2" />
+      <circle cx="12" cy="7" r="2" />
+      <circle cx="16" cy="17" r="2" />
+    </Icon>
+  )
+}
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 16V4M7 9l5-5 5 5" />
+      <path d="M4 16v3h16v-3" />
+    </Icon>
+  )
+}
+
 export function TagIcon(props: IconProps) {
   return (
     <Icon {...props}>

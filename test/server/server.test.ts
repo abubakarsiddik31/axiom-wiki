@@ -349,6 +349,33 @@ describe('json api', () => {
     expect(body.backlinks).toEqual([{ fromId: 'entities/alan-turing', fromTitle: 'Alan Turing' }])
   })
 
+  it('page payloads revalidate with an ETag', async () => {
+    const b = await ensureServer()
+    const url = `${b}/api/v1/pages/concepts/turing-completeness`
+
+    const first = await fetch(url)
+    expect(first.status).toBe(200)
+    const etag = first.headers.get('etag')
+    expect(etag).toBeTruthy()
+    expect(first.headers.get('cache-control')).toBe('no-cache')
+
+    const revalidated = await fetch(url, { headers: { 'If-None-Match': etag! } })
+    expect(revalidated.status).toBe(304)
+    expect(await revalidated.text()).toBe('')
+
+    const stale = await fetch(url, { headers: { 'If-None-Match': 'W/"nope"' } })
+    expect(stale.status).toBe(200)
+  })
+
+  it('page payloads support HEAD', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages/concepts/turing-completeness`, {
+      method: 'HEAD',
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('')
+  })
+
   it('page 404s for a missing id', async () => {
     const b = await ensureServer()
     const res = await fetch(`${b}/api/v1/pages/entities/nope`)

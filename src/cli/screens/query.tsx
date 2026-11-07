@@ -8,7 +8,7 @@ import { createAxiomAgent } from '../../agent/index.js'
 import { withRetry } from '../../core/retry.js'
 import { writePage, appendLog, listPages } from '../../core/wiki.js'
 
-type QueryState = 'idle' | 'thinking' | 'filing_prompt' | 'filing_title' | 'filing'
+type QueryState = 'idle' | 'thinking' | 'answering' | 'filing_prompt' | 'filing_title' | 'filing'
 
 interface QAPair {
   question: string
@@ -125,7 +125,7 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
         fullAnswer += chunk
         setCurrentA(fullAnswer)
         setStreamText(fullAnswer)
-        setState('answering' as any)
+        setState('answering')
       }
 
       await appendLog(config.wikiDir, q, 'query')

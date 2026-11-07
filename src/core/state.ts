@@ -30,6 +30,15 @@ const EMPTY_STATE: CompilationState = {
   frozenSlugs: [],
 }
 
+/** Warn once per state file per process — `loadState` is called on hot paths. */
+const warnedStatePaths = new Set<string>()
+
+function warnStateOnce(key: string, message: string): void {
+  if (warnedStatePaths.has(key)) return
+  warnedStatePaths.add(key)
+  process.stderr.write(`[axiom-wiki] ${message}\n`)
+}
+
 // ── Core Functions ──────────────────────────────────────────────────────────
 
 export function statePath(wikiDir: string): string {
@@ -43,14 +52,28 @@ export function loadState(wikiDir: string): CompilationState {
   try {
     const raw = fs.readFileSync(fp, 'utf-8')
     const parsed = JSON.parse(raw) as CompilationState
-    if (parsed.version !== 1) return structuredClone(EMPTY_STATE)
+    if (parsed.version !== 1) {
+      // A newer/unknown format must not be silently overwritten by the next
+      // save. Preserve it alongside the file and make the reset visible.
+      const bak = `${fp}.v${String(parsed.version)}.bak`
+      try { fs.copyFileSync(fp, bak) } catch { /* best effort */ }
+      warnStateOnce(
+        `${fp}:version`,
+        `state.json has unsupported version ${String(parsed.version)}; backed up to ${path.basename(bak)} and starting with an empty state. Sources will be re-ingested.`,
+      )
+      return structuredClone(EMPTY_STATE)
+    }
     // Ensure frozenSlugs always exists (older state files may lack it)
     if (!Array.isArray(parsed.frozenSlugs)) parsed.frozenSlugs = []
     return parsed
-  } catch {
+  } catch (err) {
     // Corrupted state — back up and start fresh
     const bak = fp + '.bak'
     try { fs.copyFileSync(fp, bak) } catch { /* best effort */ }
+    warnStateOnce(
+      `${fp}:corrupt`,
+      `state.json is unreadable (${err instanceof Error ? err.message : String(err)}); backed up to ${path.basename(bak)} and starting with an empty state. Sources will be re-ingested.`,
+    )
     return structuredClone(EMPTY_STATE)
   }
 }

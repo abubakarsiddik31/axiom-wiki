@@ -93,15 +93,27 @@ program
 
 program
   .command('serve')
-  .description('Serve the wiki as a local read-only web UI')
+  .description('Serve the wiki as a local web UI with a read-only JSON API')
   .option('-p, --port <port>', 'port to listen on', '1717')
   .option('--host <host>', 'host to bind (use 0.0.0.0 to expose on the LAN)', '127.0.0.1')
   .option('--open', 'open the browser after starting')
-  .action(async (opts: { port: string; host: string; open?: boolean }) => {
+  .option('--allow-write', 'enable ingest, source management, query, and reindex actions (loopback only)')
+  .action(async (opts: { port: string; host: string; open?: boolean; allowWrite?: boolean }) => {
     requireConfig()
     const config = getConfig()
     if (!config) return
-    await startServer({ config, port: Number(opts.port), host: opts.host, open: opts.open })
+    try {
+      await startServer({
+        config,
+        port: Number(opts.port),
+        host: opts.host,
+        open: opts.open,
+        allowWrite: opts.allowWrite,
+      })
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
   })
 
 program

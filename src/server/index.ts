@@ -21,6 +21,8 @@ import {
 import { handleApi, isSafeSegment, parseFrontmatter } from './api.js'
 import { resolveWebDir, serveStatic } from './static.js'
 import { WikiReadCache } from './cache.js'
+import { JobManager } from './jobs.js'
+import { WatchController } from './watch.js'
 
 export { parseFrontmatter } from './api.js'
 
@@ -36,6 +38,8 @@ export interface ServeOptions {
    * to the legacy server-rendered pages (used by the SSR integration tests).
    */
   staticDir?: string | false
+  /** Enable POST/DELETE action routes. Read-only when false (the default). */
+  allowWrite?: boolean
 }
 
 function sendHtml(res: http.ServerResponse, status: number, html: string): void {
@@ -70,6 +74,7 @@ export function createHandler(
   config: AxiomConfig,
   webDir: string | null = null,
   cache?: WikiReadCache,
+  options: { allowWrite?: boolean; jobs?: JobManager; watch?: WatchController } = {},
 ) {
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
@@ -82,19 +87,26 @@ export function createHandler(
         : Promise.resolve(buildWikiSnapshot(config.wikiDir)))
 
     try {
-      if (req.method !== 'GET' && req.method !== 'HEAD') {
-        res.writeHead(405, { Allow: 'GET, HEAD' })
-        res.end('Method not allowed — the web UI is read-only.')
-        return
-      }
-
       if (url.pathname === '/healthz') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true }))
         return
       }
 
-      if (await handleApi(config, url, req, res, snapshot)) return
+      // API routes own their own method checks (actions + SSE); everything
+      // below is a read-only HTML surface.
+      if (await handleApi(config, url, req, res, snapshot, {
+        allowWrite: options.allowWrite,
+        subscribe: cache ? (listener) => cache.onChange(listener) : undefined,
+        jobs: options.jobs,
+        watch: options.watch,
+      })) return
+
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { Allow: 'GET, HEAD' })
+        res.end('Method not allowed — the web UI is read-only.')
+        return
+      }
 
       // The built SPA owns every remaining route when it exists.
       if (webDir && serveStatic(webDir, url, req, res)) return
@@ -152,20 +164,30 @@ export function createHandler(
 }
 
 export function startServer(options: ServeOptions): Promise<http.Server> {
-  const { config, port = 1717, host = '127.0.0.1', open = false, quiet = false } = options
+  const { config, port = 1717, host = '127.0.0.1', open = false, quiet = false, allowWrite = false } = options
+
+  const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1'
+  if (allowWrite && !loopback) {
+    return Promise.reject(
+      new Error('--allow-write only works with a loopback --host (127.0.0.1, localhost, or ::1).'),
+    )
+  }
 
   const explicitWebDir = options.staticDir === false ? '' : options.staticDir
   const webDir = options.staticDir === false ? null : resolveWebDir(explicitWebDir)
   const cache = new WikiReadCache(config.wikiDir)
   cache.start()
+  const jobManager = new JobManager()
+  const watch = new WatchController(config, jobManager)
 
   return new Promise((resolve) => {
-    const handler = createHandler(config, webDir, cache)
+    const handler = createHandler(config, webDir, cache, { allowWrite, jobs: jobManager, watch })
     const server = http.createServer((req, res) => {
       void handler(req, res)
     })
 
     server.on('close', () => {
+      void watch.stop()
       void cache.close()
     })
 
@@ -175,7 +197,8 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
       const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`
       if (!quiet) {
         const mode = webDir ? 'web UI' : 'read-only fallback UI'
-        console.log(`Axiom Wiki ${mode} at ${url}  (Ctrl+C to stop)`)
+        const write = allowWrite ? ' · write enabled' : ' · read-only'
+        console.log(`Axiom Wiki ${mode} at ${url}${write}  (Ctrl+C to stop)`)
       }
       if (open) openUrlInBrowser(url)
       resolve(server)

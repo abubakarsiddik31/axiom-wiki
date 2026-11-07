@@ -5,19 +5,28 @@ import { api } from '../api'
 import { useAsync } from '../hooks'
 import { formatDate, pluralize } from '../format'
 import {
+  AskIcon,
   CloseIcon,
+  DatabaseIcon,
   DiamondIcon,
   GraphIcon,
   MenuIcon,
   OverviewIcon,
   PagesIcon,
   SearchIcon,
+  ShieldIcon,
+  SlidersIcon,
 } from './Icons'
+import { JobTrayLive } from './JobTray'
 
 const NAV = [
   { to: '/', label: 'Overview', icon: OverviewIcon, end: true },
   { to: '/pages', label: 'Pages', icon: PagesIcon, end: false },
+  { to: '/ask', label: 'Ask', icon: AskIcon, end: false },
+  { to: '/sources', label: 'Sources', icon: DatabaseIcon, end: false },
   { to: '/graph', label: 'Graph', icon: GraphIcon, end: false },
+  { to: '/integrity', label: 'Integrity', icon: ShieldIcon, end: false },
+  { to: '/settings', label: 'Settings', icon: SlidersIcon, end: false },
 ] as const
 
 function navClass(isActive: boolean): string {
@@ -166,6 +175,7 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+        <JobTrayLive />
         <SidebarStatus
           totalPages={status?.totalPages ?? 0}
           totalSources={status?.rawSourceCount ?? 0}
@@ -217,6 +227,7 @@ export function AppShell() {
                 </NavLink>
               ))}
             </nav>
+            <JobTrayLive />
             <SidebarStatus
               totalPages={status?.totalPages ?? 0}
               totalSources={status?.rawSourceCount ?? 0}
@@ -248,7 +259,7 @@ function LinkBrand({ compact = false }: { compact?: boolean }) {
       <span className="flex flex-col leading-none">
         <span className="font-display text-[0.8rem] font-bold tracking-[0.16em] text-ghost">AXIOM</span>
         <span className="mt-1 font-mono text-[0.55rem] tracking-[0.2em] text-graphite">
-          WIKI / READ-ONLY
+          WIKI / LOCAL
         </span>
       </span>
     </NavLink>

@@ -20,12 +20,18 @@ The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ship
 - **Page view** — rendered Markdown with frontmatter (tags, sources, updatedAt), rewritten wiki-links, citation pills, and a **Linked from** panel ("what links here").
 - **Search** — the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled), with section badges and highlighted snippets.
 - **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
+- **Ask** — run a streaming query against the wiki agent, optionally in forensic mode, and file the answer as an analysis page.
+- **Sources** — list compiled sources, clip a URL, ingest a file from `raw/`, re-ingest, delete, or start a watcher that auto-ingests dropped files.
+- **Integrity** — dead links, orphans, metadata gaps, unresolved contradictions, citation audit, and agent lint.
+- **Settings** — provider/model, embeddings status, `obsidianCompat`, forensic mode, and semantic-index rebuild.
+
+Live views listen to `GET /api/v1/events` and refresh when an ingest or agent write lands.
 
 Content is read fresh from disk on every request — `watch`, `ingest`, and agent writes are reflected immediately.
 
 ## JSON API
 
-The UI is a client of the same read-only API, which you can call directly:
+The UI is a client of the same API, which you can call directly:
 
 | Route | Returns |
 |---|---|
@@ -34,6 +40,20 @@ The UI is a client of the same read-only API, which you can call directly:
 | `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, html, backlinks }` |
 | `GET /api/v1/search?q=…` | `{ query, results }` (optional `limit`, `category`) |
 | `GET /api/v1/graph` | `{ nodes, edges, orphans, deadLinks, totalNodes, totalEdges, orphanCount, deadLinkCount, truncated }` |
+| `GET /api/v1/sources` | `{ sources, rawFiles, lock }` |
+| `GET /api/v1/watch` | `{ running, startedAt, lastEvent }` |
+| `GET /api/v1/integrity` | dead links, orphans, metadata gaps, contradictions |
+| `GET /api/v1/config` | provider, model, embeddings status, write mode (no credentials) |
+| `GET /api/v1/events` | SSE `wiki-changed` events |
+| `GET /api/v1/jobs` | `{ jobs }` |
+| `GET /api/v1/jobs/:id` | `{ job }` |
+| `GET /api/v1/jobs/:id/events` | SSE job status, log lines, and streamed deltas |
+| `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
+| `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
+
+Actions: `ingest`, `clip`, `query`, `lint`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream.
+
+Write mode also enables **watch mode**: `POST /api/v1/actions/watch/start` watches `raw/` and compiles each dropped file as a job. This is the browser equivalent of `axiom-wiki watch` and pairs with the Obsidian Web Clipper.
 
 `/api/v1/pages` is paginated server-side:
 
@@ -57,11 +77,28 @@ The UI is a client of the same read-only API, which you can call directly:
 
 Without `focus`, the server ranks pages by degree and returns the top slice. `truncated` is `true` when nodes were omitted; `totalNodes`, `totalEdges`, `orphanCount`, and `deadLinkCount` always report the full graph. Dead-link targets referenced by the visible slice are included so broken links remain visible.
 
-All responses use `Cache-Control: no-store`. The API is GET/HEAD only and returns JSON errors with the appropriate status code. The page list and graph come from a watcher-backed in-process snapshot: a request after the first is served from memory, and the snapshot rebuilds once per file change rather than once per request.
+The API is GET/HEAD only and returns JSON errors with the appropriate status code. Summary routes use `Cache-Control: no-store`; page payloads use `no-cache` with a weak `ETag` and `Last-Modified`, so a client that revisits a page revalidates with `If-None-Match` and gets a bodyless `304` instead of a re-render.
 
-## Read-only by design
+The page list and graph come from a watcher-backed in-process snapshot: a request after the first is served from memory. Watcher events are coalesced (~150 ms), so a bulk ingest rebuilds the snapshot once after the writes settle rather than once per page.
 
-The server exposes `GET`/`HEAD` routes only — no write endpoints, no auth. It is safe to keep running locally and to open on your LAN with `--host 0.0.0.0`, but it is not intended for public exposure. To share a wiki publicly, use [Obsidian-compatible](/guides/obsidian/) publishing or a static export.
+## Read-only by default
+
+Without `--allow-write`, the server exposes `GET`/`HEAD` routes only. It is safe to keep running locally and to open on your LAN with `--host 0.0.0.0`, but it is not intended for public exposure.
+
+## Write mode (opt-in)
+
+```bash
+axiom-wiki serve --allow-write
+```
+
+Write mode enables ingest, clip, source deletion/re-ingest, query, analysis filing, contradiction resolution, and semantic reindexing. It is deliberately narrow:
+
+- It only starts on a loopback host (`127.0.0.1`, `localhost`, or `::1`); `--host 0.0.0.0 --allow-write` is refused.
+- Every mutating request needs `X-Axiom-Write: 1`; cross-origin `Origin` headers are rejected (DNS-rebinding guard).
+- Web ingest only reads files inside `raw/`. Use the CLI for arbitrary local paths.
+- Mutations acquire the same compilation lock as the CLI. A busy wiki returns `409` with the holder PID instead of racing.
+
+To share a wiki publicly, use [Obsidian-compatible](/guides/obsidian/) publishing or a static export.
 
 ## Options
 
@@ -70,6 +107,7 @@ The server exposes `GET`/`HEAD` routes only — no write endpoints, no auth. It 
 | `-p, --port <port>` | `1717` | Port to listen on |
 | `--host <host>` | `127.0.0.1` | Bind address (`0.0.0.0` exposes on the LAN) |
 | `--open` | off | Open the browser after starting |
+| `--allow-write` | off | Enable mutating actions (loopback only) |
 
 ## Developing the frontend
 

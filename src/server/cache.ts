@@ -14,18 +14,24 @@ import { buildWikiSnapshot, type WikiSnapshot } from '../core/snapshot.js'
 export class WikiReadCache {
   private readonly wikiDir: string
   private readonly ttlMs: number
+  private readonly debounceMs: number
   private snapshot: WikiSnapshot | null = null
   private builtAt = 0
   private inflight: Promise<WikiSnapshot> | null = null
   private watcher: FSWatcher | null = null
+  private invalidateTimer: NodeJS.Timeout | null = null
+  private readonly changeListeners = new Set<() => void>()
   private closed = false
   private ready: Promise<void> = Promise.resolve()
 
-  constructor(wikiDir: string, options?: { ttlMs?: number }) {
+  constructor(wikiDir: string, options?: { ttlMs?: number; debounceMs?: number }) {
     this.wikiDir = wikiDir
     // Safety net if the watcher misses an event (network filesystems, fsevents
     // hiccups). The watcher is still the primary invalidation path.
     this.ttlMs = options?.ttlMs ?? 5 * 60_000
+    // An ingest writes many pages in quick succession. Coalesce those events so
+    // a bulk write rebuilds the snapshot once instead of once per page.
+    this.debounceMs = options?.debounceMs ?? 150
   }
 
   start(): void {
@@ -40,13 +46,52 @@ export class WikiReadCache {
     this.ready = new Promise((resolve) => {
       this.watcher?.once('ready', () => resolve())
     })
-    this.watcher.on('all', () => {
-      this.snapshot = null
-    })
+    this.watcher.on('all', () => this.scheduleInvalidate())
     this.watcher.on('error', () => {
       // A watcher failure must not poison reads; the next request rebuilds.
-      this.snapshot = null
+      this.scheduleInvalidate()
     })
+  }
+
+  /**
+   * Defers invalidation until the current burst of writes settles. Requests
+   * during the debounce window keep serving the warm snapshot — a few hundred
+   * milliseconds of staleness is preferable to re-parsing the corpus for every
+   * page an ingest touches.
+   */
+  private scheduleInvalidate(): void {
+    if (this.closed) return
+    if (this.invalidateTimer) clearTimeout(this.invalidateTimer)
+    this.invalidateTimer = setTimeout(() => {
+      this.invalidateTimer = null
+      this.snapshot = null
+      this.builtAt = 0
+      this.notifyChange()
+    }, this.debounceMs)
+    // Never keep the process alive just to expire a cache entry.
+    this.invalidateTimer.unref?.()
+  }
+
+  /**
+   * Subscribe to "the Markdown corpus changed" notifications. Used by the SSE
+   * endpoint; listeners are called after the debounce burst settles.
+   */
+  onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener)
+    return () => {
+      this.changeListeners.delete(listener)
+    }
+  }
+
+  private notifyChange(): void {
+    if (this.closed) return
+    for (const listener of this.changeListeners) {
+      try {
+        listener()
+      } catch {
+        // A broken subscriber must not break the cache.
+      }
+    }
   }
 
   /** Resolves once chokidar has completed its initial scan. */
@@ -77,13 +122,18 @@ export class WikiReadCache {
   }
 
   invalidate(): void {
+    if (this.invalidateTimer) {
+      clearTimeout(this.invalidateTimer)
+      this.invalidateTimer = null
+    }
     this.snapshot = null
     this.builtAt = 0
+    this.notifyChange()
   }
 
   async close(): Promise<void> {
     this.closed = true
-    this.snapshot = null
+    this.invalidate()
     const watcher = this.watcher
     this.watcher = null
     await watcher?.close()

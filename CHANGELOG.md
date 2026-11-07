@@ -8,12 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **React Web App**: `axiom-wiki serve` now ships a Vite + React + TypeScript + Tailwind frontend (`apps/web`, built to `dist/web`) with an overview dashboard, filterable page library, rendered page views with backlinks, hybrid search with highlighted snippets, and an interactive pan/zoom link graph. The repo is now a pnpm workspace (`apps/*`). A read-only JSON API at `/api/v1` backs the UI; the previous server-rendered pages remain as a fallback when `dist/web` is absent.
+- **Web actions + feature parity**: `serve --allow-write` now exposes the core CLI workflows in the browser. New pages cover **Ask** (streaming query with optional forensic mode and filing as an analysis), **Sources** (clip a URL, ingest from `raw/`, re-ingest, delete), **Integrity** (dead links, orphans, metadata gaps, contradictions, citation audit, agent lint), and **Settings** (provider/model, embeddings, reindex). Long-running work runs as cancellable jobs with SSE progress.
+- **Live web updates**: `GET /api/v1/events` streams `wiki-changed` events from the snapshot watcher, and the SPA refreshes mounted views without polling.
+- **React Web App**: `axiom-wiki serve` now ships a Vite + React + TypeScript + Tailwind frontend (`apps/web`, built to `dist/web`) with an overview dashboard, filterable page library, rendered page views with backlinks, hybrid search with highlighted snippets, and an interactive pan/zoom link graph. The repo is now a pnpm workspace (`apps/*`). A JSON API at `/api/v1` backs the UI; the previous server-rendered pages remain as a fallback when `dist/web` is absent.
 - **YouTube Transcripts**: `clip` and `ingest` now accept YouTube URLs (`watch?v=`, `youtu.be`, `/shorts/`, `/embed/`, `/live/`, with `?t=` offsets) and save a timestamped transcript instead of the video. Supports `--lang`, per-video chapters as headings, rolling-caption deduplication, and `[12:34]` markers that work as `#12:34` citation locators in forensic lint.
 - **Zero-setup yt-dlp**: the standalone yt-dlp build is downloaded to `~/.axiom/bin` on first use and verified, so YouTube ingestion needs no manual install. `AXIOM_NO_AUTO_INSTALL=1` opts out.
 - **Transcript Cache**: parsed transcripts are cached in `~/.axiom/cache/youtube/`, and an existing `raw/` transcript for the same video is reused, so re-clipping costs no network requests. This also removes most HTTP 429 exposure, which now additionally retries with backoff.
 
+### Fixed
+- **Unlocked state writes**: the `sources` screen now takes the compilation lock before deleting a source or clearing its hash for re-ingest, so it cannot overwrite `state.json` while `ingest`/`watch` is running. A busy wiki reports the holding PID instead of racing.
+- **Stale derived artifacts after source deletion**: removing a source now rebuilds `index.md` and `moc.md` and drops the summary page from the semantic index instead of leaving a deleted page in generated views.
+- **Query state typing**: the Ink query screen's `answering` state is now part of its union instead of an `as any` escape hatch.
+- **Silent state reset**: `loadState` now warns (once per process) when `state.json` is corrupt or has an unsupported version, names the backup it wrote, and preserves unknown-version files as `state.json.v<N>.bak` before falling back to an empty state.
+
 ### Performance
+- **Debounced snapshot invalidation**: `serve` coalesces watcher events (~150 ms), so a bulk ingest rebuilds the page/graph snapshot once after writes settle instead of once per page.
+- **ETag revalidation for page payloads**: `/api/v1/pages/:category/:slug` now returns a weak `ETag` + `Last-Modified` with `Cache-Control: no-cache`; `If-None-Match` gets a bodyless `304` without re-reading, parsing, or rendering the page.
 - **One-pass read snapshot + watcher cache**: `serve` now builds page metadata and the link graph in a single corpus walk and keeps the result in memory, invalidating on Markdown changes. On a 10k-page corpus, warm `/api/v1/pages`, `/api/v1/graph`, and page views no longer repeat the 170–230ms full scan; backlinks drop from ~170ms to ~0.3ms.
 - **Paginated page API**: `/api/v1/pages` now supports `limit`, `cursor`, `cat`, `q`, and `sort`, and returns category facets. At 10k pages the response drops from ~2.2MB to ~22KB for the default 100-row page.
 - **Bounded graph API**: `/api/v1/graph` returns the most-connected slice by default (`limit`, or a `focus`/`depth` neighborhood) plus full totals and a `truncated` flag. At 10k pages the payload drops from ~1.8MB to ~289KB.

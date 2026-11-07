@@ -34,7 +34,9 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 
 ### Web UI Layer (`src/server/` + `apps/web/`)
 - **`src/server/index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). GET/HEAD only; never writes.
-- **`src/server/api.ts`** — Read-only JSON API under `/api/v1` (`overview`, `pages`, page payload, `search`, `graph`). Thin wrappers over `getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`, `getBacklinks`; no wiki state of its own.
+- **`src/server/api.ts`** — Read-only JSON API under `/api/v1` (`overview`, paginated `pages`, page payload, `search`, bounded `graph`). Thin wrappers over `getStatus`, `readPage`, `searchWiki`, and the snapshot; no wiki state of its own.
+- **`src/server/cache.ts`** — `WikiReadCache`: one snapshot per process, invalidated by a chokidar watcher on `wiki/`. Reads are O(1) after the first request; the snapshot rebuilds once per Markdown change.
+- **`src/core/snapshot.ts`** — `buildWikiSnapshot`: single pass over `wiki/pages` that returns page metadata, the link graph, and the wiki size, so consumers no longer walk and parse the corpus once each.
 - **`src/server/static.ts`** — Serves the built SPA from `dist/web` (or `apps/web/dist`), with hashed-asset caching and `index.html` fallback for client routes. `AXIOM_WEB_DIR` overrides the location.
 - **`src/server/render.ts`** — Pure rendering helpers shared by the API and the legacy SSR fallback: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), citations, markdown→HTML via `marked`, and the SVG graph. Unit-tested without sockets.
 - **`apps/web/`** — Vite + React + TypeScript + Tailwind SPA (`@axiom-wiki/web`). Routes: overview, pages, page view, search, graph. Styling follows `DESIGN.md`. `vite build` outputs to the root `dist/web` so the npm package (`files: ["dist"]`) ships it. During development, Vite proxies `/api` to a running `axiom-wiki serve` on `:1717`.

@@ -129,18 +129,24 @@ export interface Backlink {
   fromTitle: string
 }
 
+/** Pure backlink lookup over an already-built graph (O(edges), no disk I/O). */
+export function backlinksFromGraph(graph: WikiGraph, pageId: string): Backlink[] {
+  const backlinks: Backlink[] = []
+  const seen = new Set<string>()
+  for (const edge of graph.edges) {
+    if (edge.to !== pageId) continue
+    const node = graph.nodes.get(edge.from)
+    if (!node?.exists || seen.has(node.id)) continue
+    seen.add(node.id)
+    backlinks.push({ fromId: node.id, fromTitle: node.title })
+  }
+  return backlinks
+}
+
 /**
  * Pages that link to the given page id ("what links here").
  * The inbound counterpart of the edges buildGraph already computes.
  */
 export function getBacklinks(wikiDir: string, pageId: string): Backlink[] {
-  const graph = buildGraph(wikiDir)
-  const backlinks: Backlink[] = []
-  for (const edge of graph.edges) {
-    if (edge.to !== pageId) continue
-    const node = graph.nodes.get(edge.from)
-    if (!node?.exists) continue
-    backlinks.push({ fromId: node.id, fromTitle: node.title })
-  }
-  return backlinks
+  return backlinksFromGraph(buildGraph(wikiDir), pageId)
 }

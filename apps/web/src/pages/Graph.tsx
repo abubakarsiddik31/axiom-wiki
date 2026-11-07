@@ -25,7 +25,10 @@ function clamp(value: number, min: number, max: number): number {
 
 export function Graph() {
   const navigate = useNavigate()
-  const { data: graph, error, loading, reload } = useAsync((signal) => api.graph(signal), [])
+  const { data: graph, error, loading, reload } = useAsync(
+    (signal) => api.graph({ limit: 1200 }, signal),
+    [],
+  )
   useTitle('Graph')
   const [hovered, setHovered] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
@@ -103,7 +106,7 @@ export function Graph() {
       <PageHeading
         eyebrow="Link graph"
         title="Page graph"
-        description={`${pluralize(layout.nodes.length, 'page')} · ${pluralize(edges.length, 'link')} · ${pluralize(orphans.size, 'orphan')} · ${pluralize(graph.deadLinks.length, 'dead link')}`}
+        description={`${pluralize(graph.totalNodes, 'page')} · ${pluralize(graph.totalEdges, 'link')} · ${pluralize(graph.orphanCount, 'orphan')} · ${pluralize(graph.deadLinkCount, 'dead link')}`}
         actions={
           <div className="flex items-center gap-1">
             <button
@@ -136,6 +139,14 @@ export function Graph() {
           </div>
         }
       />
+
+      {graph.truncated ? (
+        <p className="mb-4 border border-amber/30 bg-amber/5 px-3 py-2 font-mono text-[0.68rem] leading-relaxed text-amber">
+          Showing the {layout.nodes.length} most-connected pages of {graph.totalNodes}. Open a page to
+          inspect its immediate neighbors, or use the API with a <code>focus</code> parameter for a
+          full neighborhood.
+        </p>
+      ) : null}
 
       {layout.nodes.length === 0 ? (
         <EmptyState title="No pages to plot">Ingest a source to start building the graph.</EmptyState>
@@ -215,6 +226,7 @@ export function Graph() {
                         tabIndex={0}
                         aria-label={`${node.title} (${node.category})`}
                       >
+                        <title>{`${node.title} (${node.category})${orphan ? ' — orphan' : ''}`}</title>
                         <circle r={14} fill="#000" fillOpacity={0} pointerEvents="all" />
                         <circle
                           r={active ? 8 : orphan ? 5.5 : 4}
@@ -224,16 +236,18 @@ export function Graph() {
                           strokeWidth={orphan ? 1 : 0}
                           strokeDasharray={orphan ? '2 2' : undefined}
                         />
-                        <text
-                          y={-10}
-                          textAnchor="middle"
-                          fontSize={9}
-                          fill={active ? '#f4f4f5' : '#a1a1aa'}
-                          opacity={hovered && !active ? 0.35 : 0.9}
-                          className="pointer-events-none font-mono"
-                        >
-                          {node.title.length > 24 ? `${node.title.slice(0, 23)}…` : node.title}
-                        </text>
+                        {layout.nodes.length <= 300 || active || zoom > 1.4 ? (
+                          <text
+                            y={-10}
+                            textAnchor="middle"
+                            fontSize={9}
+                            fill={active ? '#f4f4f5' : '#a1a1aa'}
+                            opacity={hovered && !active ? 0.35 : 0.9}
+                            className="pointer-events-none font-mono"
+                          >
+                            {node.title.length > 24 ? `${node.title.slice(0, 23)}…` : node.title}
+                          </text>
+                        ) : null}
                       </g>
                     )
                   })}
@@ -251,19 +265,25 @@ export function Graph() {
               <dl className="space-y-1.5 font-mono text-[0.68rem]">
                 <div className="flex justify-between gap-3">
                   <dt className="text-graphite">nodes</dt>
-                  <dd className="text-ghost">{layout.nodes.length}</dd>
+                  <dd className="text-ghost">
+                    {layout.nodes.length}
+                    {graph.truncated ? ` / ${graph.totalNodes}` : ''}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-graphite">edges</dt>
-                  <dd className="text-ghost">{edges.length}</dd>
+                  <dd className="text-ghost">
+                    {edges.length}
+                    {graph.truncated ? ` / ${graph.totalEdges}` : ''}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-graphite">orphans</dt>
-                  <dd className="text-ghost">{orphans.size}</dd>
+                  <dd className="text-ghost">{graph.orphanCount}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-graphite">dead links</dt>
-                  <dd className="text-ghost">{graph.deadLinks.length}</dd>
+                  <dd className="text-ghost">{graph.deadLinkCount}</dd>
                 </div>
               </dl>
             </section>
@@ -291,11 +311,13 @@ export function Graph() {
                   ))}
                 </ul>
               ) : (
-                <p className="px-4 py-4 font-mono text-[0.66rem] text-graphite">No dead links.</p>
+                <p className="px-4 py-4 font-mono text-[0.66rem] text-graphite">
+                  {graph.deadLinkCount ? 'No dead links in this view.' : 'No dead links.'}
+                </p>
               )}
-              {graph.deadLinks.length > 12 ? (
+              {graph.deadLinkCount > 12 ? (
                 <p className="border-t border-line px-4 py-2 font-mono text-[0.62rem] text-graphite">
-                  +{graph.deadLinks.length - 12} more
+                  +{graph.deadLinkCount - 12} more
                 </p>
               ) : null}
             </section>

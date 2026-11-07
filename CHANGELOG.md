@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-setup yt-dlp**: the standalone yt-dlp build is downloaded to `~/.axiom/bin` on first use and verified, so YouTube ingestion needs no manual install. `AXIOM_NO_AUTO_INSTALL=1` opts out.
 - **Transcript Cache**: parsed transcripts are cached in `~/.axiom/cache/youtube/`, and an existing `raw/` transcript for the same video is reused, so re-clipping costs no network requests. This also removes most HTTP 429 exposure, which now additionally retries with backoff.
 
+### Performance
+- **One-pass read snapshot + watcher cache**: `serve` now builds page metadata and the link graph in a single corpus walk and keeps the result in memory, invalidating on Markdown changes. On a 10k-page corpus, warm `/api/v1/pages`, `/api/v1/graph`, and page views no longer repeat the 170–230ms full scan; backlinks drop from ~170ms to ~0.3ms.
+- **Paginated page API**: `/api/v1/pages` now supports `limit`, `cursor`, `cat`, `q`, and `sort`, and returns category facets. At 10k pages the response drops from ~2.2MB to ~22KB for the default 100-row page.
+- **Bounded graph API**: `/api/v1/graph` returns the most-connected slice by default (`limit`, or a `focus`/`depth` neighborhood) plus full totals and a `truncated` flag. At 10k pages the payload drops from ~1.8MB to ~289KB.
+- **Status reuse**: `/api/v1/overview` reuses the snapshot's pages and precomputed wiki size instead of walking the corpus twice; warm overview latency drops from ~30ms to ~3ms at 10k pages.
+
 ## [0.9.2] - 2026-09-21
 
 ### Added

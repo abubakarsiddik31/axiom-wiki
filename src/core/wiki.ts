@@ -346,9 +346,13 @@ export async function appendLog(
   fs.appendFileSync(logPath, line, 'utf-8')
 }
 
-export async function getStatus(config: AxiomConfig): Promise<WikiStatus> {
+export async function getStatus(
+  config: AxiomConfig,
+  preloadedPages?: PageMeta[],
+  preloadedWikiSize?: number,
+): Promise<WikiStatus> {
   const { wikiDir, rawDir } = config
-  const pages = await listPages(wikiDir)
+  const pages = preloadedPages ?? await listPages(wikiDir)
   const pagesByCategory: Record<string, number> = {}
   for (const p of pages) {
     pagesByCategory[p.category] = (pagesByCategory[p.category] ?? 0) + 1
@@ -361,7 +365,7 @@ export async function getStatus(config: AxiomConfig): Promise<WikiStatus> {
       })
     : []
 
-  const wikiSize = dirSize(path.join(wikiDir, 'wiki'))
+  const wikiSize = preloadedWikiSize ?? dirSize(path.join(wikiDir, 'wiki'))
 
   const logPath = path.join(wikiDir, 'wiki/log.md')
   let lastIngest: string | null = null
@@ -465,7 +469,7 @@ function walkDir(dir: string): string[] {
   return files
 }
 
-function dirSize(dir: string): number {
+export function dirSize(dir: string): number {
   if (!fs.existsSync(dir)) return 0
   return walkDir(dir).reduce((acc, f) => acc + fs.statSync(f).size, 0)
 }

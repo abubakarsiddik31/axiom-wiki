@@ -74,6 +74,18 @@ export interface GraphPayload {
   edges: GraphEdge[]
   orphans: string[]
   deadLinks: Array<{ from: string; to: string }>
+  totalNodes: number
+  totalEdges: number
+  orphanCount: number
+  deadLinkCount: number
+  truncated: boolean
+}
+
+export interface PagesPayload {
+  pages: PageMeta[]
+  total: number
+  nextCursor: string | null
+  facets: { categories: Record<string, number> }
 }
 
 export interface OverviewPayload {

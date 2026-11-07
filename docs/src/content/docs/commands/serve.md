@@ -30,12 +30,34 @@ The UI is a client of the same read-only API, which you can call directly:
 | Route | Returns |
 |---|---|
 | `GET /api/v1/overview` | `{ status, recent }` |
-| `GET /api/v1/pages` | `{ pages }` |
+| `GET /api/v1/pages` | `{ pages, total, nextCursor, facets }` |
 | `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, html, backlinks }` |
 | `GET /api/v1/search?q=…` | `{ query, results }` (optional `limit`, `category`) |
-| `GET /api/v1/graph` | `{ nodes, edges, orphans, deadLinks }` |
+| `GET /api/v1/graph` | `{ nodes, edges, orphans, deadLinks, totalNodes, totalEdges, orphanCount, deadLinkCount, truncated }` |
 
-All responses use `Cache-Control: no-store`. The API is GET/HEAD only and returns JSON errors with the appropriate status code.
+`/api/v1/pages` is paginated server-side:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `cat` | — | Exact category filter |
+| `q` | — | Case-insensitive match on title, summary, or tags |
+| `limit` | `100` | Rows per page (max 500) |
+| `cursor` | `0` | Opaque offset returned as `nextCursor` by the previous page |
+| `sort` | `category` | `category`, `title`, or `updated` (descending) |
+
+`facets.categories` always contains counts over the whole wiki, so filter chips stay stable while paging.
+
+`/api/v1/graph` returns a bounded slice by default so a large wiki does not emit its entire edge set:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `limit` | `2000` | Maximum existing nodes (max 10000) |
+| `focus` | — | Page id to center a neighborhood on |
+| `depth` | `1` | Neighborhood radius when `focus` is set (max 3) |
+
+Without `focus`, the server ranks pages by degree and returns the top slice. `truncated` is `true` when nodes were omitted; `totalNodes`, `totalEdges`, `orphanCount`, and `deadLinkCount` always report the full graph. Dead-link targets referenced by the visible slice are included so broken links remain visible.
+
+All responses use `Cache-Control: no-store`. The API is GET/HEAD only and returns JSON errors with the appropriate status code. The page list and graph come from a watcher-backed in-process snapshot: a request after the first is served from memory, and the snapshot rebuilds once per file change rather than once per request.
 
 ## Read-only by design
 

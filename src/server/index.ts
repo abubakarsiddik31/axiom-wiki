@@ -4,9 +4,10 @@ import path from 'path'
 import { URL } from 'url'
 
 import type { AxiomConfig } from '../config/index.js'
-import { getStatus, listPages, readPage } from '../core/wiki.js'
+import { getStatus, readPage } from '../core/wiki.js'
 import { searchWiki } from '../core/search.js'
-import { buildGraph, getBacklinks } from '../core/graph.js'
+import { backlinksFromGraph, type WikiGraph } from '../core/graph.js'
+import { buildWikiSnapshot, type WikiSnapshot } from '../core/snapshot.js'
 import { openUrlInBrowser } from '../auth/command.js'
 import {
   layout,
@@ -19,6 +20,7 @@ import {
 } from './render.js'
 import { handleApi, isSafeSegment, parseFrontmatter } from './api.js'
 import { resolveWebDir, serveStatic } from './static.js'
+import { WikiReadCache } from './cache.js'
 
 export { parseFrontmatter } from './api.js'
 
@@ -41,7 +43,12 @@ function sendHtml(res: http.ServerResponse, status: number, html: string): void 
   res.end(html)
 }
 
-async function handlePage(config: AxiomConfig, url: URL, res: http.ServerResponse): Promise<void> {
+async function handlePage(
+  config: AxiomConfig,
+  url: URL,
+  res: http.ServerResponse,
+  graph: WikiGraph,
+): Promise<void> {
   const segments = url.pathname.split('/').filter(Boolean).slice(1) // drop "page"
   if (segments.length < 2 || segments.some((s) => !isSafeSegment(s))) {
     sendHtml(res, 404, renderErrorPage('Not found', 'Unknown page address.'))
@@ -56,12 +63,23 @@ async function handlePage(config: AxiomConfig, url: URL, res: http.ServerRespons
   }
   const raw = await readPage(config.wikiDir, pagePath)
   const { data, body } = parseFrontmatter(raw, segments[segments.length - 1])
-  sendHtml(res, 200, renderWikiPage(id, data, body, getBacklinks(config.wikiDir, id)))
+  sendHtml(res, 200, renderWikiPage(id, data, body, backlinksFromGraph(graph, id)))
 }
 
-export function createHandler(config: AxiomConfig, webDir: string | null = null) {
+export function createHandler(
+  config: AxiomConfig,
+  webDir: string | null = null,
+  cache?: WikiReadCache,
+) {
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
+
+    // One snapshot per request, shared by every route that needs pages/graph.
+    let snapshotPromise: Promise<WikiSnapshot> | null = null
+    const snapshot = () =>
+      (snapshotPromise ??= cache
+        ? cache.get()
+        : Promise.resolve(buildWikiSnapshot(config.wikiDir)))
 
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -76,18 +94,16 @@ export function createHandler(config: AxiomConfig, webDir: string | null = null)
         return
       }
 
-      if (await handleApi(config, url, req, res)) return
+      if (await handleApi(config, url, req, res, snapshot)) return
 
       // The built SPA owns every remaining route when it exists.
       if (webDir && serveStatic(webDir, url, req, res)) return
 
       // Legacy server-rendered fallback (used when `pnpm build:web` has not run).
       if (url.pathname === '/') {
-        const [status, pages] = await Promise.all([
-          getStatus(config),
-          listPages(config.wikiDir),
-        ])
-        const recent = [...pages]
+        const snap = await snapshot()
+        const status = await getStatus(config, snap.pages, snap.wikiSizeBytes)
+        const recent = [...snap.pages]
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
           .slice(0, 10)
         sendHtml(res, 200, renderDashboard(status, recent))
@@ -95,8 +111,8 @@ export function createHandler(config: AxiomConfig, webDir: string | null = null)
       }
 
       if (url.pathname === '/pages') {
-        const pages = await listPages(config.wikiDir)
-        sendHtml(res, 200, renderPageList(pages))
+        const snap = await snapshot()
+        sendHtml(res, 200, renderPageList(snap.pages))
         return
       }
 
@@ -112,13 +128,14 @@ export function createHandler(config: AxiomConfig, webDir: string | null = null)
       }
 
       if (url.pathname === '/graph') {
-        const graph = buildGraph(config.wikiDir)
-        sendHtml(res, 200, renderGraphPage(graph))
+        const snap = await snapshot()
+        sendHtml(res, 200, renderGraphPage(snap.graph))
         return
       }
 
       if (url.pathname.startsWith('/page/')) {
-        await handlePage(config, url, res)
+        const snap = await snapshot()
+        await handlePage(config, url, res, snap.graph)
         return
       }
 
@@ -139,11 +156,17 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
 
   const explicitWebDir = options.staticDir === false ? '' : options.staticDir
   const webDir = options.staticDir === false ? null : resolveWebDir(explicitWebDir)
+  const cache = new WikiReadCache(config.wikiDir)
+  cache.start()
 
   return new Promise((resolve) => {
-    const handler = createHandler(config, webDir)
+    const handler = createHandler(config, webDir, cache)
     const server = http.createServer((req, res) => {
       void handler(req, res)
+    })
+
+    server.on('close', () => {
+      void cache.close()
     })
 
     server.listen(port, host, () => {

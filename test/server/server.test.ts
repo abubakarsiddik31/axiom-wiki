@@ -279,7 +279,63 @@ describe('json api', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.pages).toHaveLength(2)
+    expect(body.total).toBe(2)
     expect(body.pages.map((p: { title: string }) => p.title)).toContain('Alan Turing')
+    expect(body.facets.categories).toEqual({ concepts: 1, entities: 1 })
+  })
+
+  it('pages supports limit and cursor pagination', async () => {
+    const b = await ensureServer()
+    const first = await (await fetch(`${b}/api/v1/pages?limit=1`)).json()
+    expect(first.pages).toHaveLength(1)
+    expect(first.total).toBe(2)
+    expect(first.nextCursor).toBe('1')
+
+    const second = await (
+      await fetch(`${b}/api/v1/pages?limit=1&cursor=${first.nextCursor}`)
+    ).json()
+    expect(second.pages).toHaveLength(1)
+    expect(second.nextCursor).toBeNull()
+    expect(second.pages[0].path).not.toBe(first.pages[0].path)
+  })
+
+  it('pages filters by category and query', async () => {
+    const b = await ensureServer()
+    const byCategory = await (await fetch(`${b}/api/v1/pages?cat=concepts`)).json()
+    expect(byCategory.pages.map((p: { title: string }) => p.title)).toEqual([
+      'Turing Completeness',
+    ])
+    expect(byCategory.total).toBe(1)
+
+    const byQuery = await (await fetch(`${b}/api/v1/pages?q=alan`)).json()
+    expect(byQuery.pages.map((p: { title: string }) => p.title)).toEqual(['Alan Turing'])
+    expect(byQuery.total).toBe(1)
+  })
+
+  it('graph reports totals and truncates by limit', async () => {
+    const b = await ensureServer()
+    const full = await (await fetch(`${b}/api/v1/graph`)).json()
+    expect(full.totalNodes).toBe(2)
+    expect(full.orphanCount).toBe(1)
+    expect(full.truncated).toBe(false)
+
+    const sliced = await (await fetch(`${b}/api/v1/graph?limit=1`)).json()
+    expect(sliced.nodes).toHaveLength(1)
+    expect(sliced.totalNodes).toBe(2)
+    expect(sliced.truncated).toBe(true)
+  })
+
+  it('graph supports a focus neighborhood', async () => {
+    const b = await ensureServer()
+    const body = await (
+      await fetch(`${b}/api/v1/graph?focus=entities/alan-turing&depth=1`)
+    ).json()
+    expect(body.nodes.map((n: { id: string }) => n.id).sort()).toEqual([
+      'concepts/turing-completeness',
+      'entities/alan-turing',
+    ])
+    expect(body.edges).toHaveLength(1)
+    expect(body.truncated).toBe(false)
   })
 
   it('page returns markdown html and backlinks', async () => {

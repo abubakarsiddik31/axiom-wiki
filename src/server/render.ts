@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import type { PageMeta, WikiStatus } from '../core/wiki.js'
 import type { SearchResult } from '../core/search.js'
 import type { WikiGraph, Backlink } from '../core/graph.js'
+import { slugifyHeading } from '../core/slug.js'
 
 /**
  * Pure rendering helpers for the read-only web UI.
@@ -65,8 +66,26 @@ export function rewriteCitations(markdown: string): string {
   })
 }
 
+/**
+ * Adds stable `id`s to rendered headings using the same slug the search indexer
+ * uses for section anchors, so `/page/x#section` links resolve.
+ */
+export function addHeadingIds(html: string): string {
+  const seen = new Map<string, number>()
+  return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (match, level: string, inner: string) => {
+    const text = inner.replace(/<[^>]+>/g, '').trim()
+    if (!text) return match
+    const base = slugifyHeading(text) || 'section'
+    const count = seen.get(base) ?? 0
+    seen.set(base, count + 1)
+    const id = count === 0 ? base : `${base}-${count}`
+    return `<h${level} id="${escapeHtml(id)}">${inner}</h${level}>`
+  })
+}
+
 export function renderMarkdown(markdown: string): string {
-  return marked.parse(rewriteCitations(rewriteWikiLinks(markdown)), { async: false }) as string
+  const html = marked.parse(rewriteCitations(rewriteWikiLinks(markdown)), { async: false }) as string
+  return addHeadingIds(html)
 }
 
 const CSS = `

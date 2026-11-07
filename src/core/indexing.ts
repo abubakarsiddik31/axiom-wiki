@@ -14,9 +14,11 @@ import {
 } from './search/orama-store.js';
 import { listPages } from './wiki.js';
 import { loadMapState, saveMapState, markPageVectorSynced } from './sync.js';
+import { slugifyHeading } from './slug.js';
 import type { AxiomConfig } from '../config/index.js';
 
 export { persistOrama } from './search/orama-store.js';
+export { slugifyHeading } from './slug.js';
 
 export interface MarkdownChunk {
   id: string;
@@ -29,15 +31,6 @@ export interface MarkdownChunk {
   tags: string[];
   category: string;
   embeddingText: string;
-}
-
-export function slugifyHeading(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .slice(0, 50);
 }
 
 export function chunkMarkdownPage(

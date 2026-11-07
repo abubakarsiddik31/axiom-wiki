@@ -1,0 +1,319 @@
+@import "tailwindcss";
+
+/* Axiom design tokens — see DESIGN.md. Zinc-950 base, cyan accent, no shadows. */
+@theme {
+  --color-space: #09090b;
+  --color-surface: #18181b;
+  --color-raised: #1f1f23;
+  --color-line: #27272a;
+  --color-line-soft: #1e1e22;
+  --color-ghost: #f4f4f5;
+  --color-graphite: #71717a;
+  --color-cyan: #06b6d4;
+  --color-cyan-soft: #0891b2;
+  --color-amber: #f59e0b;
+  --color-danger: #ef4444;
+
+  --font-display: "Geist", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-body: "Satoshi", "Geist", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-card: 0.25rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-space);
+    color: var(--color-ghost);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(6 182 212 / 0.28);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-cyan);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Wiki article typography                                            */
+/* ------------------------------------------------------------------ */
+
+.wiki-prose {
+  max-width: 72ch;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: color-mix(in oklab, var(--color-ghost) 92%, var(--color-graphite));
+  overflow-wrap: anywhere;
+}
+
+.wiki-prose > :first-child {
+  margin-top: 0;
+}
+
+.wiki-prose h1,
+.wiki-prose h2,
+.wiki-prose h3,
+.wiki-prose h4 {
+  font-family: var(--font-display);
+  color: var(--color-ghost);
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  margin: 1.9em 0 0.55em;
+}
+
+.wiki-prose h1 {
+  font-size: 1.45rem;
+}
+.wiki-prose h2 {
+  font-size: 1.2rem;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--color-line);
+}
+.wiki-prose h3 {
+  font-size: 1.02rem;
+}
+.wiki-prose h4 {
+  font-size: 0.92rem;
+  color: var(--color-graphite);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.wiki-prose p {
+  margin: 0.85em 0;
+}
+
+.wiki-prose a {
+  color: var(--color-cyan);
+  text-decoration: underline;
+  text-decoration-color: rgb(6 182 212 / 0.35);
+  text-underline-offset: 3px;
+}
+
+.wiki-prose a:hover {
+  text-decoration-color: var(--color-cyan);
+}
+
+.wiki-prose strong {
+  color: var(--color-ghost);
+  font-weight: 600;
+}
+
+.wiki-prose ul,
+.wiki-prose ol {
+  margin: 0.85em 0;
+  padding-left: 1.4em;
+}
+.wiki-prose li {
+  margin: 0.3em 0;
+}
+.wiki-prose li::marker {
+  color: var(--color-cyan-soft);
+}
+
+.wiki-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 0.15rem;
+  padding: 0.08em 0.35em;
+}
+
+.wiki-prose pre {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.wiki-prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.wiki-prose blockquote {
+  margin: 1em 0;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 2px solid var(--color-cyan-soft);
+  color: var(--color-graphite);
+}
+
+.wiki-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.1em 0;
+  font-size: 0.86rem;
+}
+
+.wiki-prose th,
+.wiki-prose td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}
+
+.wiki-prose th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-graphite);
+}
+
+.wiki-prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  margin: 2em 0;
+}
+
+.wiki-prose img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-line);
+}
+
+/* Inline citation pills emitted by src/server/render.ts */
+.wiki-prose cite.citation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin: 0 2px;
+  padding: 0 0.4em;
+  border: 1px solid rgb(6 182 212 / 0.3);
+  border-radius: 0.15rem;
+  background: rgb(6 182 212 / 0.08);
+  color: var(--color-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  font-style: normal;
+  vertical-align: baseline;
+}
+
+.wiki-prose cite.citation .cite-grade {
+  padding: 0 0.25em;
+  border-radius: 0.1rem;
+  background: rgb(6 182 212 / 0.18);
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion                                                             */
+/* ------------------------------------------------------------------ */
+
+@keyframes axiom-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes axiom-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes axiom-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.fade-up {
+  animation: axiom-fade-up 220ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-raised) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: axiom-shimmer 1.4s linear infinite;
+  border-radius: var(--radius-card);
+}
+
+.pulse-dot {
+  animation: axiom-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Form controls                                                      */
+/* ------------------------------------------------------------------ */
+
+.field {
+  width: 100%;
+  background: var(--color-space);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  color: var(--color-ghost);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.field::placeholder {
+  color: color-mix(in oklab, var(--color-graphite) 85%, transparent);
+}
+
+.field:focus {
+  border-color: var(--color-cyan);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-cyan);
+}

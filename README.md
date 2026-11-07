@@ -145,12 +145,13 @@ Combines lexical **BM25 keyword search** with dense **vector embeddings** using 
 * Two-stage candidate deduplication and dynamic dimension probing.
 * Seamless embedding support for **Google Gemini** (up to 3072d), **OpenAI** (1536d), or **Ollama** (100% offline).
 
-### 🌐 Local Web UI & Link Graph (`serve`)
-Run `axiom-wiki serve` to launch a zero-dependency, lightweight web dashboard (`http://127.0.0.1:1717`):
-* **Dashboard & Metrics:** Category distributions, raw document counts, and index health.
-* **Deterministic SVG Graph:** Visualize page connections, identify orphan nodes, and spot broken links.
+### 🌐 Local Web App, JSON API & Link Graph (`serve`)
+Run `axiom-wiki serve` to launch the Axiom web app (`http://127.0.0.1:1717`), built with React and shipped pre-compiled with the CLI:
+* **Overview, pages, page view, search, and graph** — a dense, keyboard-friendly browser UI over the same Markdown on disk.
+* **Interactive link graph** — zoom, pan, and click nodes; orphan pages are dashed and dead links are listed inline.
 * **"Linked From" Backlinks:** Native bi-directional backlinks on every page.
-* **Read-Only Safety:** Zero write endpoints; safe for LAN sharing via `--host 0.0.0.0`.
+* **Read-only JSON API** at `/api/v1` — the UI is just a client, so scripts and integrations can use it too.
+* **Read-Only Safety:** GET/HEAD only; safe for LAN sharing via `--host 0.0.0.0`.
 
 ### 🔌 Native Model Context Protocol (MCP) Server
 Integrate Axiom Wiki directly with **Claude Code**, **Cursor**, **Windsurf**, or custom AI agents.

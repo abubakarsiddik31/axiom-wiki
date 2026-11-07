@@ -64,19 +64,35 @@ pnpm dev
 After any code change, compile and check for errors:
 
 ```bash
-pnpm build
+pnpm build        # CLI (strict TypeScript)
+pnpm build:web    # frontend type-check + production build → dist/web
+pnpm build:all    # both
 ```
 
-There is no test runner — `pnpm build` is the type-check. If it compiles clean, the types are correct.
+Tests and type checks:
+
+```bash
+pnpm test            # Vitest
+pnpm typecheck:web   # frontend-only type check
+```
 
 ---
 
 ## Project Structure
 
 ```
+apps/
+  web/                  ← Vite + React + TypeScript + Tailwind frontend
+    src/pages/          ← Overview, Pages, PageView, Search, Graph
+    src/components/     ← AppShell, Markdown, Icons, UI primitives
 bin/
   axiom-wiki.ts         ← CLI entry point (Commander.js)
 src/
+  server/
+    index.ts            ← node:http server for `serve`
+    api.ts              ← read-only /api/v1 JSON API
+    static.ts           ← serves dist/web with SPA fallback
+    render.ts           ← Markdown/link rendering shared with SSR fallback
   agent/
     index.ts            ← Creates the Mastra agent
     tools.ts            ← All 16 agent tools
@@ -153,14 +169,15 @@ Edit `src/agent/prompts.ts`. The prompt defines all wiki conventions — be prec
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes
-3. Run `pnpm build` — must compile with zero errors
+3. Run `pnpm build:all` and `pnpm test` — both must pass
 4. Open a PR against `main` with a clear title and description
 5. Link the related issue if one exists
 
 **PR checklist:**
-- [ ] `pnpm build` passes clean
+- [ ] `pnpm build:all` passes clean
+- [ ] `pnpm test` passes
 - [ ] No new TypeScript `any` casts without a comment explaining why
-- [ ] New behaviour is reflected in the README if user-facing
+- [ ] New behaviour is reflected in the README/docs if user-facing
 - [ ] Commit messages follow the style below
 
 ---

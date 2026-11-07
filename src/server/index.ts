@@ -2,7 +2,6 @@ import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import { URL } from 'url'
-import matter from 'gray-matter'
 
 import type { AxiomConfig } from '../config/index.js'
 import { getStatus, listPages, readPage } from '../core/wiki.js'
@@ -17,8 +16,11 @@ import {
   renderSearchResults,
   renderGraphPage,
   renderErrorPage,
-  type PageFrontmatter,
 } from './render.js'
+import { handleApi, isSafeSegment, parseFrontmatter } from './api.js'
+import { resolveWebDir, serveStatic } from './static.js'
+
+export { parseFrontmatter } from './api.js'
 
 export interface ServeOptions {
   config: AxiomConfig
@@ -27,34 +29,16 @@ export interface ServeOptions {
   open?: boolean
   /** Suppress the startup log (used by tests). */
   quiet?: boolean
-}
-
-const SEGMENT_RE = /^[\w][\w.-]*$/
-
-function isSafeSegment(segment: string): boolean {
-  return SEGMENT_RE.test(segment) && !segment.includes('..')
+  /**
+   * Directory with the built SPA. `false` disables the frontend and falls back
+   * to the legacy server-rendered pages (used by the SSR integration tests).
+   */
+  staticDir?: string | false
 }
 
 function sendHtml(res: http.ServerResponse, status: number, html: string): void {
   res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(html)
-}
-
-/** Parses frontmatter into the header fields the page view needs. */
-export function parseFrontmatter(raw: string, fallbackTitle: string): { data: PageFrontmatter; body: string } {
-  const parsed = matter(raw)
-  const d = parsed.data as Record<string, unknown>
-  return {
-    data: {
-      title: String(d['title'] ?? fallbackTitle),
-      summary: String(d['summary'] ?? ''),
-      tags: Array.isArray(d['tags']) ? d['tags'].map(String) : [],
-      category: String(d['category'] ?? ''),
-      updatedAt: String(d['updatedAt'] ?? ''),
-      sources: Array.isArray(d['sources']) ? d['sources'].map(String) : [],
-    },
-    body: parsed.content,
-  }
 }
 
 async function handlePage(config: AxiomConfig, url: URL, res: http.ServerResponse): Promise<void> {
@@ -75,7 +59,7 @@ async function handlePage(config: AxiomConfig, url: URL, res: http.ServerRespons
   sendHtml(res, 200, renderWikiPage(id, data, body, getBacklinks(config.wikiDir, id)))
 }
 
-export function createHandler(config: AxiomConfig) {
+export function createHandler(config: AxiomConfig, webDir: string | null = null) {
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
 
@@ -92,6 +76,12 @@ export function createHandler(config: AxiomConfig) {
         return
       }
 
+      if (await handleApi(config, url, req, res)) return
+
+      // The built SPA owns every remaining route when it exists.
+      if (webDir && serveStatic(webDir, url, req, res)) return
+
+      // Legacy server-rendered fallback (used when `pnpm build:web` has not run).
       if (url.pathname === '/') {
         const [status, pages] = await Promise.all([
           getStatus(config),
@@ -147,9 +137,13 @@ export function createHandler(config: AxiomConfig) {
 export function startServer(options: ServeOptions): Promise<http.Server> {
   const { config, port = 1717, host = '127.0.0.1', open = false, quiet = false } = options
 
+  const explicitWebDir = options.staticDir === false ? '' : options.staticDir
+  const webDir = options.staticDir === false ? null : resolveWebDir(explicitWebDir)
+
   return new Promise((resolve) => {
+    const handler = createHandler(config, webDir)
     const server = http.createServer((req, res) => {
-      void createHandler(config)(req, res)
+      void handler(req, res)
     })
 
     server.listen(port, host, () => {
@@ -157,7 +151,8 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
       const actualPort = typeof addr === 'object' && addr ? addr.port : port
       const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`
       if (!quiet) {
-        console.log(`Axiom Wiki served read-only at ${url}  (Ctrl+C to stop)`)
+        const mode = webDir ? 'web UI' : 'read-only fallback UI'
+        console.log(`Axiom Wiki ${mode} at ${url}  (Ctrl+C to stop)`)
       }
       if (open) openUrlInBrowser(url)
       resolve(server)

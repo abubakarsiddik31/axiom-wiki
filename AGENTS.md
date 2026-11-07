@@ -5,14 +5,17 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 ## Commands
 
 ```bash
-pnpm build      # Compile TypeScript → dist/
+pnpm build      # Compile the CLI TypeScript → dist/
+pnpm build:web  # Build the React app → dist/web (shipped with the npm package)
+pnpm build:all  # Both of the above (what prepublishOnly runs)
 pnpm dev        # Watch mode with live reload (tsx watch)
+pnpm dev:web    # Vite dev server for apps/web on :1718, proxying /api → :1717
 pnpm start      # Run compiled binary (node dist/bin/axiom-wiki.js)
 ```
 
-Tests: `pnpm test` (Vitest). Type-check with `pnpm build` (strict TypeScript compilation).
+Tests: `pnpm test` (Vitest). Type-check with `pnpm build` (strict TypeScript compilation) and `pnpm typecheck:web` for the frontend.
 
-**Run `pnpm build` after every code change** to catch type errors early. The compiled output in `dist/` is what gets executed.
+**Run `pnpm build` after every backend change and `pnpm typecheck:web` after every frontend change** to catch type errors early. The compiled output in `dist/` is what gets executed; the frontend is served from `dist/web`.
 
 **Update docs after every user-facing change.** The documentation site lives in `docs/src/content/docs/` (Astro + Starlight). When adding or changing commands, features, or wiki structure, update the relevant doc pages under `docs/src/content/docs/commands/`, `docs/src/content/docs/guides/`, or `docs/src/content/docs/reference/`.
 
@@ -23,15 +26,18 @@ npx tsx bin/axiom-wiki.ts <command>   # e.g., status, query, ingest
 
 ## Architecture
 
-Axiom Wiki is an AI-powered CLI wiki tool. The system has five main layers:
+Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: the CLI package lives at the root, the web frontend in `apps/web` (see `pnpm-workspace.yaml`). The system has these main layers:
 
 ### Entry & Routing
 - **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
-### Web UI Layer (`src/server/`)
-- **`index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Routes: `/` (dashboard), `/pages`, `/page/:category/:slug`, `/search?q=`, `/graph`, `/healthz`. Wraps core functions only (`getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`, `getBacklinks`) — no wiki state of its own. GET/HEAD only; never writes.
-- **`render.ts`** — Pure rendering helpers: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), markdown→HTML via `marked`, HTML layout/theme, deterministic SVG graph. Unit-tested without sockets.
+### Web UI Layer (`src/server/` + `apps/web/`)
+- **`src/server/index.ts`** — Bare `node:http` read-only server behind `axiom-wiki serve` (`--port`, `--host`, `--open`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). GET/HEAD only; never writes.
+- **`src/server/api.ts`** — Read-only JSON API under `/api/v1` (`overview`, `pages`, page payload, `search`, `graph`). Thin wrappers over `getStatus`, `listPages`, `readPage`, `searchWiki`, `buildGraph`, `getBacklinks`; no wiki state of its own.
+- **`src/server/static.ts`** — Serves the built SPA from `dist/web` (or `apps/web/dist`), with hashed-asset caching and `index.html` fallback for client routes. `AXIOM_WEB_DIR` overrides the location.
+- **`src/server/render.ts`** — Pure rendering helpers shared by the API and the legacy SSR fallback: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), citations, markdown→HTML via `marked`, and the SVG graph. Unit-tested without sockets.
+- **`apps/web/`** — Vite + React + TypeScript + Tailwind SPA (`@axiom-wiki/web`). Routes: overview, pages, page view, search, graph. Styling follows `DESIGN.md`. `vite build` outputs to the root `dist/web` so the npm package (`files: ["dist"]`) ships it. During development, Vite proxies `/api` to a running `axiom-wiki serve` on `:1717`.
 
 ### CLI/UI Layer (`src/cli/`)
 - Built with **Ink 5 + React 18** (React for the terminal).

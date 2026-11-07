@@ -47,6 +47,11 @@ describe('link rewriting', () => {
     expect(html).toContain('<a href="/page/entities/alan-turing">entities/alan-turing</a>')
   })
 
+  it('adds heading ids that match search section anchors', () => {
+    expect(renderMarkdown('## Limits of Computation')).toContain('id="limits-of-computation"')
+    expect(renderMarkdown('## Repeat\n\n## Repeat')).toContain('id="repeat-1"')
+  })
+
   it('idFromPath strips wiki/pages prefix and extension', () => {
     expect(idFromPath('wiki/pages/entities/foo.md')).toBe('entities/foo')
   })
@@ -139,7 +144,7 @@ let base = ''
 
 async function ensureServer(): Promise<string> {
   if (!server) {
-    server = await startServer({ config, port: 0, host: '127.0.0.1', quiet: true })
+    server = await startServer({ config, port: 0, host: '127.0.0.1', quiet: true, staticDir: false })
     const addr = server.address()
     const port = typeof addr === 'object' && addr ? addr.port : 0
     base = `http://127.0.0.1:${port}`
@@ -251,5 +256,171 @@ describe('serve integration', () => {
     const res = await fetch(`${b}/whatever`)
     expect(res.status).toBe(404)
     expect(await res.text()).toContain('Not found')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// JSON API used by the React frontend (apps/web)
+// ---------------------------------------------------------------------------
+
+describe('json api', () => {
+  it('overview returns status and recent pages', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/overview`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.status.totalPages).toBe(2)
+    expect(body.recent[0].title).toBeTruthy()
+  })
+
+  it('pages returns every page', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.pages).toHaveLength(2)
+    expect(body.pages.map((p: { title: string }) => p.title)).toContain('Alan Turing')
+  })
+
+  it('page returns markdown html and backlinks', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages/concepts/turing-completeness`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.id).toBe('concepts/turing-completeness')
+    expect(body.frontmatter.title).toBe('Turing Completeness')
+    expect(body.html).toContain('href="/page/entities/alan-turing"')
+    expect(body.backlinks).toEqual([{ fromId: 'entities/alan-turing', fromTitle: 'Alan Turing' }])
+  })
+
+  it('page 404s for a missing id', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages/entities/nope`)
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toContain('No wiki page')
+  })
+
+  it('page rejects traversal segments', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages/..%2F..%2Fsecret`)
+    expect(res.status).toBe(404)
+  })
+
+  it('search returns matching sections', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/search?q=turing`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.query).toBe('turing')
+    expect(body.results.length).toBeGreaterThan(0)
+  })
+
+  it('empty search returns no results', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/search`)
+    expect(await res.json()).toEqual({ query: '', results: [] })
+  })
+
+  it('graph serializes nodes and edges as arrays', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/graph`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body.nodes)).toBe(true)
+    expect(body.nodes.map((n: { id: string }) => n.id)).toContain('entities/alan-turing')
+    expect(body.edges.length).toBeGreaterThan(0)
+    expect(body.orphans).toContain('entities/alan-turing')
+  })
+
+  it('rejects non-GET methods', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/pages`, { method: 'POST' })
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET, HEAD')
+  })
+
+  it('unknown api routes return a json 404', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/v1/nope`)
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toContain('No API route')
+  })
+
+  it('non-versioned api paths return a json 404', async () => {
+    const b = await ensureServer()
+    const res = await fetch(`${b}/api/nope`)
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toContain('/api/v1')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// SPA static serving (built frontend)
+// ---------------------------------------------------------------------------
+
+describe('spa static serving', () => {
+  const webDir = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-web-'))
+  fs.mkdirSync(path.join(webDir, 'assets'), { recursive: true })
+  fs.writeFileSync(path.join(webDir, 'index.html'), '<!doctype html><div id="root">spa</div>')
+  fs.writeFileSync(path.join(webDir, 'assets', 'app.js'), 'console.log("ok")')
+
+  let spaServer: Server | null = null
+  let spaBase = ''
+
+  async function ensureSpaServer(): Promise<string> {
+    if (!spaServer) {
+      spaServer = await startServer({
+        config,
+        port: 0,
+        host: '127.0.0.1',
+        quiet: true,
+        staticDir: webDir,
+      })
+      const addr = spaServer.address()
+      const port = typeof addr === 'object' && addr ? addr.port : 0
+      spaBase = `http://127.0.0.1:${port}`
+    }
+    return spaBase
+  }
+
+  afterAll(() => {
+    spaServer?.close()
+  })
+
+  it('serves index.html at the root', async () => {
+    const b = await ensureSpaServer()
+    const res = await fetch(`${b}/`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('id="root"')
+  })
+
+  it('falls back to index.html for client routes', async () => {
+    const b = await ensureSpaServer()
+    for (const route of ['/pages', '/page/entities/alan-turing', '/graph', '/whatever']) {
+      const res = await fetch(`${b}${route}`)
+      expect(res.status).toBe(200)
+      expect(await res.text()).toContain('id="root"')
+    }
+  })
+
+  it('serves hashed assets with immutable caching', async () => {
+    const b = await ensureSpaServer()
+    const res = await fetch(`${b}/assets/app.js`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('javascript')
+    expect(res.headers.get('cache-control')).toContain('immutable')
+  })
+
+  it('404s missing assets instead of returning html', async () => {
+    const b = await ensureSpaServer()
+    const res = await fetch(`${b}/assets/missing.js`)
+    expect(res.status).toBe(404)
+  })
+
+  it('keeps the json api working alongside the spa', async () => {
+    const b = await ensureSpaServer()
+    const res = await fetch(`${b}/api/v1/pages`)
+    expect(res.status).toBe(200)
+    expect((await res.json()).pages).toHaveLength(2)
   })
 })

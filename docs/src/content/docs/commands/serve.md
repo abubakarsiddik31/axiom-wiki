@@ -1,6 +1,6 @@
 ---
 title: serve
-description: Browse the wiki as a local read-only web UI.
+description: Browse the wiki in a local read-only web app with a JSON API.
 ---
 
 ```bash
@@ -9,17 +9,37 @@ axiom-wiki serve --port 3000 --open
 axiom-wiki serve --host 0.0.0.0   # expose on your LAN
 ```
 
-Starts a local web server (default `http://127.0.0.1:1717`) that renders your wiki as a clean, dark/light-themed browser UI:
+Starts a local web server (default `http://127.0.0.1:1717`) that serves the **Axiom web app** from `dist/web` plus a read-only JSON API under `/api/v1`.
 
-- **Dashboard** — page counts by category, raw source count, semantic index health, and recently updated pages.
-- **Pages** — every page grouped by category, with summaries and last-updated dates.
-- **Page view** — rendered markdown with frontmatter (tags, sources, updatedAt) as a header, wiki-links (`[[entities/foo]]`) rewritten to clickable internal links, and a **"Linked from"** section at the bottom listing every page that links to it ("what links here").
-- **Search** — a search box wired to the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled).
-- **Graph** — the page link graph as an SVG; orphan pages get dashed circles, dead links are listed below.
+## The web app
+
+The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ships pre-built in the npm package, so `axiom-wiki serve` needs no extra install or second process:
+
+- **Overview** — page and source counts, wiki size, last ingest, semantic index health, pages by category, and the ten most recently updated pages.
+- **Pages** — every page grouped by category, with client-side text and category filters.
+- **Page view** — rendered Markdown with frontmatter (tags, sources, updatedAt), rewritten wiki-links, citation pills, and a **Linked from** panel ("what links here").
+- **Search** — the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled), with section badges and highlighted snippets.
+- **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
+
+Content is read fresh from disk on every request — `watch`, `ingest`, and agent writes are reflected immediately.
+
+## JSON API
+
+The UI is a client of the same read-only API, which you can call directly:
+
+| Route | Returns |
+|---|---|
+| `GET /api/v1/overview` | `{ status, recent }` |
+| `GET /api/v1/pages` | `{ pages }` |
+| `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, html, backlinks }` |
+| `GET /api/v1/search?q=…` | `{ query, results }` (optional `limit`, `category`) |
+| `GET /api/v1/graph` | `{ nodes, edges, orphans, deadLinks }` |
+
+All responses use `Cache-Control: no-store`. The API is GET/HEAD only and returns JSON errors with the appropriate status code.
 
 ## Read-only by design
 
-The server exposes `GET` routes only — no write endpoints, no auth. It is safe to keep running locally and to open on your LAN with `--host 0.0.0.0`, but it is not intended for public exposure. To share a wiki publicly, use [Obsidian-compatible](/guides/obsidian/) publishing or a static export.
+The server exposes `GET`/`HEAD` routes only — no write endpoints, no auth. It is safe to keep running locally and to open on your LAN with `--host 0.0.0.0`, but it is not intended for public exposure. To share a wiki publicly, use [Obsidian-compatible](/guides/obsidian/) publishing or a static export.
 
 ## Options
 
@@ -29,4 +49,14 @@ The server exposes `GET` routes only — no write endpoints, no auth. It is safe
 | `--host <host>` | `127.0.0.1` | Bind address (`0.0.0.0` exposes on the LAN) |
 | `--open` | off | Open the browser after starting |
 
-Content is read fresh from disk on every request — `watch`, `ingest`, and agent writes are reflected immediately, just refresh the page.
+## Developing the frontend
+
+```bash
+# Terminal 1 — API + wiki, port 1717
+axiom-wiki serve
+
+# Terminal 2 — Vite dev server with HMR, port 1718, proxying /api to 1717
+pnpm dev:web
+```
+
+Build the frontend with `pnpm build:web` (outputs to `dist/web`) or build both halves with `pnpm build:all`. If `dist/web` is missing when `serve` starts, the server falls back to the legacy server-rendered pages so the command still works from a source checkout.

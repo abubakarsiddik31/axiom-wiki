@@ -96,9 +96,10 @@ Drop PDFs, Markdown, images, DOCX, CSV/TSV, or HTML files into your `raw/` folde
 ```bash
 axiom-wiki ingest
 ```
-*Or clip any web article directly:*
+*Or clip any web article or YouTube video directly:*
 ```bash
-axiom-wiki clip https://example.com/article --ingest
+axiom-wiki clip https://example.com/article
+axiom-wiki ingest https://youtu.be/zjkBMFhNj_g   # transcript, needs yt-dlp
 ```
 
 ### 3. Or Auto-Wiki an Entire Codebase
@@ -201,7 +202,7 @@ Knowledge Ingestion & Compilation
   autowiki (alias: map)        Autonomously map and build a wiki from a project folder
   sync                         Detect codebase changes and update stale wiki pages
   watch                        Continuously monitor raw/ and auto-ingest incoming files
-  clip [url]                   Extract clean article text via Readability into raw/
+  clip [url]                   Extract article text (Readability) or a YouTube transcript into raw/
 
 Exploration & Querying
   query [question]             Interactive chat against your wiki (-f, --forensic for zero trained knowledge)

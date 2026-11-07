@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **YouTube Transcripts**: `clip` and `ingest` now accept YouTube URLs (`watch?v=`, `youtu.be`, `/shorts/`, `/embed/`, `/live/`, with `?t=` offsets) and save a timestamped transcript instead of the video. Supports `--lang`, per-video chapters as headings, rolling-caption deduplication, and `[12:34]` markers that work as `#12:34` citation locators in forensic lint.
+- **Zero-setup yt-dlp**: the standalone yt-dlp build is downloaded to `~/.axiom/bin` on first use and verified, so YouTube ingestion needs no manual install. `AXIOM_NO_AUTO_INSTALL=1` opts out.
+- **Transcript Cache**: parsed transcripts are cached in `~/.axiom/cache/youtube/`, and an existing `raw/` transcript for the same video is reused, so re-clipping costs no network requests. This also removes most HTTP 429 exposure, which now additionally retries with backoff.
+
 ## [0.9.2] - 2026-09-21
 
 ### Added

@@ -12,4 +12,13 @@ description: File formats that Axiom Wiki can ingest.
 | `.docx` | Converted to Markdown via mammoth |
 | `.csv`, `.tsv` | Converted to a Markdown table (RFC-4180 parser: quoted fields, embedded delimiters/newlines) |
 
+URLs are resolved before the file is read:
+
+| URL | How it's processed |
+|---|---|
+| Article page | Readability extraction → Markdown |
+| YouTube video | Subtitle track → timestamped Markdown transcript (yt-dlp is downloaded automatically) |
+| `.pdf` link | Downloaded, then handled as a PDF |
+| Image link | Downloaded, then handled as an image |
+
 For Google Gemini, binary files (PDFs and images) are uploaded to the Google Files API before ingestion — the file bytes are hosted server-side and referenced by URI, bypassing the model's inline token limit.

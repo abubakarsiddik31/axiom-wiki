@@ -22,11 +22,11 @@ import { InitScreen } from './init.js'
 type ActiveScreen =
   | { name: 'shell' }
   | { name: 'query'; prefill?: string; forensic?: boolean }
-  | { name: 'ingest'; file?: string; interactive?: boolean }
+  | { name: 'ingest'; file?: string; interactive?: boolean; lang?: string }
   | { name: 'status' }
   | { name: 'model' }
   | { name: 'watch' }
-  | { name: 'clip'; url?: string }
+  | { name: 'clip'; url?: string; lang?: string }
   | { name: 'sources' }
   | { name: 'review' }
   | { name: 'graph' }
@@ -48,6 +48,15 @@ const HELP_LINES: LogLine[] = [
   })),
   { text: '  Or type a question to query your wiki directly.', color: 'gray' },
 ]
+
+/** Pulls `--lang xx` / `--lang=xx` out of a slash-command argument string. */
+function extractLangFlag(arg: string): { rest: string; lang?: string } {
+  const withValue = arg.match(/--lang[= ]([\w-]+)/)
+  if (withValue) {
+    return { rest: arg.replace(withValue[0], '').trim(), lang: withValue[1] }
+  }
+  return { rest: arg }
+}
 
 export function HomeScreen() {
   const { exit } = useApp()
@@ -168,13 +177,15 @@ export function HomeScreen() {
 
       if (parsed.command === 'ingest') {
         const interactive = parsed.arg.includes('--interactive')
-        const file = parsed.arg.replace('--interactive', '').trim() || undefined
-        setScreen({ name: 'ingest', file, interactive })
+        const { rest, lang } = extractLangFlag(parsed.arg)
+        const file = rest.replace('--interactive', '').trim() || undefined
+        setScreen({ name: 'ingest', file, interactive, lang })
         return
       }
 
       if (parsed.command === 'clip') {
-        setScreen({ name: 'clip', url: parsed.arg || undefined })
+        const { rest, lang } = extractLangFlag(parsed.arg)
+        setScreen({ name: 'clip', url: rest.trim() || undefined, lang })
         return
       }
 
@@ -236,11 +247,11 @@ export function HomeScreen() {
 
   // ── Sub-screens ───────────────────────────────────────────────────────────
   if (screen.name === 'query')   return <QueryScreen prefill={screen.prefill} forensic={screen.forensic} onExit={goHome} />
-  if (screen.name === 'ingest')  return <IngestScreen file={screen.file} interactive={screen.interactive} onExit={goHome} />
+  if (screen.name === 'ingest')  return <IngestScreen file={screen.file} interactive={screen.interactive} lang={screen.lang} onExit={goHome} />
   if (screen.name === 'status')  return <StatusScreen onExit={goHome} />
   if (screen.name === 'model')   return <ModelScreen onExit={goHome} />
   if (screen.name === 'watch')   return <WatchScreen onExit={goHome} />
-  if (screen.name === 'clip')    return <ClipScreen url={screen.url} onExit={goHome} />
+  if (screen.name === 'clip')    return <ClipScreen url={screen.url} lang={screen.lang} onExit={goHome} />
   if (screen.name === 'sources') return <SourcesScreen onExit={goHome} />
   if (screen.name === 'review')  return <ReviewScreen onExit={goHome} />
   if (screen.name === 'graph')   return <GraphScreen onExit={goHome} />

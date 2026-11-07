@@ -9,6 +9,7 @@ import { createAxiomAgent } from "../../agent/index.js";
 import { INTERACTIVE_INGEST_PREFIX } from "../../agent/prompts.js";
 import { SUPPORTED_EXTS, buildIngestMessage, contextLimitMessage, checkFileSize, checkContextBudget, ConversionError } from "../../core/files.js";
 import { clipUrl } from "../../core/clip.js";
+import { parseYouTubeUrl } from "../../core/youtube.js";
 import type { CoreMessage } from "../../agent/types.js";
 import { updateIndex, updateMOC, appendLog, snapshotWiki, diffWiki } from "../../core/wiki.js";
 import { indexWikiPage, persistOrama } from "../../core/indexing.js";
@@ -29,6 +30,7 @@ function debug(...args: unknown[]) {
 interface Props {
   file?: string;
   interactive?: boolean;
+  lang?: string;
   onExit?: () => void;
 }
 
@@ -71,7 +73,7 @@ function extractPages(text: string): string[] {
   return pages;
 }
 
-export function IngestScreen({ file, interactive = false, onExit }: Props) {
+export function IngestScreen({ file, interactive = false, lang, onExit }: Props) {
   const { exit } = useApp();
   const doExit = onExit ?? exit;
   const config = getConfig();
@@ -138,14 +140,27 @@ export function IngestScreen({ file, interactive = false, onExit }: Props) {
         const isUrl = /^https?:\/\//i.test(cleaned);
         if (isUrl) {
           setCurrentFile(cleaned);
-          setLiveLines([{ text: "⠸ Clipping URL…", color: "yellow" }]);
+          const isYouTube = Boolean(parseYouTubeUrl(cleaned));
+          setLiveLines([{ text: isYouTube ? "⠸ Fetching YouTube transcript…" : "⠸ Clipping URL…", color: "yellow" }]);
           setStep("running");
           try {
-            const result = await clipUrl(cleaned, rawDir);
+            const result = await clipUrl(cleaned, rawDir, {
+              lang,
+              onStatus: (message) => {
+                setLiveLines((prev) =>
+                  prev[prev.length - 1]?.text === message
+                    ? prev
+                    : [...prev, { text: `  ${message}`, color: "gray" }],
+                );
+              },
+            });
             setCurrentFile(result.filename);
             setLiveLines((prev) => [
               ...prev,
-              { text: `✓ Saved: ${result.filename} (${(result.sizeBytes / 1024).toFixed(1)} KB)`, color: "green" },
+              {
+                text: `${result.reused ? "↺ Already saved" : "✓ Saved"}: ${result.filename} (${(result.sizeBytes / 1024).toFixed(1)} KB)`,
+                color: "green",
+              },
             ]);
             filesToProcess = [result.filepath];
           } catch (err) {

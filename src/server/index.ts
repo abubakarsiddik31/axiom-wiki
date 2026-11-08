@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { URL } from 'url'
 
-import type { AxiomConfig } from '../config/index.js'
+import { setConfig, type AxiomConfig } from '../config/index.js'
 import { getStatus, readPage } from '../core/wiki.js'
 import { runMaintenance } from '../core/maintenance.js'
 import { searchWiki } from '../core/search.js'
@@ -46,6 +46,8 @@ export interface ServeOptions {
    * Requires `allowWrite`; the first pass starts shortly after boot.
    */
   maintainIntervalMinutes?: number
+  /** Persist settings changes (tests can inject a no-op/spy). */
+  saveConfig?: (cfg: Partial<AxiomConfig>) => void
 }
 
 function sendHtml(res: http.ServerResponse, status: number, html: string): void {
@@ -80,7 +82,12 @@ export function createHandler(
   config: AxiomConfig,
   webDir: string | null = null,
   cache?: WikiReadCache,
-  options: { allowWrite?: boolean; jobs?: JobManager; watch?: WatchController } = {},
+  options: {
+    allowWrite?: boolean
+    jobs?: JobManager
+    watch?: WatchController
+    saveConfig?: (cfg: Partial<AxiomConfig>) => void
+  } = {},
 ) {
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
@@ -108,6 +115,7 @@ export function createHandler(
         onWrite: cache ? () => cache.refresh() : undefined,
         jobs: options.jobs,
         watch: options.watch,
+        saveConfig: options.saveConfig,
       })) return
 
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -194,7 +202,12 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
   const watch = new WatchController(config, jobManager)
 
   return new Promise((resolve) => {
-    const handler = createHandler(config, webDir, cache, { allowWrite, jobs: jobManager, watch })
+    const handler = createHandler(config, webDir, cache, {
+      allowWrite,
+      jobs: jobManager,
+      watch,
+      saveConfig: options.saveConfig ?? setConfig,
+    })
     const server = http.createServer((req, res) => {
       void handler(req, res)
     })

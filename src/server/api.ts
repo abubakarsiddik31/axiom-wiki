@@ -18,6 +18,7 @@ import { getPageDiff, getPageHistory } from '../core/history.js'
 import { renderMarkdown } from './render.js'
 import type { PageFrontmatter } from './render.js'
 import { BadRequestError, actionRequiresWrite, handleAction, readJsonBody } from './actions.js'
+import { describeRerankConfig } from '../core/rerank.js'
 import { jobs as defaultJobs, type JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
 
@@ -140,6 +141,8 @@ export interface ApiOptions {
   linkIndex?: () => Map<string, PageLinkEntry>
   /** Called after a successful write so cached derivations refresh at once. */
   onWrite?: () => void
+  /** Persist settings changes (injected by the server; tests can override). */
+  saveConfig?: (cfg: Partial<AxiomConfig>) => void
 }
 
 function openSse(req: http.IncomingMessage, res: http.ServerResponse): {
@@ -276,6 +279,7 @@ export async function handleApi(
         allowWrite: options.allowWrite,
         invalidate: options.onWrite,
         linkIndex: options.linkIndex,
+        saveConfig: options.saveConfig,
       })
       sendJson(res, result.status, result.body, headOnly)
       return true
@@ -370,6 +374,7 @@ export async function handleApi(
             manifest: loadSearchManifest(config.wikiDir),
             consistency: checkEmbeddingConsistency(config),
           },
+          rerank: describeRerankConfig(config),
         },
         headOnly,
       )

@@ -7,6 +7,7 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { withRetry } from '../../core/retry.js'
 import { writePage, appendLog, listPages } from '../../core/wiki.js'
+import { assembleContext } from '../../core/context.js'
 
 type QueryState = 'idle' | 'thinking' | 'answering' | 'filing_prompt' | 'filing_title' | 'filing'
 
@@ -118,6 +119,31 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
     contextMessages.push({ role: 'user', content: q })
 
     try {
+      let prompt = q
+      try {
+        setStatusLine('Retrieving wiki context…')
+        const evidence = await assembleContext(config, q, {
+          onStatus: (message) => setStatusLine(message),
+          rerank: { allowDownload: false },
+        })
+        if (evidence.sources.length > 0) {
+          prompt = `${evidence.text}\n\n## Question\n\n${q}`
+          const rerankLabel = evidence.rerank
+            ? evidence.rerank.used
+              ? ` · reranked (${evidence.rerank.provider})`
+              : ' · hybrid ranking'
+            : ''
+          setStatusLine(
+            `Context: ${evidence.sources.length} pages${rerankLabel}`,
+          )
+        } else {
+          setStatusLine('')
+        }
+      } catch {
+        setStatusLine('')
+      }
+      contextMessages[contextMessages.length - 1] = { role: 'user', content: prompt }
+
       const stream = await withRetry(() => agent.stream(contextMessages))
       let fullAnswer = ''
 

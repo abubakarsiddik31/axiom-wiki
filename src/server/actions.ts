@@ -3,7 +3,8 @@ import path from 'path'
 import type http from 'http'
 import matter from 'gray-matter'
 
-import type { AxiomConfig } from '../config/index.js'
+import type { AxiomConfig, RerankConfig } from '../config/index.js'
+import { setConfig } from '../config/index.js'
 import { createAxiomAgent } from '../agent/index.js'
 import { clipUrl } from '../core/clip.js'
 import { ingest, type IngestRequest } from '../core/ingest.js'
@@ -27,6 +28,7 @@ import { assembleContext } from '../core/context.js'
 import {
   PageOpError,
   deletePage,
+  idFromPagePath,
   isValidPageId,
   mergePages,
   pagePathForId,
@@ -35,6 +37,13 @@ import {
 } from '../core/page-ops.js'
 import { capture, promoteInbox } from '../core/inbox.js'
 import { planMaintenance, runMaintenance } from '../core/maintenance.js'
+import {
+  DEFAULT_RERANK_MODEL,
+  describeRerankConfig,
+  rerankCandidates,
+  resolveRerankConfig,
+  setupLocalReranker,
+} from '../core/rerank.js'
 import { commitPaths } from '../core/git.js'
 import type { JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
@@ -50,6 +59,8 @@ export interface ActionDeps {
   invalidate?: () => void
   /** Corpus link index shared with the read cache. */
   linkIndex?: () => Map<string, PageLinkEntry>
+  /** Persist settings changes; injectable so tests never touch the real config. */
+  saveConfig?: (cfg: Partial<AxiomConfig>) => void
 }
 
 export interface ActionResult {
@@ -81,6 +92,8 @@ const WRITE_ACTIONS = new Set([
   'capture',
   'inbox/promote',
   'maintain/apply',
+  'settings/save',
+  'rerank/setup',
 ])
 
 export function actionRequiresWrite(action: string): boolean {
@@ -372,13 +385,17 @@ export async function handleAction(
     const job = manager.create('query')
     manager.start(job.id, async ({ delta, log, signal }) => {
       let evidenceSources: Array<Record<string, unknown>> = []
+      let rerankInfo: Awaited<ReturnType<typeof assembleContext>>['rerank'] | null = null
       let prompt = question
 
       if (useContext) {
         log('Retrieving wiki context…')
         const evidence = await assembleContext(config, question, {
           index: deps.linkIndex?.(),
+          onStatus: log,
+          rerank: { allowDownload: false },
         })
+        rerankInfo = evidence.rerank ?? null
         evidenceSources = evidence.sources as unknown as Array<Record<string, unknown>>
         if (evidence.sources.length > 0) {
           log(
@@ -423,7 +440,7 @@ export async function handleAction(
           }
         }
       }
-      return { answer, filed, forensic, context: evidenceSources }
+      return { answer, filed, forensic, context: evidenceSources, rerank: rerankInfo }
     })
     return { status: 202, body: { job } }
   }
@@ -435,6 +452,7 @@ export async function handleAction(
     const assembled = await assembleContext(config, question, {
       limit: Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 20) : undefined,
       index: deps.linkIndex?.(),
+      rerank: { allowDownload: false },
     })
     return {
       status: 200,
@@ -444,6 +462,7 @@ export async function handleAction(
         estimatedTokens: assembled.estimatedTokens,
         truncated: assembled.truncated,
         text: assembled.text,
+        rerank: assembled.rerank ?? null,
       },
     }
   }
@@ -891,6 +910,136 @@ export async function handleAction(
     })
     if (result.status === 'busy') return lockBusy(config)
     return { status: 200, body: result }
+  }
+
+  if (action === 'settings/save') {
+    const raw = body['rerank']
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new BadRequestError('“rerank” must be an object.')
+    }
+    const payload = raw as Record<string, unknown>
+    const provider = stringField(payload, 'provider') ?? 'local'
+    if (!['none', 'local', 'llm', 'cohere'].includes(provider)) {
+      throw new BadRequestError('“rerank.provider” must be none, local, llm, or cohere.')
+    }
+
+    const model = stringField(payload, 'model')
+    const topN = numberField(payload, 'topN')
+    const candidates = numberField(payload, 'candidates')
+    const apiKeyInput = stringField(payload, 'apiKey')
+    const clearApiKey = boolField(payload, 'clearApiKey') ?? false
+    const previous = config.rerank
+
+    const rerank: RerankConfig = {
+      provider: provider as RerankConfig['provider'],
+      ...(provider === 'local'
+        ? { model: model || previous?.model || DEFAULT_RERANK_MODEL }
+        : provider === 'cohere'
+          ? { model: model || previous?.model }
+          : {}),
+      ...(topN != null ? { topN } : {}),
+      ...(candidates != null ? { candidates } : {}),
+      ...(clearApiKey
+        ? {}
+        : apiKeyInput
+          ? { apiKey: apiKeyInput }
+          : previous?.apiKey
+            ? { apiKey: previous.apiKey }
+            : {}),
+    }
+
+    const resolved = resolveRerankConfig({ ...config, rerank })
+    rerank.topN = resolved.topN
+    rerank.candidates = resolved.candidates
+
+    const persist = deps.saveConfig ?? setConfig
+    persist({ rerank })
+    config.rerank = rerank
+
+    return { status: 200, body: { rerank: describeRerankConfig(config) } }
+  }
+
+  if (action === 'rerank/setup') {
+    const resolved = resolveRerankConfig(config)
+    const model =
+      stringField(body, 'model') ||
+      (resolved.provider === 'local' ? resolved.model : DEFAULT_RERANK_MODEL)
+
+    const job = manager.create('rerank')
+    manager.start(job.id, async ({ log, signal }) => {
+      log(`Preparing reranker model ${model}…`)
+      const result = await setupLocalReranker(model, (message) => log(message))
+      if (signal.aborted) return { ...result, cancelled: true }
+      log(`Reranker ready (${result.ready ? result.path : 'not cached'})`)
+      return result
+    })
+    return { status: 202, body: { job } }
+  }
+
+  if (action === 'rerank/test') {
+    const query = stringField(body, 'query') || 'wiki search'
+    const snap = await deps.snapshot()
+    const index = deps.linkIndex?.() ?? buildLinkIndex(config.wikiDir)
+    const candidates = snap.pages
+      .filter((page) => page.category !== 'inbox')
+      .slice(0, 6)
+      .map((page) => {
+        const id = idFromPagePath(page.path)
+        return {
+          id,
+          title: page.title,
+          summary: page.summary,
+          text: (index.get(id)?.body ?? page.summary).slice(0, 600),
+        }
+      })
+
+    if (candidates.length === 0) {
+      candidates.push(
+        {
+          id: 'sample/logic',
+          title: 'Logic',
+          summary: 'The study of valid inference.',
+          text: 'Logic is the study of valid inference and the rules of reasoning.',
+        },
+        {
+          id: 'sample/bananas',
+          title: 'Bananas',
+          summary: 'A fruit.',
+          text: 'Bananas are yellow and grow in bunches.',
+        },
+        {
+          id: 'sample/gamma',
+          title: 'Gamma',
+          summary: 'A note about gamma.',
+          text: 'Gamma covers a third topic entirely.',
+        },
+      )
+    }
+
+    const outcome = await rerankCandidates(config, query, candidates, { allowDownload: false })
+    const resolved = resolveRerankConfig(config)
+    return {
+      status: 200,
+      body: {
+        provider: outcome.provider,
+        model: outcome.model,
+        used: outcome.used,
+        reason: outcome.reason,
+        latencyMs: outcome.latencyMs,
+        settings: {
+          provider: resolved.provider,
+          model: resolved.model,
+          topN: resolved.topN,
+          candidates: resolved.candidates,
+          hasApiKey: Boolean(resolved.apiKey),
+        },
+        results: outcome.candidates.map((candidate) => ({
+          id: candidate.id,
+          title: candidate.title,
+          score: candidate.score,
+        })),
+      },
+    }
   }
 
   if (action === 'preview') {

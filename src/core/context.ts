@@ -1,6 +1,13 @@
 import type { AxiomConfig } from '../config/index.js'
 import { buildLinkIndex, type PageLinkEntry } from './links.js'
 import { searchWiki } from './search.js'
+import {
+  rerankCandidates,
+  resolveRerankConfig,
+  type RerankCandidate,
+  type RerankProvider,
+  type ResolvedRerank,
+} from './rerank.js'
 
 /**
  * Deliberate retrieval for query answering.
@@ -33,6 +40,13 @@ export interface AssembledContext {
   text: string
   estimatedTokens: number
   truncated: boolean
+  /** Which reranker (if any) shaped the seed order. */
+  rerank?: {
+    provider: RerankProvider
+    model: string
+    used: boolean
+    reason?: string
+  }
 }
 
 export interface AssembleOptions {
@@ -48,6 +62,10 @@ export interface AssembleOptions {
   index?: Map<string, PageLinkEntry>
   /** Bypass hybrid search (used by tests and by callers that already ranked). */
   seeds?: string[]
+  /** Override or disable reranking. `false` keeps the hybrid order. */
+  rerank?: false | (Partial<ResolvedRerank> & { allowDownload?: boolean })
+  /** Progress messages (model download, reranker fallback). */
+  onStatus?: (message: string) => void
 }
 
 const DEFAULT_LIMIT = 6
@@ -142,18 +160,65 @@ export async function assembleContext(
   const inbound = buildInbound(pages)
 
   const seeds: Array<{ id: string; score: number; sectionTitle?: string }> = []
+  let rerankInfo: AssembledContext['rerank']
 
   if (options.seeds) {
     options.seeds.forEach((id, position) => {
       if (pages.has(id)) seeds.push({ id, score: 1 - position * 0.05 })
     })
   } else {
+    const overrides =
+      options.rerank && typeof options.rerank === 'object' ? options.rerank : {}
+    const settings = { ...resolveRerankConfig(config), ...overrides }
+    const rerankEnabled = options.rerank !== false && settings.provider !== 'none'
+    const searchLimit = rerankEnabled ? Math.max(settings.candidates, limit) : limit
+
+    if (options.rerank !== false && settings.provider === 'none') {
+      rerankInfo = { provider: 'none', model: '', used: false }
+    }
+
     try {
-      const results = await searchWiki(config.wikiDir, question, { limit, config })
-      for (const result of results) {
-        const id = idFromPath(result.path)
-        if (!pages.has(id)) continue
-        seeds.push({ id, score: result.score, sectionTitle: result.sectionTitle })
+      const results = await searchWiki(config.wikiDir, question, { limit: searchLimit, config })
+
+      if (rerankEnabled && results.length > 1) {
+        const candidates: RerankCandidate[] = results.map((result) => ({
+          id: idFromPath(result.path),
+          title: result.title,
+          summary: result.summary,
+          text: result.excerpt,
+          sectionTitle: result.sectionTitle,
+          score: result.score,
+        }))
+        const outcome = await rerankCandidates(config, question, candidates, {
+          ...settings,
+          allowDownload: Boolean(overrides.allowDownload),
+          onStatus: options.onStatus,
+        })
+        rerankInfo = {
+          provider: outcome.provider,
+          model: outcome.model,
+          used: outcome.used,
+          reason: outcome.reason,
+        }
+        if (!outcome.used && outcome.reason) {
+          options.onStatus?.(`Reranker unavailable: ${outcome.reason}`)
+        }
+
+        const ranked = outcome.used ? outcome.candidates : candidates
+        for (const candidate of ranked.slice(0, limit)) {
+          if (!pages.has(candidate.id)) continue
+          seeds.push({
+            id: candidate.id,
+            score: candidate.score ?? 1 - seeds.length * 0.05,
+            sectionTitle: candidate.sectionTitle,
+          })
+        }
+      } else {
+        for (const result of results) {
+          const id = idFromPath(result.path)
+          if (!pages.has(id)) continue
+          seeds.push({ id, score: result.score, sectionTitle: result.sectionTitle })
+        }
       }
     } catch {
       // Retrieval failure is not fatal; the caller still has the agent tools.
@@ -206,6 +271,7 @@ export async function assembleContext(
     text,
     estimatedTokens: Math.ceil(text.length / CHARS_PER_TOKEN),
     truncated: budget.truncated,
+    ...(rerankInfo ? { rerank: rerankInfo } : {}),
   }
 }
 

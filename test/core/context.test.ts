@@ -27,6 +27,7 @@ describe('context assembly', () => {
       provider: 'openai',
       apiKey: 'test',
       model: 'gpt-4o-mini',
+      rerank: { provider: 'none' },
     } as unknown as AxiomConfig
 
     writePage(
@@ -115,5 +116,32 @@ describe('context assembly', () => {
     })
     expect(context.sources[0]?.id).toBe('entities/alan-turing')
     expect(context.sources[0]?.origin).toBe('search')
+  })
+
+  it('can disable reranking explicitly', async () => {
+    const context = await assembleContext(config, 'computability', { rerank: false })
+    expect(context.rerank).toBeUndefined()
+    expect(context.sources.length).toBeGreaterThan(0)
+  })
+
+  it('falls back with a reason when the local reranker is not ready', async () => {
+    const modelsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'axiom-context-models-'))
+    const previous = process.env.AXIOM_MODELS_DIR
+    process.env.AXIOM_MODELS_DIR = modelsDir
+    try {
+      const context = await assembleContext(
+        { ...config, rerank: { provider: 'local', model: 'org/not-cached' } },
+        'computability',
+        { rerank: { allowDownload: false } },
+      )
+      expect(context.rerank?.provider).toBe('local')
+      expect(context.rerank?.used).toBe(false)
+      expect(context.rerank?.reason).toMatch(/not downloaded/)
+      expect(context.sources.length).toBeGreaterThan(0)
+    } finally {
+      if (previous === undefined) delete process.env.AXIOM_MODELS_DIR
+      else process.env.AXIOM_MODELS_DIR = previous
+      fs.rmSync(modelsDir, { recursive: true, force: true })
+    }
   })
 })

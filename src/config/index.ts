@@ -2,6 +2,18 @@ import Conf from 'conf'
 import fs from 'fs'
 import path from 'path'
 
+export interface RerankConfig {
+  provider: 'none' | 'local' | 'llm' | 'cohere'
+  /** Local Hugging Face model id (or a preset key); Cohere model id for cohere. */
+  model?: string
+  /** Final number of seeds kept for the evidence block. */
+  topN?: number
+  /** Candidates pulled from hybrid search before reranking. */
+  candidates?: number
+  /** Cohere API key. Never exposed over the API. */
+  apiKey?: string
+}
+
 export interface AxiomConfig {
   provider: 'google' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq' | 'mistral' | 'xai' | 'ollama'
   apiKey: string
@@ -38,6 +50,8 @@ export interface AxiomConfig {
     model?: string
     dimensions?: number
   }
+  /** Candidate reranking before the evidence block is built. */
+  rerank?: RerankConfig
 }
 
 export type ConfigScope = 'local' | 'global'
@@ -80,7 +94,8 @@ function getGlobalConfig(): AxiomConfig | null {
   const ollamaNumCtx = store.get('ollamaNumCtx')
   const obsidianCompat = store.get('obsidianCompat')
   const embeddings = store.get('embeddings')
-  return { provider, apiKey: resolvedApiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings }
+  const rerank = store.get('rerank')
+  return { provider, apiKey: resolvedApiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings, rerank }
 }
 
 let _cachedLocalConfigPath: string | null | undefined = undefined
@@ -124,13 +139,14 @@ interface LocalConfigFile {
   ollamaNumCtx?: number
   obsidianCompat?: boolean
   embeddings?: AxiomConfig['embeddings']
+  rerank?: AxiomConfig['rerank']
 }
 
 function readLocalConfig(configPath: string): AxiomConfig | null {
   try {
     const raw = fs.readFileSync(configPath, 'utf-8')
     const parsed: LocalConfigFile = JSON.parse(raw)
-    const { provider, apiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings } = parsed
+    const { provider, apiKey, providerApiKeys, auth, model, wikiDir, rawDir, ollamaBaseUrl, ollamaNumCtx, obsidianCompat, embeddings, rerank } = parsed
     const resolvedApiKey = resolveProviderCredential(provider, apiKey, providerApiKeys, auth)
 
     if (!provider || !model || !wikiDir || !rawDir) return null
@@ -151,6 +167,7 @@ function readLocalConfig(configPath: string): AxiomConfig | null {
       ollamaNumCtx,
       obsidianCompat,
       embeddings,
+      rerank,
     }
   } catch {
     return null

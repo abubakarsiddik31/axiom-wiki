@@ -11,6 +11,7 @@ interface Pair {
   question: string
   answer: string
   sources: ContextSource[]
+  rerank?: ContextPayload['rerank']
 }
 
 const ORIGIN_LABEL: Record<ContextSource['origin'], string> = {
@@ -19,7 +20,20 @@ const ORIGIN_LABEL: Record<ContextSource['origin'], string> = {
   backlink: 'links here',
 }
 
-function SourceList({ sources }: { sources: ContextSource[] }) {
+function rerankLabel(rerank: ContextPayload['rerank'] | undefined): string | null {
+  if (!rerank) return null
+  if (rerank.used) return `reranked · ${rerank.provider}`
+  if (rerank.provider === 'none') return 'reranker off'
+  return 'hybrid order'
+}
+
+function SourceList({
+  sources,
+  rerank,
+}: {
+  sources: ContextSource[]
+  rerank?: ContextPayload['rerank']
+}) {
   if (sources.length === 0) return null
   return (
     <section className="mt-4 border-t border-line pt-3" aria-label="Retrieved context">
@@ -27,6 +41,11 @@ function SourceList({ sources }: { sources: ContextSource[] }) {
         <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-graphite">
           grounded in {sources.length} {sources.length === 1 ? 'page' : 'pages'}
         </span>
+        {rerankLabel(rerank) ? (
+          <span className="border border-line px-1.5 py-0.5 font-mono text-[0.56rem] uppercase tracking-[0.08em] text-graphite">
+            {rerankLabel(rerank)}
+          </span>
+        ) : null}
       </div>
       <ul className="grid gap-1 md:grid-cols-2">
         {sources.map((source) => (
@@ -72,12 +91,21 @@ export function Query() {
   useEffect(() => {
     if (!job || job.status !== 'succeeded' || committed.current.has(job.id)) return
     committed.current.add(job.id)
-    const result = job.result as { answer?: string; context?: ContextSource[] } | null
+    const result = job.result as {
+      answer?: string
+      context?: ContextSource[]
+      rerank?: ContextPayload['rerank']
+    } | null
     const answer = result?.answer || text
     if (answer) {
       setPairs((prev) => [
         ...prev,
-        { question: asked || question, answer, sources: result?.context ?? [] },
+        {
+          question: asked || question,
+          answer,
+          sources: result?.context ?? [],
+          rerank: result?.rerank ?? null,
+        },
       ].slice(-10))
     }
   }, [job, text, asked, question])
@@ -224,8 +252,18 @@ export function Query() {
               <span>
                 {peek.sources.length} pages · ~{peek.estimatedTokens} tokens
               </span>
+              {rerankLabel(peek.rerank) ? (
+                <span className="border border-line px-1.5 py-0.5 text-[0.56rem] tracking-[0.08em]">
+                  {rerankLabel(peek.rerank)}
+                </span>
+              ) : null}
               {peek.truncated ? <Badge tone="amber">truncated</Badge> : null}
             </div>
+            {peek.rerank && !peek.rerank.used && peek.rerank.reason ? (
+              <p className="mb-2 font-mono text-[0.62rem] leading-relaxed text-amber">
+                {peek.rerank.reason}
+              </p>
+            ) : null}
             <SourceList sources={peek.sources} />
           </div>
         ) : null}
@@ -257,7 +295,7 @@ export function Query() {
             <div className="mt-2 whitespace-pre-wrap text-[0.88rem] leading-relaxed text-graphite">
               {pair.answer}
             </div>
-            <SourceList sources={pair.sources} />
+            <SourceList sources={pair.sources} rerank={pair.rerank} />
           </article>
         ))}
 

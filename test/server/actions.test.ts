@@ -53,6 +53,7 @@ function scaffold(): { wikiDir: string; config: AxiomConfig } {
       provider: 'openai',
       apiKey: 'secret-key',
       model: 'gpt-4o-mini',
+      rerank: { provider: 'none' },
     } as unknown as AxiomConfig,
   }
 }
@@ -308,12 +309,43 @@ describe('read-only action API', () => {
     })
     expect(apply.status).toBe(403)
   })
+
+  it('refuses settings changes and reranker setup', async () => {
+    const save = await fetch(`${base}/api/v1/actions/settings/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1' },
+      body: JSON.stringify({ rerank: { provider: 'none' } }),
+    })
+    expect(save.status).toBe(403)
+
+    const setup = await fetch(`${base}/api/v1/actions/rerank/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1' },
+      body: JSON.stringify({}),
+    })
+    expect(setup.status).toBe(403)
+  })
+
+  it('exposes the reranker settings in the config payload', async () => {
+    const config = await (await fetch(`${base}/api/v1/config`)).json()
+    expect(config.rerank).toMatchObject({
+      provider: 'none',
+      topN: 6,
+      candidates: 24,
+    })
+    expect(config.rerank.presets.map((preset: { key: string }) => preset.key)).toEqual([
+      'fast',
+      'balanced',
+      'multilingual',
+    ])
+  })
 })
 
 describe('page curation actions', () => {
   const { wikiDir, config } = scaffold()
   let server: Server | null = null
   let base = ''
+  let savedConfig: Partial<AxiomConfig> | null = null
 
   beforeAll(async () => {
     // A git repo makes history and scoped commits real rather than mocked.
@@ -332,6 +364,9 @@ describe('page curation actions', () => {
       quiet: true,
       staticDir: false,
       allowWrite: true,
+      saveConfig: (cfg) => {
+        savedConfig = cfg
+      },
     })
     const addr = server.address()
     const port = typeof addr === 'object' && addr ? addr.port : 0
@@ -571,5 +606,49 @@ describe('page curation actions', () => {
 
     const log = fs.readFileSync(path.join(wikiDir, 'wiki/log.md'), 'utf-8')
     expect(log).toContain('maintain')
+  })
+
+  it('saves reranker settings without exposing the key', async () => {
+    const res = await post('settings/save', {
+      rerank: {
+        provider: 'cohere',
+        model: 'rerank-v3.5',
+        topN: 4,
+        candidates: 12,
+        apiKey: 'cohere-secret',
+      },
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.rerank.provider).toBe('cohere')
+    expect(body.rerank.topN).toBe(4)
+    expect(body.rerank.candidates).toBe(12)
+    expect(body.rerank.hasApiKey).toBe(true)
+    expect(JSON.stringify(body)).not.toContain('cohere-secret')
+
+    expect(savedConfig?.rerank).toMatchObject({
+      provider: 'cohere',
+      topN: 4,
+      candidates: 12,
+    })
+
+    const config = await (await fetch(`${base}/api/v1/config`)).json()
+    expect(config.rerank.provider).toBe('cohere')
+    expect(config.rerank.topN).toBe(4)
+    expect(config.rerank.candidates).toBe(12)
+    expect(JSON.stringify(config)).not.toContain('cohere-secret')
+
+    // Leave the shared fixture rerank-free for any later test.
+    const restored = await post('settings/save', { rerank: { provider: 'none' } })
+    expect(restored.status).toBe(200)
+  })
+
+  it('tests the reranker and reports the fallback when it is off', async () => {
+    const res = await post('rerank/test', { query: 'paper' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.provider).toBe('none')
+    expect(body.used).toBe(false)
+    expect(body.results.length).toBeGreaterThan(0)
   })
 })

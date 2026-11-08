@@ -27,7 +27,7 @@ The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ship
 - **Ask** — retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence; optionally in forensic mode, then file the answer as an analysis page. Press **what will it read?** to preview the exact pages and token estimate before asking.
 - **Sources** — list compiled sources, clip a URL, ingest a file from `raw/`, re-ingest, delete, or start a watcher that auto-ingests dropped files.
 - **Integrity** — dead links, orphans, metadata gaps, unresolved contradictions, citation audit, and agent lint. Its **Maintenance** panel previews and applies the same deterministic pass as `axiom-wiki maintain`: backfill missing summaries, adopt orphans, propose duplicates, and optionally create stubs for dead links.
-- **Settings** — provider/model, embeddings status, `obsidianCompat`, forensic mode, and semantic-index rebuild.
+- **Settings** — provider/model, embeddings status, `obsidianCompat`, forensic mode, and semantic-index rebuild. The **Reranker** panel configures the provider (`local`, `llm`, `cohere`, `none`), local model, candidate/top-N limits, and the Cohere key, and can download or test a local model.
 
 Live views listen to `GET /api/v1/events` and refresh when an ingest or agent write lands.
 
@@ -50,7 +50,7 @@ The UI is a client of the same API, which you can call directly:
 | `GET /api/v1/sources` | `{ sources, rawFiles, lock }` |
 | `GET /api/v1/watch` | `{ running, startedAt, lastEvent }` |
 | `GET /api/v1/integrity` | dead links, orphans, metadata gaps, contradictions |
-| `GET /api/v1/config` | provider, model, embeddings status, write mode (no credentials) |
+| `GET /api/v1/config` | provider, model, embeddings status, reranker settings, write mode (no credentials) |
 | `GET /api/v1/events` | SSE `wiki-changed` events |
 | `GET /api/v1/jobs` | `{ jobs }` |
 | `GET /api/v1/jobs/:id` | `{ job }` |
@@ -58,7 +58,9 @@ The UI is a client of the same API, which you can call directly:
 | `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
 | `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
 
-Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
+Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `settings/save`, `rerank/setup`, `rerank/test`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
+
+`settings/save` persists reranker changes to the active config (write mode). `rerank/setup` downloads and caches a local model as a job. `rerank/test` scores a few pages with the current settings without writing.
 
 `maintain` returns the deterministic maintenance plan (missing summaries, orphan links, duplicate candidates, dead links, untagged pages) and stays available in read-only mode. `maintain/apply` writes the safe fixes, rebuilds the index and MOC, appends to the log, and commits; it requires write mode. Pass `createStubs: true` to materialise stub pages for dead links and `refreshStale: true` to refresh summaries that no longer share any content words with the body.
 

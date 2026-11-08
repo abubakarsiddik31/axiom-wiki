@@ -207,6 +207,12 @@ export function HomeScreen() {
         return
       }
 
+      if (parsed.command === 'rerank') {
+        addLog({ text: '  Run: axiom-wiki rerank --status', color: 'gray' })
+        addLog({ text: '  (reranker setup runs outside the shell — use the CLI or Settings)', color: 'gray' })
+        return
+      }
+
       return
     }
 

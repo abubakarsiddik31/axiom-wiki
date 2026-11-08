@@ -7,6 +7,7 @@ import { startMcpServer } from '../src/mcp/server.js'
 import { VERSION } from '../src/version.js'
 import { createAxiomAgent } from '../src/agent/index.js'
 import { getConfig } from '../src/config/index.js'
+import type { RerankConfig } from '../src/config/index.js'
 import { openUrlInBrowser, runAuthCommand } from '../src/auth/command.js'
 import { startServer } from '../src/server/index.js'
 
@@ -295,6 +296,163 @@ program
     } catch (err: unknown) {
       console.error('Export failed:', err instanceof Error ? err.message : String(err))
       process.exit(1)
+    }
+  })
+
+program
+  .command('rerank')
+  .description('Configure, download, or test the candidate reranker')
+  .option('--status', 'show the effective reranker settings')
+  .option('--setup', 'download and cache the configured local model')
+  .option('--test <query>', 'rerank a few pages for a query')
+  .option('--provider <provider>', 'none | local | llm | cohere')
+  .option('--model <model>', 'local model id or preset key (fast, balanced, multilingual); Cohere model id')
+  .option('--top-n <n>', 'seeds kept after reranking')
+  .option('--candidates <n>', 'candidates fetched before reranking')
+  .option('--api-key <key>', 'Cohere API key')
+  .option('--clear-api-key', 'remove the stored Cohere key')
+  .option('--json', 'print JSON')
+  .action(async (opts: {
+    status?: boolean
+    setup?: boolean
+    test?: string
+    provider?: string
+    model?: string
+    topN?: string
+    candidates?: string
+    apiKey?: string
+    clearApiKey?: boolean
+    json?: boolean
+  }) => {
+    requireConfig()
+    const config = getConfig()!
+    const {
+      DEFAULT_RERANK_MODEL,
+      RERANK_PRESETS,
+      describeRerankConfig,
+      localModelStatus,
+      presetForKey,
+      rerankCandidates,
+      resolveRerankConfig,
+      setupLocalReranker,
+    } = await import('../src/core/rerank.js')
+    const { setConfig } = await import('../src/config/index.js')
+
+    const hasSave = Boolean(
+      opts.provider || opts.model || opts.topN || opts.candidates || opts.apiKey || opts.clearApiKey,
+    )
+
+    if (hasSave) {
+      const provider = (opts.provider ?? config.rerank?.provider ?? 'local') as RerankConfig['provider']
+      if (!['none', 'local', 'llm', 'cohere'].includes(provider)) {
+        console.error('Provider must be one of: none, local, llm, cohere.')
+        process.exit(1)
+      }
+      const topN = opts.topN ? Number.parseInt(opts.topN, 10) : undefined
+      const candidates = opts.candidates ? Number.parseInt(opts.candidates, 10) : undefined
+      const rerank: RerankConfig = {
+        provider,
+        ...(opts.model ? { model: opts.model } : {}),
+        ...(topN !== undefined && Number.isFinite(topN) ? { topN } : {}),
+        ...(candidates !== undefined && Number.isFinite(candidates) ? { candidates } : {}),
+        ...(opts.clearApiKey
+          ? {}
+          : opts.apiKey
+            ? { apiKey: opts.apiKey }
+            : config.rerank?.apiKey
+              ? { apiKey: config.rerank.apiKey }
+              : {}),
+      }
+      const resolved = resolveRerankConfig({ ...config, rerank })
+      rerank.topN = resolved.topN
+      rerank.candidates = resolved.candidates
+      setConfig({ rerank })
+      config.rerank = rerank
+      if (!opts.json) {
+        console.log(
+          `Reranker: ${resolved.provider}${resolved.model ? ` · ${resolved.model}` : ''} · ` +
+            `top ${resolved.topN} of ${resolved.candidates}`,
+        )
+      }
+    }
+
+    if (opts.setup) {
+      const resolved = resolveRerankConfig(config)
+      const requested =
+        opts.model || (resolved.provider === 'local' ? resolved.model : DEFAULT_RERANK_MODEL)
+      const model = presetForKey(requested)?.id ?? requested
+      console.log(`Preparing ${model}…`)
+      const result = await setupLocalReranker(model, (message) => console.log(message))
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2))
+      } else {
+        console.log(`Ready: ${result.ready ? 'yes' : 'no'} (${result.path})`)
+      }
+    }
+
+    if (opts.test) {
+      const { searchWiki } = await import('../src/core/search.js')
+      const results = await searchWiki(config.wikiDir, opts.test, { limit: 6, config })
+      const candidates = results.map((result) => ({
+        id: result.path.replace(/^wiki\/pages\//, '').replace(/\.md$/, ''),
+        title: result.title,
+        summary: result.summary,
+        text: result.excerpt,
+        sectionTitle: result.sectionTitle,
+      }))
+      if (candidates.length === 0) {
+        candidates.push(
+          {
+            id: 'sample/logic',
+            title: 'Logic',
+            summary: 'The study of valid inference.',
+            text: 'Logic is the study of valid inference and the rules of reasoning.',
+            sectionTitle: undefined,
+          },
+          {
+            id: 'sample/bananas',
+            title: 'Bananas',
+            summary: 'A fruit.',
+            text: 'Bananas are yellow and grow in bunches.',
+            sectionTitle: undefined,
+          },
+        )
+      }
+      const outcome = await rerankCandidates(config, opts.test, candidates, { allowDownload: false })
+      if (opts.json) {
+        console.log(JSON.stringify(outcome, null, 2))
+      } else {
+        console.log(
+          `Reranker: ${outcome.provider}${outcome.model ? ` · ${outcome.model}` : ''} ` +
+            `(${outcome.used ? 'used' : 'fallback'}, ${outcome.latencyMs}ms)`,
+        )
+        if (!outcome.used && outcome.reason) console.log(`  reason: ${outcome.reason}`)
+        outcome.candidates.forEach((candidate, index) => {
+          console.log(`  ${index + 1}. ${candidate.title} (${(candidate.score ?? 0).toFixed(3)})`)
+        })
+      }
+    }
+
+    if (opts.status || (!hasSave && !opts.setup && !opts.test)) {
+      const described = describeRerankConfig(config)
+      if (opts.json) {
+        console.log(JSON.stringify(described, null, 2))
+      } else {
+        console.log(`Reranker: ${described.provider}`)
+        if (described.model) console.log(`  model: ${described.model}`)
+        console.log(`  keep: ${described.topN} seeds from ${described.candidates} candidates`)
+        if (described.provider === 'cohere') {
+          console.log(`  Cohere key: ${described.hasApiKey ? 'configured' : 'missing'}`)
+        }
+        console.log('  local models:')
+        for (const preset of RERANK_PRESETS) {
+          const status = localModelStatus(preset.id)
+          console.log(
+            `    ${preset.key.padEnd(12)} ${preset.label} · ${preset.sizeMb} MB · ` +
+              `${status.ready ? 'cached' : 'not downloaded'}`,
+          )
+        }
+      }
     }
   })
 

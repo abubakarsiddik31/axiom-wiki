@@ -17,6 +17,12 @@ You can also type questions directly in the interactive shell without the `/quer
 
 After answering, the agent offers to file the answer as an analysis page in `wiki/pages/analyses/`.
 
+## Reranking
+
+Before the agent sees evidence, the query pipeline over-fetches candidates from hybrid search, rescores each `(query, page)` pair with the configured reranker, and keeps the best few before expanding the link graph. The default is a **local cross-encoder** (`Xenova/bge-reranker-base`), so nothing leaves the machine. You can switch to the chat model, Cohere Rerank, or turn it off with `axiom-wiki rerank --provider …` or **Settings → Reranker** in the web app.
+
+If the local model is not downloaded yet, retrieval falls back to the hybrid order and the Ask preview shows why. Run `axiom-wiki rerank --setup` once to download it. See [Rerankers](/reference/rerankers) for the model table and trade-offs.
+
 ## Analyses-first search
 
 The agent checks `wiki/pages/analyses/` first to see if the question has already been answered. Previously filed analysis pages receive a 1.5x boost in search ranking, so they surface ahead of raw entity or concept pages. This means repeat questions are answered faster and more consistently.

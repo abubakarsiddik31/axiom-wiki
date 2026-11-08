@@ -16,6 +16,8 @@ import type {
   PageLinksPayload,
   PagePayload,
   PagesPayload,
+  RerankSettings,
+  RerankTestResult,
   SavePageResult,
   SearchResult,
   SourcesPayload,
@@ -203,6 +205,21 @@ export const api = {
 
   maintainApply: (options: Record<string, unknown> = {}) =>
     runAction<MaintenanceRun>('maintain/apply', options),
+
+  saveSettings: (rerank: {
+    provider?: string
+    model?: string
+    topN?: number
+    candidates?: number
+    apiKey?: string
+    clearApiKey?: boolean
+  }) => runAction<{ rerank: RerankSettings }>('settings/save', { rerank }),
+
+  setupReranker: (model?: string) =>
+    runAction<JobPayload>('rerank/setup', model ? { model } : {}),
+
+  testReranker: (query: string) =>
+    runAction<RerankTestResult>('rerank/test', { query }),
 }
 
 export function jobEventsUrl(id: string): string {

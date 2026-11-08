@@ -127,6 +127,12 @@ export interface ContextPayload {
   estimatedTokens: number
   truncated: boolean
   text: string
+  rerank?: {
+    provider: 'none' | 'local' | 'llm' | 'cohere'
+    model: string
+    used: boolean
+    reason?: string
+  } | null
 }
 
 export interface GraphNode {
@@ -295,6 +301,41 @@ export type MaintenanceRun =
       committed: boolean
     }
 
+export interface RerankPreset {
+  key: 'fast' | 'balanced' | 'multilingual'
+  id: string
+  label: string
+  sizeMb: number
+  languages: string
+}
+
+export interface RerankSettings {
+  provider: 'none' | 'local' | 'llm' | 'cohere'
+  model: string
+  topN: number
+  candidates: number
+  hasApiKey: boolean
+  localReady: boolean
+  localModels: Record<string, boolean>
+  presets: RerankPreset[]
+}
+
+export interface RerankTestResult {
+  provider: 'none' | 'local' | 'llm' | 'cohere'
+  model: string
+  used: boolean
+  reason?: string
+  latencyMs: number
+  settings: {
+    provider: 'none' | 'local' | 'llm' | 'cohere'
+    model: string
+    topN: number
+    candidates: number
+    hasApiKey: boolean
+  }
+  results: Array<{ id: string; title: string; score?: number }>
+}
+
 export interface ConfigPayload {
   provider: string
   model: string
@@ -317,6 +358,7 @@ export interface ConfigPayload {
     } | null
     consistency: { consistent: boolean; reason?: string; message?: string }
   }
+  rerank: RerankSettings
 }
 
 export interface CitationAuditReport {

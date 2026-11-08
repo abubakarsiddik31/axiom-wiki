@@ -201,6 +201,12 @@ export function HomeScreen() {
         return
       }
 
+      if (parsed.command === 'export') {
+        addLog({ text: '  Run: axiom-wiki export --out public', color: 'gray' })
+        addLog({ text: '  (static export runs outside the shell — use the CLI directly)', color: 'gray' })
+        return
+      }
+
       return
     }
 

@@ -1,92 +1,28 @@
-import { marked } from 'marked'
 import type { PageMeta, WikiStatus } from '../core/wiki.js'
 import type { SearchResult } from '../core/search.js'
 import type { WikiGraph, Backlink } from '../core/graph.js'
-import { slugifyHeading } from '../core/slug.js'
+import {
+  escapeHtml,
+  pageHref,
+  renderMarkdown,
+  rewriteCitations,
+  rewriteWikiLinks,
+} from '../core/markdown.js'
+import { renderGraphSvg } from '../core/graph-svg.js'
 
-/**
- * Pure rendering helpers for the read-only web UI.
- * No filesystem or network access — everything here is testable string-in/string-out.
- */
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-/** "entities/alan-turing" -> "/page/entities/alan-turing" */
-export function pageHref(id: string): string {
-  return `/page/${id.replace(/^\/+/, '')}`
+export {
+  escapeHtml,
+  pageHref,
+  renderGraphSvg,
+  renderMarkdown,
+  rewriteCitations,
+  rewriteWikiLinks,
 }
 
 /**
- * Rewrites wiki-links and relative .md links into internal routes,
- * before markdown parsing. Supports:
- *   [[entities/foo]]        -> [entities/foo](/page/entities/foo)
- *   [[foo]]                 -> [foo](/page/entities/foo)   (entities is the default, like graph.ts)
- *   [[entities/foo|Title]]  -> [Title](/page/entities/foo)
- *   [text](../entities/foo.md) / [text](entities/foo.md) -> [text](/page/entities/foo)
+ * HTML chrome for the legacy server-rendered pages. The Markdown rendering
+ * itself lives in `core/markdown.ts` so the static exporter can share it.
  */
-export function rewriteWikiLinks(markdown: string): string {
-  let out = markdown.replace(
-    /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
-    (_m, rawId: string, alias?: string) => {
-      const id = rawId.trim().includes('/') ? rawId.trim() : `entities/${rawId.trim()}`
-      return `[${(alias ?? rawId).trim()}](${pageHref(id)})`
-    },
-  )
-
-  out = out.replace(
-    /\[([^\]]*)\]\(([^)]+\.md)\)/g,
-    (m, text: string, href: string) => {
-      if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(href)) return m // external URL, leave untouched
-      const clean = href
-        .replace(/^\.\//, '')
-        .replace(/^\.\.\//, '')
-        .replace(/^\/?wiki\/pages\//, '')
-        .replace(/\.md$/, '')
-      return `[${text}](${pageHref(clean)})`
-    },
-  )
-
-  return out
-}
-
-export function rewriteCitations(markdown: string): string {
-  return markdown.replace(/\^\[([^\]]+)\]/g, (_match, inner) => {
-    const parts = inner.split('|')
-    const sourcePart = parts[0].trim()
-    const gradePart = parts[1] ? parts[1].replace(/grade:\s*/i, '').trim() : ''
-    const gradeBadge = gradePart ? ` <span class="cite-grade">${escapeHtml(gradePart)}</span>` : ''
-    return `<cite class="citation" title="${escapeHtml(inner)}">↗ ${escapeHtml(sourcePart)}${gradeBadge}</cite>`
-  })
-}
-
-/**
- * Adds stable `id`s to rendered headings using the same slug the search indexer
- * uses for section anchors, so `/page/x#section` links resolve.
- */
-export function addHeadingIds(html: string): string {
-  const seen = new Map<string, number>()
-  return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (match, level: string, inner: string) => {
-    const text = inner.replace(/<[^>]+>/g, '').trim()
-    if (!text) return match
-    const base = slugifyHeading(text) || 'section'
-    const count = seen.get(base) ?? 0
-    seen.set(base, count + 1)
-    const id = count === 0 ? base : `${base}-${count}`
-    return `<h${level} id="${escapeHtml(id)}">${inner}</h${level}>`
-  })
-}
-
-export function renderMarkdown(markdown: string): string {
-  const html = marked.parse(rewriteCitations(rewriteWikiLinks(markdown)), { async: false }) as string
-  return addHeadingIds(html)
-}
 
 const CSS = `
 :root { color-scheme: light dark; }
@@ -318,66 +254,6 @@ export function renderErrorPage(title: string, message: string): string {
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(message)}</p>
 </div>`)
-}
-
-/**
- * Renders the wiki graph as a self-contained SVG.
- * Nodes are placed on a circle grouped by category; edges are chords.
- * Deterministic — same graph, same picture.
- */
-export function renderGraphSvg(graph: WikiGraph): string {
-  const W = 920
-  const H = 720
-  const cx = W / 2
-  const cy = H / 2
-  const R = Math.min(W, H) / 2 - 70
-
-  const nodes = [...graph.nodes.values()].filter((n) => n.exists)
-  const catColor: Record<string, string> = {
-    entities: '#3b5bdb',
-    concepts: '#0ca678',
-    sources: '#f08c00',
-    analyses: '#d6336c',
-  }
-  const colorOf = (cat: string) => catColor[cat] ?? '#868e96'
-
-  nodes.sort((a, b) => (a.category + a.id).localeCompare(b.category + b.id))
-  const pos = new Map<string, { x: number; y: number }>()
-  nodes.forEach((n, i) => {
-    const angle = (i / Math.max(nodes.length, 1)) * 2 * Math.PI - Math.PI / 2
-    pos.set(n.id, { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) })
-  })
-
-  const edges = graph.edges
-    .filter((e) => pos.has(e.from) && pos.has(e.to))
-    .map((e) => {
-      const a = pos.get(e.from)!
-      const b = pos.get(e.to)!
-      return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="currentColor" stroke-opacity="0.18" stroke-width="1"/>`
-    })
-    .join('\n')
-
-  const circles = nodes
-    .map((n) => {
-      const p = pos.get(n.id)!
-      const orphan = graph.orphans.includes(n.id)
-      return `<g>
-<title>${escapeHtml(`${n.title} (${n.category})${orphan ? ' — orphan' : ''}`)}</title>
-<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${orphan ? 7 : 5}" fill="${colorOf(n.category)}" ${orphan ? 'stroke="currentColor" stroke-width="1.5" stroke-dasharray="2,2"' : ''}/>
-<text x="${p.x.toFixed(1)}" y="${(p.y - 11).toFixed(1)}" font-size="9" text-anchor="middle" fill="currentColor" opacity="0.8">${escapeHtml(n.title.slice(0, 24))}</text>
-</g>`
-    })
-    .join('\n')
-
-  const legend = Object.entries(catColor)
-    .map(([cat, c], i) => `<g transform="translate(16, ${20 + i * 18})"><circle r="5" cx="6" cy="-3" fill="${c}"/><text x="18" font-size="12" fill="currentColor">${cat}</text></g>`)
-    .join('')
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Wiki page graph" style="max-width:100%;height:auto;color:inherit">
-${edges}
-${circles}
-${legend}
-</svg>`
 }
 
 export function renderGraphPage(graph: WikiGraph): string {

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
+import path from 'path'
 import { hasConfig } from '../src/config/index.js'
 import { renderApp } from '../src/cli/index.js'
 import { startMcpServer } from '../src/mcp/server.js'
 import { VERSION } from '../src/version.js'
 import { createAxiomAgent } from '../src/agent/index.js'
 import { getConfig } from '../src/config/index.js'
-import { runAuthCommand } from '../src/auth/command.js'
+import { openUrlInBrowser, runAuthCommand } from '../src/auth/command.js'
 import { startServer } from '../src/server/index.js'
 
 function requireConfig() {
@@ -242,6 +243,57 @@ program
       console.log(result.committed ? 'Changes committed.' : 'Changes written (not committed).')
     } catch (err: unknown) {
       console.error('Maintenance failed:', err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('export')
+  .description('Export the wiki as a static HTML site')
+  .option('-o, --out <dir>', 'output directory', 'axiom-site')
+  .option('--title <title>', 'site title shown in the header and page titles')
+  .option('--base-url <url>', 'canonical base URL (enables sitemap and social tags)')
+  .option('--no-graph', 'omit the graph page')
+  .option('--no-search', 'omit the search page and index')
+  .option('--force', 'overwrite a non-empty output directory')
+  .option('--open', 'open the exported site in a browser')
+  .action(async (opts: {
+    out?: string
+    title?: string
+    baseUrl?: string
+    graph?: boolean
+    search?: boolean
+    force?: boolean
+    open?: boolean
+  }) => {
+    requireConfig()
+    const config = getConfig()!
+    const { exportSite } = await import('../src/core/export.js')
+    try {
+      const result = exportSite(config.wikiDir, {
+        outDir: path.resolve(opts.out ?? 'axiom-site'),
+        title: opts.title,
+        baseUrl: opts.baseUrl,
+        graph: opts.graph,
+        search: opts.search,
+        force: opts.force,
+      })
+      const size = result.bytes >= 1024 * 1024
+        ? `${(result.bytes / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(result.bytes / 1024))} KB`
+      console.log(`Exported ${result.pages} pages to ${result.outDir}`)
+      console.log(
+        `  ${Object.keys(result.categories).length} categories · ${result.media} media · ` +
+          `${result.deadLinks} dead links · ${size}`,
+      )
+      if (result.excludedInbox > 0) {
+        console.log(`  ${result.excludedInbox} inbox note(s) left out of the public site`)
+      }
+      const indexPath = path.join(result.outDir, 'index.html')
+      console.log(`  Open: ${indexPath}`)
+      if (opts.open) openUrlInBrowser(indexPath)
+    } catch (err: unknown) {
+      console.error('Export failed:', err instanceof Error ? err.message : String(err))
       process.exit(1)
     }
   })

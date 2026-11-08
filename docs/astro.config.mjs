@@ -56,6 +56,7 @@ export default defineConfig({
             { label: 'review', slug: 'commands/review' },
             { label: 'graph', slug: 'commands/graph' },
             { label: 'serve', slug: 'commands/serve' },
+            { label: 'export', slug: 'commands/export' },
             { label: 'maintain', slug: 'commands/maintain' },
             { label: 'model', slug: 'commands/model' },
             { label: 'status', slug: 'commands/status' },

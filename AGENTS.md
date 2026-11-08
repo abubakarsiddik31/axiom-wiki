@@ -29,7 +29,7 @@ npx tsx bin/axiom-wiki.ts <command>   # e.g., status, query, ingest
 Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: the CLI package lives at the root, the web frontend in `apps/web` (see `pnpm-workspace.yaml`). The system has these main layers:
 
 ### Entry & Routing
-- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `maintain`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
+- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `maintain`, `export`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
 ### Web UI Layer (`src/server/` + `apps/web/`)
@@ -41,7 +41,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 - **`src/server/cache.ts`** — `WikiReadCache`: one snapshot per process, invalidated by a debounced chokidar watcher on `wiki/`. Reads are O(1) after the first request; watcher bursts rebuild once and notify `onChange` listeners (SSE).
 - **`src/core/snapshot.ts`** — `buildWikiSnapshot`: single pass over `wiki/pages` that returns page metadata, the link graph, and the wiki size, so consumers no longer walk and parse the corpus once each.
 - **`src/server/static.ts`** — Serves the built SPA from `dist/web` (or `apps/web/dist`), with hashed-asset caching and `index.html` fallback for client routes. `AXIOM_WEB_DIR` overrides the location.
-- **`src/server/render.ts`** — Pure rendering helpers shared by the API and the legacy SSR fallback: wiki-link rewriting (`[[id]]`, `[[id|title]]`, relative `.md` links → `/page/...`), citations, markdown→HTML via `marked`, and the SVG graph. Unit-tested without sockets.
+- **`src/server/render.ts`** — HTML chrome for the legacy SSR fallback (dashboard, page list, page view, search, graph, error pages). The pure Markdown helpers now live in `src/core/markdown.ts` (wiki-link rewriting, citations, heading ids) and the SVG graph in `src/core/graph-svg.ts`; `render.ts` re-exports them so the API and tests keep one import surface.
 - **`apps/web/`** — Vite + React + TypeScript + Tailwind SPA (`@axiom-wiki/web`). Routes: overview, pages, inbox, page view, page editor (`/new`, `/edit/*`), page history (`/history/*`), search, graph, ask, sources, integrity, settings. Styling follows `DESIGN.md`. `vite build` outputs to the root `dist/web` so the npm package (`files: ["dist"]`) ships it. During development, Vite proxies `/api` to a running `axiom-wiki serve` on `:1717`. `WikiEventsProvider` feeds a version counter into `useAsync`, so SSE changes refresh mounted views.
 
 ### CLI/UI Layer (`src/cli/`)
@@ -62,6 +62,9 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 - **`history.ts`** — Per-page git log, historical content, and unified diffs. Uses `execFileSync` with validated revs; follows renames so pre-rename commits still resolve.
 - **`context.ts`** — Graph-aware retrieval for queries: hybrid search seeds, one-hop expansion through outbound links and backlinks, a character-budgeted citable evidence block, and the source list the Ask UI renders.
 - **`maintenance.ts`** — Deterministic, LLM-free maintenance: `planMaintenance` finds missing summaries, adoptable orphans, duplicate candidates, dead links, and untagged pages; `applyMaintenance` writes the safe fixes (summary backfill, mention/Related links, opt-in stubs); `runMaintenance` adds the lock, derived-artifact refresh, semantic indexing, and scoped git commit. Shared by `axiom-wiki maintain`, `POST /actions/maintain[/apply]`, and the `serve --maintain-interval` timer.
+- **`export.ts`** — Static site exporter: `exportSite(wikiDir, options)` writes a self-contained HTML site (overview, filterable page list, per-page views with TOC/backlinks/pager, inline client-side search, SVG graph, copied media, optional sitemap). Relative links and an embedded index make it work from `file://`; inbox notes are excluded. Used by `axiom-wiki export`.
+- **`markdown.ts`** — Pure Markdown helpers shared by the live server and the exporter: wiki-link/relative-`.md` rewriting (with a pluggable href builder for `/page/...` vs relative `.html`), citation pills, heading ids, and `renderMarkdown`.
+- **`graph-svg.ts`** — Deterministic SVG rendering of `WikiGraph` (used by the legacy graph page and the static export).
 - **`inbox.ts`** — Quick capture: `capture` writes a note into the `inbox` category with a derived title, and `promoteInbox` moves it into a real category while dropping the inbox tag. Triage reuses `renamePage`/`mergePages`, so links follow.
 - **`git.ts`** — `isGitRepo`, `autoCommit`, and `commitPaths` (scoped commits so a browser edit does not sweep unrelated changes).
 - **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `{wikiDir}/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.

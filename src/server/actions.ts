@@ -20,8 +20,10 @@ import { slugifyHeading } from '../core/slug.js'
 import {
   buildLinkIndex,
   linkFirstMentionInBody,
+  type PageLinkEntry,
 } from '../core/links.js'
 import { getPageVersionAt } from '../core/history.js'
+import { assembleContext } from '../core/context.js'
 import {
   PageOpError,
   deletePage,
@@ -44,6 +46,8 @@ export interface ActionDeps {
   allowWrite?: boolean
   /** Refresh server-side caches after a successful write. */
   invalidate?: () => void
+  /** Corpus link index shared with the read cache. */
+  linkIndex?: () => Map<string, PageLinkEntry>
 }
 
 export interface ActionResult {
@@ -347,12 +351,34 @@ export async function handleAction(
         if (a) history.push({ role: 'assistant', content: a })
       }
     }
-    history.push({ role: 'user', content: question })
+
+    // Graph context is opt-out so existing callers keep the old behaviour.
+    const useContext = boolField(body, 'context') ?? true
 
     const job = manager.create('query')
     manager.start(job.id, async ({ delta, log, signal }) => {
+      let evidenceSources: Array<Record<string, unknown>> = []
+      let prompt = question
+
+      if (useContext) {
+        log('Retrieving wiki context…')
+        const evidence = await assembleContext(config, question, {
+          index: deps.linkIndex?.(),
+        })
+        evidenceSources = evidence.sources as unknown as Array<Record<string, unknown>>
+        if (evidence.sources.length > 0) {
+          log(
+            `Context: ${evidence.sources.length} pages (~${evidence.estimatedTokens} tokens${evidence.truncated ? ', truncated' : ''})`,
+          )
+          prompt = `${evidence.text}\n\n## Question\n\n${question}`
+        } else {
+          log('No matching pages — falling back to agent search.')
+        }
+      }
+
       const agent = createAxiomAgent(config, { forensic })
-      const stream = await withRetry(() => agent.stream(history))
+      const messages = [...history, { role: 'user' as const, content: prompt }]
+      const stream = await withRetry(() => agent.stream(messages))
       let answer = ''
       for await (const chunk of stream.textStream) {
         if (signal.aborted) break
@@ -383,9 +409,29 @@ export async function handleAction(
           }
         }
       }
-      return { answer, filed, forensic }
+      return { answer, filed, forensic, context: evidenceSources }
     })
     return { status: 202, body: { job } }
+  }
+
+  if (action === 'context') {
+    const question = stringField(body, 'q') ?? stringField(body, 'question')
+    if (!question) throw new BadRequestError('“q” is required.')
+    const limit = Number(body['limit'])
+    const assembled = await assembleContext(config, question, {
+      limit: Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 20) : undefined,
+      index: deps.linkIndex?.(),
+    })
+    return {
+      status: 200,
+      body: {
+        query: assembled.query,
+        sources: assembled.sources,
+        estimatedTokens: assembled.estimatedTokens,
+        truncated: assembled.truncated,
+        text: assembled.text,
+      },
+    }
   }
 
   if (action === 'lint') {

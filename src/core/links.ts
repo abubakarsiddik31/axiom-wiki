@@ -24,6 +24,8 @@ export interface PageLinkEntry {
   aliases: string[]
   /** Frontmatter summary, used by related-page cards. */
   summary: string
+  /** Raw source files this page cites. */
+  sources: string[]
   /** Normalized outbound wiki-link ids. */
   links: string[]
   /** Markdown body without frontmatter. */
@@ -109,6 +111,7 @@ export function buildLinkIndex(wikiDir: string): Map<string, PageLinkEntry> {
       tags,
       aliases,
       summary: String(data['summary'] ?? ''),
+      sources: Array.isArray(data['sources']) ? (data['sources'] as unknown[]).map(String) : [],
       links: extractLinkIds(body),
       body,
     })

@@ -1,6 +1,7 @@
 import type {
   CitationAuditReport,
   ConfigPayload,
+  ContextPayload,
   GraphPayload,
   IntegrityPayload,
   Job,
@@ -136,6 +137,8 @@ export const api = {
 
   linkMention: (sourceId: string, targetId: string) =>
     runAction<{ linked: boolean }>('link/insert', { sourceId, targetId }),
+
+  context: (q: string) => runAction<ContextPayload>('context', { q }),
 
   search: (query: string, signal?: AbortSignal) =>
     request<{ query: string; results: SearchResult[] }>(

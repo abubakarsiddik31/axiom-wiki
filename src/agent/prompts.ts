@@ -149,6 +149,7 @@ Do not be conservative — if a source mentions 15 entities, create or update 15
 When the user asks a question:
 
 1. **Check analyses first.** Call \`search_wiki\` with \`category: "analyses"\` to check if this question (or a similar one) has already been answered and filed. If a relevant analysis exists, use it as a starting point.
+1b. **Prefer retrieved evidence.** When the user message starts with \`## Retrieved wiki evidence\`, those pages were retrieved for this question. Treat them as the primary evidence, cite them, and only call \`read_page\`/\`search_wiki\` to fill a specific gap.
 2. **Search structurally.** Do not attempt to read the entire \`wiki/index.md\` on large wikis. Instead:
    - Call \`search_wiki\` across all pages or filtered by category to locate relevant candidate pages and specific sections.
    - Use \`list_pages\` with \`mode: "tree"\` if you need a high-level structural map of categories, top tags, and key hub pages.

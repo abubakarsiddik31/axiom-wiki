@@ -108,6 +108,27 @@ export interface SavePageResult {
   created: boolean
 }
 
+export type ContextOrigin = 'search' | 'link' | 'backlink'
+
+export interface ContextSource {
+  id: string
+  title: string
+  category: string
+  summary: string
+  excerpt: string
+  sources: string[]
+  score: number
+  origin: ContextOrigin
+}
+
+export interface ContextPayload {
+  query: string
+  sources: ContextSource[]
+  estimatedTokens: number
+  truncated: boolean
+  text: string
+}
+
 export interface GraphNode {
   path: string
   id: string

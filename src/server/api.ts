@@ -275,6 +275,7 @@ export async function handleApi(
         watch: options.watch,
         allowWrite: options.allowWrite,
         invalidate: options.onWrite,
+        linkIndex: options.linkIndex,
       })
       sendJson(res, result.status, result.body, headOnly)
       return true

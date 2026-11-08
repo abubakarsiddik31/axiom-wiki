@@ -4,12 +4,49 @@ import { Link } from 'react-router-dom'
 import { api, idFromPath, runAction } from '../api'
 import { useAsync, useJobStream, useTitle } from '../hooks'
 import { Badge, ErrorPanel, LoadingPage, PageHeading, SectionLabel } from '../components/ui'
-import { ArrowRightIcon, CheckIcon } from '../components/Icons'
-import type { JobPayload } from '../types'
+import { ArrowRightIcon, CheckIcon, LinkIcon } from '../components/Icons'
+import type { ContextPayload, ContextSource, JobPayload } from '../types'
 
 interface Pair {
   question: string
   answer: string
+  sources: ContextSource[]
+}
+
+const ORIGIN_LABEL: Record<ContextSource['origin'], string> = {
+  search: 'matched',
+  link: 'linked',
+  backlink: 'links here',
+}
+
+function SourceList({ sources }: { sources: ContextSource[] }) {
+  if (sources.length === 0) return null
+  return (
+    <section className="mt-4 border-t border-line pt-3" aria-label="Retrieved context">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-graphite">
+          grounded in {sources.length} {sources.length === 1 ? 'page' : 'pages'}
+        </span>
+      </div>
+      <ul className="grid gap-1 md:grid-cols-2">
+        {sources.map((source) => (
+          <li key={source.id} className="flex items-baseline gap-2">
+            <LinkIcon size={10} className="shrink-0 text-graphite" />
+            <Link
+              to={`/page/${source.id}`}
+              className="truncate text-[0.76rem] text-ghost hover:text-cyan"
+              title={source.summary || source.id}
+            >
+              {source.title}
+            </Link>
+            <span className="shrink-0 font-mono text-[0.56rem] uppercase tracking-[0.08em] text-graphite">
+              {ORIGIN_LABEL[source.origin]}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
 }
 
 export function Query() {
@@ -17,11 +54,14 @@ export function Query() {
   const [question, setQuestion] = useState('')
   const [asked, setAsked] = useState('')
   const [forensic, setForensic] = useState(false)
+  const [useContext, setUseContext] = useState(true)
   const [pairs, setPairs] = useState<Pair[]>([])
   const [jobId, setJobId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filed, setFiled] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [peek, setPeek] = useState<ContextPayload | null>(null)
+  const [peeking, setPeeking] = useState(false)
   const committed = useRef<Set<string>>(new Set())
 
   const { job, lines, text } = useJobStream(jobId)
@@ -32,12 +72,12 @@ export function Query() {
   useEffect(() => {
     if (!job || job.status !== 'succeeded' || committed.current.has(job.id)) return
     committed.current.add(job.id)
-    const result = job.result as { answer?: string } | null
+    const result = job.result as { answer?: string; context?: ContextSource[] } | null
     const answer = result?.answer || text
     if (answer) {
       setPairs((prev) => [
         ...prev,
-        { question: asked || question, answer },
+        { question: asked || question, answer, sources: result?.context ?? [] },
       ].slice(-10))
     }
   }, [job, text, asked, question])
@@ -48,17 +88,33 @@ export function Query() {
     if (!trimmed || running || !writeMode) return
     setError(null)
     setFiled(null)
+    setPeek(null)
     setAsked(trimmed)
     try {
       const { job: created } = await runAction<JobPayload>('query', {
         question: trimmed,
         forensic,
-        history: pairs,
+        history: pairs.map(({ question: q, answer: a }) => ({ question: q, answer: a })),
+        context: useContext,
       })
       setJobId(created.id)
       setQuestion('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function previewContext() {
+    const trimmed = question.trim()
+    if (!trimmed || peeking) return
+    setPeeking(true)
+    setError(null)
+    try {
+      setPeek(await api.context(trimmed))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPeeking(false)
     }
   }
 
@@ -89,7 +145,7 @@ export function Query() {
       <PageHeading
         eyebrow="Ask"
         title="Query the wiki"
-        description="Streams an answer from the same agent the CLI uses. Answers cite wiki pages; file one as an analysis page when it is worth keeping."
+        description="Retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence. Answers cite pages; file one as an analysis when it is worth keeping."
         actions={
           <div className="flex items-center gap-2">
             <Badge tone={forensic ? 'cyan' : 'default'}>{forensic ? 'forensic' : 'standard'}</Badge>
@@ -122,16 +178,36 @@ export function Query() {
             disabled={!writeMode || running}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-graphite">
-              <input
-                type="checkbox"
-                checked={forensic}
-                onChange={(event) => setForensic(event.target.checked)}
-                disabled={!writeMode || running}
-                className="accent-cyan"
-              />
-              strict grounded mode
-            </label>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="inline-flex cursor-pointer items-center gap-2 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-graphite">
+                <input
+                  type="checkbox"
+                  checked={useContext}
+                  onChange={(event) => setUseContext(event.target.checked)}
+                  disabled={!writeMode || running}
+                  className="accent-cyan"
+                />
+                graph context
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-graphite">
+                <input
+                  type="checkbox"
+                  checked={forensic}
+                  onChange={(event) => setForensic(event.target.checked)}
+                  disabled={!writeMode || running}
+                  className="accent-cyan"
+                />
+                strict grounded mode
+              </label>
+              <button
+                type="button"
+                onClick={() => void previewContext()}
+                disabled={running || peeking || !question.trim()}
+                className="font-mono text-[0.62rem] uppercase tracking-[0.1em] text-graphite underline-offset-4 hover:text-cyan hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {peeking ? 'reading…' : 'what will it read?'}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={!writeMode || running || !question.trim()}
@@ -141,6 +217,18 @@ export function Query() {
             </button>
           </div>
         </form>
+
+        {peek ? (
+          <div className="mt-4 border-t border-line pt-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-graphite">
+              <span>
+                {peek.sources.length} pages · ~{peek.estimatedTokens} tokens
+              </span>
+              {peek.truncated ? <Badge tone="amber">truncated</Badge> : null}
+            </div>
+            <SourceList sources={peek.sources} />
+          </div>
+        ) : null}
       </div>
 
       {running ? (
@@ -169,6 +257,7 @@ export function Query() {
             <div className="mt-2 whitespace-pre-wrap text-[0.88rem] leading-relaxed text-graphite">
               {pair.answer}
             </div>
+            <SourceList sources={pair.sources} />
           </article>
         ))}
 

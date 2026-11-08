@@ -194,6 +194,20 @@ describe('action API', () => {
     expect(res.status).toBe(404)
   })
 
+  it('previews the graph context for a question', async () => {
+    const res = await fetch(`${base}/api/v1/actions/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: 'paper' }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body.sources)).toBe(true)
+    expect(body.sources.length).toBeGreaterThan(0)
+    expect(body.text).toContain('## Retrieved wiki evidence')
+    expect(body.estimatedTokens).toBeGreaterThan(0)
+  })
+
   it('opens the wiki event stream', async () => {
     const controller = new AbortController()
     const res = await fetch(`${base}/api/v1/events`, { signal: controller.signal })
@@ -242,6 +256,16 @@ describe('read-only action API', () => {
   it('still serves read-only endpoints', async () => {
     expect((await fetch(`${base}/api/v1/pages`)).status).toBe(200)
     expect((await fetch(`${base}/api/v1/integrity`)).status).toBe(200)
+  })
+
+  it('previews graph context in read-only mode', async () => {
+    const res = await fetch(`${base}/api/v1/actions/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: 'paper' }),
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).sources.length).toBeGreaterThan(0)
   })
 
   it('does not expose the job queue', async () => {

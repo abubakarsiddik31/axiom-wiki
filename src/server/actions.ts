@@ -8,6 +8,7 @@ import { setConfig } from '../config/index.js'
 import { createAxiomAgent } from '../agent/index.js'
 import { clipUrl } from '../core/clip.js'
 import { ingest, type IngestRequest } from '../core/ingest.js'
+import { planImport, runImport, type ImportRequest } from '../core/import.js'
 import { indexWikiPage, persistOrama, reindexWiki } from '../core/indexing.js'
 import { deletePageChunks } from '../core/search/orama-store.js'
 import { markForReingest, removeSource } from '../core/sources.js'
@@ -98,6 +99,8 @@ export interface ActionResult {
 const WRITE_ACTIONS = new Set([
   'ingest',
   'clip',
+  'import/plan',
+  'import/run',
   'query',
   'sources/delete',
   'sources/reingest',
@@ -389,6 +392,50 @@ export async function handleAction(
       const result = await ingest(config, { file: clipped.filename }, { onStatus: log, signal })
       return { clip: clipped, ingest: result }
     })
+    return { status: 202, body: { job } }
+  }
+
+  if (action === 'import/plan' || action === 'import/run') {
+    const paths = stringArrayField(body, 'paths') ?? []
+    const urls = stringArrayField(body, 'urls') ?? []
+    const from = stringArrayField(body, 'from') ?? []
+
+    if (paths.length > 200) throw new BadRequestError('Too many paths in one import (max 200).')
+    if (from.length > 50) throw new BadRequestError('Too many list files in one import (max 50).')
+    if (urls.length > 5000) throw new BadRequestError('Too many URLs in one import (max 5000).')
+
+    const clamp = (value: number | undefined, min: number, max: number, fallback: number) =>
+      Math.min(max, Math.max(min, value ?? fallback))
+
+    const request: ImportRequest = {
+      paths,
+      urls,
+      from,
+      includeMedia: boolField(body, 'includeMedia') ?? false,
+      urlLimit: clamp(numberField(body, 'urlLimit'), 1, 5000, 200),
+      fileLimit: clamp(numberField(body, 'fileLimit'), 1, 20000, 2000),
+    }
+
+    if (action === 'import/plan') {
+      return { status: 200, body: { plan: planImport(config, request) } }
+    }
+
+    // Bulk import from the browser always copies. Moving files out of a vault
+    // is a CLI-only affordance; a mis-click should not delete originals.
+    const busy = requireLock(config)
+    if (busy) return busy
+
+    const ingestAfter = boolField(body, 'ingest') ?? true
+    const context = stringField(body, 'context')
+
+    const job = manager.create('import')
+    manager.start(job.id, ({ log, signal }) =>
+      runImport(
+        config,
+        { ...request, move: false, ingest: ingestAfter, context },
+        { onStatus: log, signal },
+      ),
+    )
     return { status: 202, body: { job } }
   }
 

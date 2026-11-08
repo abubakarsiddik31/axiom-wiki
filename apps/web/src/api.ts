@@ -22,6 +22,8 @@ import type {
   ScoutItem,
   ScoutPayload,
   ScoutShareResult,
+  ImportPlan,
+  ImportRequest,
   SearchResult,
   SourcesPayload,
   ThreadAskResult,
@@ -203,6 +205,12 @@ export const api = {
   startWatch: () => runAction<WatchPayload>('watch/start', {}),
 
   stopWatch: () => runAction<WatchPayload>('watch/stop', {}),
+
+  importPlan: (request: ImportRequest) =>
+    runAction<{ plan: ImportPlan }>('import/plan', request),
+
+  runImport: (request: ImportRequest & { ingest?: boolean; context?: string }) =>
+    runAction<JobPayload>('import/run', request),
 
   config: (signal?: AbortSignal) => request<ConfigPayload>('/api/v1/config', signal),
 

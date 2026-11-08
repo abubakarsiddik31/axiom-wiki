@@ -109,6 +109,12 @@ describe('url normalization', () => {
     ).toBe('https://example.com/post?id=7')
   })
 
+  it('keeps a non-default port', () => {
+    expect(normalizeUrl('http://127.0.0.1:8899/notes?utm_source=x')).toBe(
+      'http://127.0.0.1:8899/notes',
+    )
+  })
+
   it('rejects non-http links', () => {
     expect(() => normalizeUrl('file:///etc/passwd')).toThrow(/http/)
   })

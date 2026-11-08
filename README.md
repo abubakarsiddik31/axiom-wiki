@@ -102,6 +102,12 @@ axiom-wiki clip https://example.com/article
 axiom-wiki ingest https://youtu.be/zjkBMFhNj_g   # transcript, needs yt-dlp
 ```
 
+*Or bring a whole library in at once — folders, bookmarks, Readwise/Pocket exports:*
+```bash
+axiom-wiki import ~/ObsidianVault ~/Downloads --include-media
+axiom-wiki import --from ~/bookmarks.html --dry-run   # plan first
+```
+
 ### 3. Or Auto-Wiki an Entire Codebase
 Generate architectural blueprints, module guides, and domain concepts for any project folder:
 ```bash
@@ -153,6 +159,7 @@ Run `axiom-wiki serve` to launch the Axiom web app (`http://127.0.0.1:1717`), bu
 * **Overview, pages, page view, search, and graph** — a dense, keyboard-friendly browser UI over the same Markdown on disk.
 * **Curation** — create, edit, rename, merge, delete, and restore pages; renaming rewrites every inbound link, and each page keeps a git-backed history with diffs.
 * **Capture inbox** — jot a thought or URL with no ceremony, then promote it into a category or merge it into an existing page when you know where it belongs.
+* **Bulk import** — point `axiom-wiki import` or the **Import** page at an Obsidian vault, a Notion export, a downloads folder, or a bookmarks/Readwise export. It plans first (duplicates by content, skipped junk, exact `raw/` names), then stages and compiles everything through the normal ingest pipeline.
 * **Conversations (Ask)** — talk to the wiki like a chat app. Threads are saved, keep their context across turns, rewrite follow-ups into standalone queries before retrieval, and cite the pages they read. File a whole conversation into `analyses/` when it is worth keeping.
 * **Self-maintenance** — backfill missing summaries, adopt orphan pages through existing mentions, and surface duplicates; run it on demand or on a schedule. Duplicates are proposed, never auto-merged.
 * **Always-on intake (Scout)** — hand the wiki a link or note from a phone share sheet, `curl`, a drop folder, a pasted thread, or an agent tool call. Scout queues it, clips it, compiles it, and applies your `#tags`. The queue survives restarts, failed items retry, and the share listener is token-gated.

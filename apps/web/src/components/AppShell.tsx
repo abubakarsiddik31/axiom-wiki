@@ -18,6 +18,7 @@ import {
   ScoutIcon,
   ShieldIcon,
   SlidersIcon,
+  UploadIcon,
 } from './Icons'
 import { JobTrayLive } from './JobTray'
 
@@ -28,6 +29,7 @@ const NAV = [
   { to: '/scout', label: 'Scout', icon: ScoutIcon, end: false },
   { to: '/ask', label: 'Ask', icon: AskIcon, end: false },
   { to: '/sources', label: 'Sources', icon: DatabaseIcon, end: false },
+  { to: '/import', label: 'Import', icon: UploadIcon, end: false },
   { to: '/graph', label: 'Graph', icon: GraphIcon, end: false },
   { to: '/integrity', label: 'Integrity', icon: ShieldIcon, end: false },
   { to: '/settings', label: 'Settings', icon: SlidersIcon, end: false },
@@ -173,7 +175,7 @@ export function AppShell() {
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface/40 lg:flex">
         <LinkBrand />
         <SearchForm />
-        <nav aria-label="Primary" className="flex-1 py-1">
+        <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto py-1">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => navClass(isActive)}>
               <Icon size={15} className="shrink-0 opacity-80" />
@@ -235,7 +237,7 @@ export function AppShell() {
               </button>
             </div>
             <SearchForm onNavigate={() => setDrawerOpen(false)} />
-            <nav aria-label="Primary mobile" className="flex-1 py-1">
+            <nav aria-label="Primary mobile" className="min-h-0 flex-1 overflow-y-auto py-1">
               {NAV.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className={({ isActive }) => navClass(isActive)}>
                   <Icon size={15} className="shrink-0 opacity-80" />

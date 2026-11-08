@@ -213,13 +213,16 @@ export function normalizeUrl(raw: string): string {
     throw new Error(`Only http(s) links can be shared: ${raw}`)
   }
 
-  const host = url.hostname.toLowerCase().replace(/^www\./i, '')
+  const hostname = url.hostname.toLowerCase().replace(/^www\./i, '')
+  // Keep a non-default port: `http://127.0.0.1:8899/a` is not the same link as
+  // `http://127.0.0.1/a`, and local servers are a real use case.
+  const host = url.port ? `${hostname}:${url.port}` : hostname
   let pathname = url.pathname
 
   // YouTube has several share shapes; keep one canonical watch URL.
-  if (host === 'youtu.be' || host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+  if (hostname === 'youtu.be' || hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'music.youtube.com') {
     const id =
-      host === 'youtu.be'
+      hostname === 'youtu.be'
         ? pathname.slice(1).split('/')[0]
         : url.searchParams.get('v') ??
           (pathname.match(/^\/(?:shorts|live|embed)\/([\w-]+)/)?.[1] ?? '')

@@ -7,6 +7,7 @@ import { PageView } from './pages/PageView'
 import { Search } from './pages/Search'
 import { Graph } from './pages/Graph'
 import { Sources } from './pages/Sources'
+import { Import } from './pages/Import'
 import { Query } from './pages/Query'
 import { Integrity } from './pages/Integrity'
 import { Settings } from './pages/Settings'
@@ -33,6 +34,7 @@ export function App() {
         <Route path="ask" element={<Query />} />
         <Route path="ask/:threadId" element={<Query />} />
         <Route path="sources" element={<Sources />} />
+        <Route path="import" element={<Import />} />
         <Route path="integrity" element={<Integrity />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />

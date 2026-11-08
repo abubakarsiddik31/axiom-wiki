@@ -18,6 +18,11 @@ function requireConfig() {
   }
 }
 
+/** Commander collector for repeatable options (`--url a --url b`). */
+function collect(value: string, previous: string[] = []): string[] {
+  return [...previous, value]
+}
+
 const program = new Command()
   .name('axiom-wiki')
   .description('The wiki that maintains itself.')
@@ -67,6 +72,102 @@ program
   .action((file: string | undefined, opts: { interactive?: boolean; lang?: string }) => {
     requireConfig()
     renderApp({ name: 'ingest', file, interactive: opts.interactive, lang: opts.lang })
+  })
+
+program
+  .command('import [paths...]')
+  .description('Bulk import files, folders, or URL lists into raw/ and compile them')
+  .option('--url <url>', 'a URL to clip (repeatable)', collect, [] as string[])
+  .option('--from <file>', 'read URLs from a .txt, .csv, .json, or bookmarks .html file (repeatable)', collect, [] as string[])
+  .option('--include-media', 'include PDFs and images found inside folders')
+  .option('--move', 'move files into raw/ instead of copying them')
+  .option('--no-ingest', 'stage sources without compiling them')
+  .option('--dry-run', 'print the plan and stop')
+  .option('--context <text>', 'extra framing passed to the ingest prompt')
+  .option('--limit <n>', 'maximum URLs per run', '200')
+  .option('--file-limit <n>', 'maximum files per run', '2000')
+  .option('--json', 'print the plan or run result as JSON')
+  .action(async (paths: string[], opts: {
+    url?: string[]
+    from?: string[]
+    includeMedia?: boolean
+    move?: boolean
+    ingest?: boolean
+    dryRun?: boolean
+    context?: string
+    limit?: string
+    fileLimit?: string
+    json?: boolean
+  }) => {
+    requireConfig()
+    const config = getConfig()
+    if (!config) return
+
+    const { formatImportPlan, planImport, runImport } = await import('../src/core/import.js')
+    const urlLimit = Number.parseInt(opts.limit ?? '200', 10)
+    const fileLimit = Number.parseInt(opts.fileLimit ?? '2000', 10)
+
+    const request = {
+      paths,
+      urls: opts.url ?? [],
+      from: opts.from ?? [],
+      includeMedia: Boolean(opts.includeMedia),
+      move: Boolean(opts.move),
+      urlLimit: Number.isFinite(urlLimit) ? urlLimit : undefined,
+      fileLimit: Number.isFinite(fileLimit) ? fileLimit : undefined,
+    }
+
+    if (paths.length === 0 && request.urls.length === 0 && request.from.length === 0) {
+      console.error('Give me paths, --url, or --from. Run `axiom-wiki import --help` for shapes.')
+      process.exit(1)
+    }
+
+    try {
+      if (opts.dryRun) {
+        const plan = planImport(config, request)
+        if (opts.json) {
+          console.log(JSON.stringify(plan, null, 2))
+        } else {
+          console.log(formatImportPlan(plan))
+          console.log('')
+          console.log(
+            plan.ready === 0
+              ? 'Nothing to import.'
+              : `Run without --dry-run to import ${plan.ready} source${plan.ready === 1 ? '' : 's'}.`,
+          )
+        }
+        return
+      }
+
+      const result = await runImport(
+        config,
+        { ...request, ingest: opts.ingest !== false, context: opts.context },
+        { onStatus: opts.json ? undefined : (line) => console.log(line) },
+      )
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2))
+      } else {
+        console.log('')
+        console.log(formatImportPlan(result.plan))
+        console.log('')
+        const ok = result.staged.filter((entry) => entry.ok)
+        const failed = result.staged.filter((entry) => !entry.ok)
+        console.log(
+          `Imported ${ok.length} source${ok.length === 1 ? '' : 's'}${failed.length ? `, ${failed.length} failed` : ''}.`,
+        )
+        for (const entry of failed.slice(0, 10)) {
+          console.log(`  ! ${entry.item.kind === 'file' ? entry.item.label : entry.item.source} — ${entry.error}`)
+        }
+        if (result.ingest) console.log(result.ingest.summary)
+        else if (ok.length > 0) console.log('Staged only. Run `axiom-wiki ingest` when you are ready.')
+      }
+
+      if (result.staged.length > 0 && result.staged.every((entry) => !entry.ok)) process.exit(1)
+    } catch (err: unknown) {
+      console.error('Import failed:', err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
   })
 
 program

@@ -515,3 +515,69 @@ export interface CitationAuditReport {
     sourcePath?: string
   }>
 }
+
+// ── Bulk import ─────────────────────────────────────────────────────────────
+
+export type ImportItemStatus = 'ready' | 'duplicate' | 'unsupported' | 'invalid'
+
+export interface ImportFileItem {
+  kind: 'file'
+  source: string
+  label: string
+  relative: string | null
+  bytes: number
+  target: string
+  status: ImportItemStatus
+  reason?: string
+}
+
+export interface ImportUrlItem {
+  kind: 'url'
+  source: string
+  label: string
+  status: ImportItemStatus
+  reason?: string
+}
+
+export type ImportItem = ImportFileItem | ImportUrlItem
+
+export interface ImportPlan {
+  items: ImportItem[]
+  ready: number
+  duplicates: number
+  unsupported: number
+  invalid: number
+  fileCount: number
+  urlCount: number
+  totalBytes: number
+  truncatedUrls: number
+  truncatedFiles: number
+}
+
+export interface ImportRequest {
+  paths?: string[]
+  urls?: string[]
+  from?: string[]
+  includeMedia?: boolean
+  urlLimit?: number
+  fileLimit?: number
+}
+
+export interface ImportedSource {
+  item: ImportItem
+  filename: string
+  ok: boolean
+  moved?: boolean
+  error?: string
+}
+
+export interface ImportRunResult {
+  plan: ImportPlan
+  staged: ImportedSource[]
+  ingest: {
+    files: Array<{ filename: string; status: 'done' | 'error'; pages: string[]; error?: string }>
+    pages: string[]
+    summary: string
+  } | null
+  summary: string
+}

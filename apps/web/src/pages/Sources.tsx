@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { api, runAction } from '../api'
 import { useAsync, useTitle } from '../hooks'
@@ -242,6 +243,12 @@ export function Sources() {
           >
             <CheckIcon size={12} /> Ingest all new
           </button>
+          <Link
+            to="/import"
+            className="mt-2 inline-flex items-center gap-1.5 border border-line bg-surface px-3 py-1.5 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-cyan hover:border-cyan"
+          >
+            <UploadIcon size={12} /> Bulk import a folder or URL list <ArrowRightIcon size={12} />
+          </Link>
         </section>
       </div>
 

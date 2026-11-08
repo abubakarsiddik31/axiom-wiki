@@ -20,6 +20,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'status',                       desc: 'Show wiki statistics' },
   { name: 'model',                        desc: 'Switch provider or model' },
   { name: 'lint',                         desc: 'Wiki health check' },
+  { name: 'maintain',                     desc: 'Plan or apply deterministic maintenance' },
   { name: 'help',                         desc: 'Show all commands' },
 ]
 

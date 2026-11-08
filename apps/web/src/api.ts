@@ -8,6 +8,8 @@ import type {
   Job,
   JobPayload,
   JobsPayload,
+  MaintenancePlan,
+  MaintenanceRun,
   OverviewPayload,
   PageDiffPayload,
   PageHistoryPayload,
@@ -195,6 +197,12 @@ export const api = {
     runAction<CitationAuditReport>('lint', { mode: 'citations', strict }),
 
   integrityAction: () => runAction<IntegrityPayload>('lint', { mode: 'integrity' }),
+
+  maintain: (options: Record<string, unknown> = {}) =>
+    runAction<MaintenancePlan>('maintain', options),
+
+  maintainApply: (options: Record<string, unknown> = {}) =>
+    runAction<MaintenanceRun>('maintain/apply', options),
 }
 
 export function jobEventsUrl(id: string): string {

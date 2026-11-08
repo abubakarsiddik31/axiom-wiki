@@ -33,8 +33,10 @@ export function extractLinks(content: string): string[] {
   const wikiLinkRegex = /\[\[([^\]]+)\]\]/g
   let match
   while ((match = wikiLinkRegex.exec(content)) !== null) {
-    if (match[1]) {
-      links.add(normalizeLinkId(match[1]))
+    // `[[id|alias]]` and `[[id#heading]]` both point at `id`.
+    const raw = match[1]?.split('|')[0]?.split('#')[0]?.trim()
+    if (raw) {
+      links.add(normalizeLinkId(raw))
     }
   }
 

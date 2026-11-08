@@ -34,6 +34,7 @@ import {
   savePage,
 } from '../core/page-ops.js'
 import { capture, promoteInbox } from '../core/inbox.js'
+import { planMaintenance, runMaintenance } from '../core/maintenance.js'
 import { commitPaths } from '../core/git.js'
 import type { JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
@@ -79,6 +80,7 @@ const WRITE_ACTIONS = new Set([
   'link/insert',
   'capture',
   'inbox/promote',
+  'maintain/apply',
 ])
 
 export function actionRequiresWrite(action: string): boolean {
@@ -127,6 +129,15 @@ function boolField(body: Record<string, unknown>, key: string): boolean | undefi
   const value = body[key]
   if (value === undefined || value === null) return undefined
   if (typeof value !== 'boolean') throw new BadRequestError(`“${key}” must be a boolean.`)
+  return value
+}
+
+function numberField(body: Record<string, unknown>, key: string): number | undefined {
+  const value = body[key]
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new BadRequestError(`“${key}” must be a number.`)
+  }
   return value
 }
 
@@ -843,6 +854,43 @@ export async function handleAction(
     } finally {
       releaseLock(config.wikiDir)
     }
+  }
+
+  if (action === 'maintain') {
+    const plan = planMaintenance(
+      config.wikiDir,
+      {
+        limit: numberField(body, 'limit'),
+        summaries: boolField(body, 'summaries'),
+        links: boolField(body, 'links'),
+        duplicates: boolField(body, 'duplicates'),
+        deadLinks: boolField(body, 'deadLinks'),
+        tags: boolField(body, 'tags'),
+      },
+      {
+        snapshot: await deps.snapshot(),
+        index: deps.linkIndex?.(),
+      },
+    )
+    return { status: 200, body: plan }
+  }
+
+  if (action === 'maintain/apply') {
+    const result = await runMaintenance(config, {
+      apply: true,
+      limit: numberField(body, 'limit'),
+      summaries: boolField(body, 'summaries'),
+      links: boolField(body, 'links'),
+      duplicates: boolField(body, 'duplicates'),
+      deadLinks: boolField(body, 'deadLinks'),
+      tags: boolField(body, 'tags'),
+      refreshStale: boolField(body, 'refreshStale'),
+      createStubs: boolField(body, 'createStubs'),
+      obsidianCompat: Boolean(config.obsidianCompat),
+      onWrite: deps.invalidate,
+    })
+    if (result.status === 'busy') return lockBusy(config)
+    return { status: 200, body: result }
   }
 
   if (action === 'preview') {

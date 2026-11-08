@@ -36,6 +36,14 @@ describe('graph core', () => {
       const links = extractLinks(content);
       expect(links).toContain('entities/alan-turing');
     });
+
+    it('strips aliases and anchors', () => {
+      const content = '[[entities/alan-turing|Turing]] and [[concepts/logic#inference|logic]]';
+      const links = extractLinks(content);
+      expect(links).toContain('entities/alan-turing');
+      expect(links).toContain('concepts/logic');
+      expect(links).toHaveLength(2);
+    });
   });
 
   describe('getBacklinks', () => {

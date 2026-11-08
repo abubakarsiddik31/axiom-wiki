@@ -339,7 +339,7 @@ export async function updateMOC(wikiDir: string): Promise<void> {
 export async function appendLog(
   wikiDir: string,
   entry: string,
-  type: 'ingest' | 'query' | 'lint' | 'status' | 'map' | 'sync',
+  type: 'ingest' | 'query' | 'lint' | 'status' | 'map' | 'sync' | 'maintain',
 ): Promise<void> {
   const logPath = path.join(wikiDir, 'wiki/log.md')
   const line = `## [${today()}] ${type} | ${entry}\n`

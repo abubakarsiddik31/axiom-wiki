@@ -241,6 +241,60 @@ export interface IntegrityPayload {
   contradictions: Array<{ path: string; title: string }>
 }
 
+export interface MaintenancePlan {
+  generatedAt: string
+  counts: {
+    pages: number
+    summaries: number
+    staleSummaries: number
+    orphans: number
+    orphanLinks: number
+    duplicates: number
+    deadLinks: number
+    pagesWithoutTags: number
+  }
+  summaries: Array<{ id: string; title: string; summary: string }>
+  staleSummaries: Array<{ id: string; title: string; current: string; proposed: string }>
+  orphans: string[]
+  orphanLinks: Array<{
+    id: string
+    title: string
+    from: string
+    fromTitle: string
+    mode: 'mention' | 'related'
+    snippet: string
+  }>
+  duplicates: Array<{
+    a: string
+    b: string
+    aTitle: string
+    bTitle: string
+    similarity: number
+    reason: 'same-title' | 'similar-title'
+  }>
+  deadLinks: Array<{ to: string; from: string[]; creatable: boolean }>
+  pagesWithoutTags: Array<{ id: string; title: string }>
+}
+
+export interface MaintenanceApplyResult {
+  touched: string[]
+  created: string[]
+  summaries: number
+  staleSummaries: number
+  links: number
+  stubs: number
+  skipped: Array<{ id: string; reason: string }>
+}
+
+export type MaintenanceRun =
+  | { status: 'busy'; pid: number | null }
+  | {
+      status: 'ok'
+      plan: MaintenancePlan
+      applied: MaintenanceApplyResult | null
+      committed: boolean
+    }
+
 export interface ConfigPayload {
   provider: string
   model: string

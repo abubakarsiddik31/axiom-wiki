@@ -195,6 +195,12 @@ export function HomeScreen() {
         return
       }
 
+      if (parsed.command === 'maintain') {
+        addLog({ text: '  Run: axiom-wiki maintain [--apply]', color: 'gray' })
+        addLog({ text: '  (maintenance runs outside the shell — use the CLI directly)', color: 'gray' })
+        return
+      }
+
       return
     }
 

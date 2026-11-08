@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api, idFromPath, runAction } from '../api'
@@ -14,7 +14,7 @@ import {
   Stats,
 } from '../components/ui'
 import { AlertIcon, CheckIcon } from '../components/Icons'
-import type { CitationAuditReport, JobPayload } from '../types'
+import type { CitationAuditReport, JobPayload, MaintenancePlan } from '../types'
 
 export function Integrity() {
   const { data, error, loading, reload } = useAsync((signal) => api.integrity(signal), [])
@@ -24,10 +24,60 @@ export function Integrity() {
   const [auditing, setAuditing] = useState(false)
   const [agentJobId, setAgentJobId] = useState<string | null>(null)
   const agent = useJobStream(agentJobId)
+  const [plan, setPlan] = useState<MaintenancePlan | null>(null)
+  const [planning, setPlanning] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [createStubs, setCreateStubs] = useState(false)
+  const [refreshStale, setRefreshStale] = useState(false)
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null)
+  const [maintenanceNotice, setMaintenanceNotice] = useState<string | null>(null)
   useTitle('Integrity')
 
   const writeMode = config.data?.writeMode ?? false
   const agentRunning = agent.job?.status === 'running' || agent.job?.status === 'queued'
+
+  async function previewMaintenance() {
+    setPlanning(true)
+    setMaintenanceError(null)
+    setMaintenanceNotice(null)
+    try {
+      setPlan(await api.maintain())
+    } catch (err) {
+      setMaintenanceError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPlanning(false)
+    }
+  }
+
+  async function applyMaintenance() {
+    if (!writeMode) return
+    setApplying(true)
+    setMaintenanceError(null)
+    setMaintenanceNotice(null)
+    try {
+      const result = await api.maintainApply({ createStubs, refreshStale })
+      if (result.status === 'busy') {
+        setMaintenanceError('Another operation is running. Try again when it finishes.')
+        return
+      }
+      const applied = result.applied
+      if (!applied || applied.summaries + applied.staleSummaries + applied.links + applied.stubs === 0) {
+        setMaintenanceNotice('Nothing to do — the wiki is already tidy.')
+      } else {
+        setMaintenanceNotice(
+          `Applied ${applied.summaries} summaries, ${applied.staleSummaries} stale refreshes, ` +
+            `${applied.links} links, ${applied.stubs} stubs.` +
+            (result.committed ? ' Committed.' : ' Written (not committed).'),
+        )
+      }
+      reload()
+      setPlan(await api.maintain())
+    } catch (err) {
+      setMaintenanceError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setApplying(false)
+    }
+  }
 
   async function runCitations() {
     setAuditing(true)
@@ -90,6 +140,76 @@ export function Integrity() {
           hint="missing summary or tags"
         />
       </Stats>
+
+      <section className="mb-7 border border-line bg-surface/30 p-4" aria-labelledby="maintenance-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <SectionLabel>Maintenance</SectionLabel>
+            <h2 id="maintenance-heading" className="font-display text-sm font-semibold text-ghost">
+              Mechanical chores, deterministic fixes
+            </h2>
+            <p className="mt-1 max-w-[70ch] text-[0.8rem] leading-relaxed text-graphite">
+              Backfill missing summaries from each page&apos;s own body, give orphans an inbound
+              link (wrapping a mention when one exists), and surface duplicate-looking pages.
+              Duplicates are proposed, never merged automatically.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void previewMaintenance()}
+              disabled={planning}
+              className="inline-flex items-center gap-1.5 border border-line bg-surface px-3 py-1.5 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-graphite hover:border-cyan hover:text-cyan disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {planning ? 'Planning…' : 'Preview fixes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void applyMaintenance()}
+              disabled={!writeMode || applying}
+              className="inline-flex items-center gap-1.5 border border-cyan/40 bg-cyan/10 px-3 py-1.5 font-mono text-[0.66rem] uppercase tracking-[0.1em] text-cyan disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <CheckIcon size={12} /> {applying ? 'Applying…' : 'Apply safe fixes'}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 font-mono text-[0.64rem] text-graphite">
+            <input
+              type="checkbox"
+              checked={createStubs}
+              onChange={(event) => setCreateStubs(event.target.checked)}
+            />
+            create stub pages for dead links
+          </label>
+          <label className="inline-flex items-center gap-2 font-mono text-[0.64rem] text-graphite">
+            <input
+              type="checkbox"
+              checked={refreshStale}
+              onChange={(event) => setRefreshStale(event.target.checked)}
+            />
+            refresh stale summaries
+          </label>
+          {!writeMode ? (
+            <span className="font-mono text-[0.62rem] text-amber">
+              restart with --allow-write to apply
+            </span>
+          ) : null}
+        </div>
+
+        {maintenanceNotice ? (
+          <div className="mt-3 border border-cyan/30 bg-cyan/5 px-3 py-2 font-mono text-[0.68rem] text-cyan">
+            {maintenanceNotice}
+          </div>
+        ) : null}
+        {maintenanceError ? (
+          <div className="mt-3">
+            <ErrorPanel message={maintenanceError} />
+          </div>
+        ) : null}
+        {plan ? <MaintenancePreview plan={plan} /> : null}
+      </section>
 
       {auditError ? <div className="mb-5"><ErrorPanel message={auditError} /></div> : null}
 
@@ -258,6 +378,127 @@ export function Integrity() {
           </div>
         ) : null}
       </section>
+    </div>
+  )
+}
+
+function MaintenancePreview({ plan }: { plan: MaintenancePlan }) {
+  const { counts } = plan
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <div className="grid grid-cols-2 gap-2 font-mono text-[0.64rem] text-graphite sm:grid-cols-3 lg:grid-cols-6">
+        <span>{counts.summaries} summaries</span>
+        <span>{counts.staleSummaries} stale</span>
+        <span>
+          {counts.orphanLinks}/{counts.orphans} orphans adoptable
+        </span>
+        <span>{counts.duplicates} duplicate pairs</span>
+        <span>{counts.deadLinks} dead links</span>
+        <span>{counts.pagesWithoutTags} untagged</span>
+        <span>{counts.pages} pages</span>
+      </div>
+
+      {plan.summaries.length > 0 ? (
+        <MaintenanceList title="Summaries to backfill">
+          {plan.summaries.map((fix) => (
+            <li key={fix.id} className="py-1.5 font-mono text-[0.66rem]">
+              <Link to={`/page/${fix.id}`} className="text-ghost hover:text-cyan">
+                {fix.id}
+              </Link>
+              <span className="text-graphite"> — {fix.summary}</span>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+
+      {plan.staleSummaries.length > 0 ? (
+        <MaintenanceList title="Possibly stale summaries (opt-in)">
+          {plan.staleSummaries.map((fix) => (
+            <li key={fix.id} className="py-1.5 font-mono text-[0.66rem]">
+              <Link to={`/page/${fix.id}`} className="text-ghost hover:text-cyan">
+                {fix.id}
+              </Link>
+              <span className="text-graphite"> — {fix.proposed}</span>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+
+      {plan.orphanLinks.length > 0 ? (
+        <MaintenanceList title="Orphan links">
+          {plan.orphanLinks.map((fix) => (
+            <li key={fix.id} className="py-1.5 font-mono text-[0.66rem]">
+              <Link to={`/page/${fix.from}`} className="text-ghost hover:text-cyan">
+                {fix.from}
+              </Link>
+              <span className="text-graphite"> → </span>
+              <Link to={`/page/${fix.id}`} className="text-ghost hover:text-cyan">
+                {fix.id}
+              </Link>
+              <span className="text-graphite"> · {fix.mode === 'mention' ? 'wraps a mention' : 'adds a Related bullet'}</span>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+
+      {plan.duplicates.length > 0 ? (
+        <MaintenanceList title="Duplicate candidates (review, never auto-merged)">
+          {plan.duplicates.map((pair) => (
+            <li key={`${pair.a}|${pair.b}`} className="py-1.5 font-mono text-[0.66rem]">
+              <Link to={`/page/${pair.a}`} className="text-ghost hover:text-cyan">
+                {pair.a}
+              </Link>
+              <span className="text-graphite"> ≈ </span>
+              <Link to={`/page/${pair.b}`} className="text-ghost hover:text-cyan">
+                {pair.b}
+              </Link>
+              <span className="text-graphite">
+                {' '}
+                · {Math.round(pair.similarity * 100)}% · {pair.reason}
+              </span>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+
+      {plan.deadLinks.length > 0 ? (
+        <MaintenanceList title="Dead links">
+          {plan.deadLinks.map((dead) => (
+            <li key={dead.to} className="py-1.5 font-mono text-[0.66rem]">
+              <span className="text-danger">{dead.to}</span>
+              <span className="text-graphite">
+                {' '}
+                ← {dead.from.join(', ')}
+                {dead.creatable ? ' · stub available' : ''}
+              </span>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+
+      {plan.pagesWithoutTags.length > 0 ? (
+        <MaintenanceList title="Pages without tags">
+          {plan.pagesWithoutTags.map((page) => (
+            <li key={page.id} className="py-1.5 font-mono text-[0.66rem]">
+              <Link to={`/page/${page.id}`} className="text-ghost hover:text-cyan">
+                {page.id}
+              </Link>
+            </li>
+          ))}
+        </MaintenanceList>
+      ) : null}
+    </div>
+  )
+}
+
+function MaintenanceList({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex items-center justify-between">
+        <SectionLabel>{title}</SectionLabel>
+      </div>
+      <ul className="max-h-56 divide-y divide-line-soft overflow-auto">{children}</ul>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { URL } from 'url'
 
 import type { AxiomConfig } from '../config/index.js'
 import { getStatus, readPage } from '../core/wiki.js'
+import { runMaintenance } from '../core/maintenance.js'
 import { searchWiki } from '../core/search.js'
 import { backlinksFromGraph, type WikiGraph } from '../core/graph.js'
 import { buildWikiSnapshot, type WikiSnapshot } from '../core/snapshot.js'
@@ -40,6 +41,11 @@ export interface ServeOptions {
   staticDir?: string | false
   /** Enable POST/DELETE action routes. Read-only when false (the default). */
   allowWrite?: boolean
+  /**
+   * Run a deterministic maintenance pass at this interval, in minutes.
+   * Requires `allowWrite`; the first pass starts shortly after boot.
+   */
+  maintainIntervalMinutes?: number
 }
 
 function sendHtml(res: http.ServerResponse, status: number, html: string): void {
@@ -174,6 +180,11 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
       new Error('--allow-write only works with a loopback --host (127.0.0.1, localhost, or ::1).'),
     )
   }
+  if (options.maintainIntervalMinutes != null && !allowWrite) {
+    return Promise.reject(
+      new Error('--maintain-interval requires --allow-write (maintenance edits pages).'),
+    )
+  }
 
   const explicitWebDir = options.staticDir === false ? '' : options.staticDir
   const webDir = options.staticDir === false ? null : resolveWebDir(explicitWebDir)
@@ -188,7 +199,44 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
       void handler(req, res)
     })
 
+    let stopped = false
+    let maintainTimer: NodeJS.Timeout | null = null
+    const intervalMinutes = Math.floor(options.maintainIntervalMinutes ?? 0)
+    if (allowWrite && intervalMinutes > 0) {
+      const intervalMs = Math.max(1, intervalMinutes) * 60_000
+      const firstDelay = Math.min(intervalMs, 30_000)
+      const tick = () => {
+        if (stopped) return
+        void runMaintenance(config, { apply: true, onWrite: () => cache.refresh() })
+          .then((result) => {
+            if (result.status !== 'ok' || !result.applied) return
+            const applied = result.applied
+            const changed = applied.summaries + applied.staleSummaries + applied.links + applied.stubs
+            if (changed > 0 && !quiet) {
+              console.log(
+                `[maintenance] ${applied.summaries} summaries, ${applied.links} links, ` +
+                  `${applied.stubs} stubs${result.committed ? ' (committed)' : ''}`,
+              )
+            }
+          })
+          .catch((err: unknown) => {
+            if (!quiet) {
+              console.error('[maintenance]', err instanceof Error ? err.message : String(err))
+            }
+          })
+          .finally(() => {
+            if (stopped) return
+            maintainTimer = setTimeout(tick, intervalMs)
+            maintainTimer.unref?.()
+          })
+      }
+      maintainTimer = setTimeout(tick, firstDelay)
+      maintainTimer.unref?.()
+    }
+
     server.on('close', () => {
+      stopped = true
+      if (maintainTimer) clearTimeout(maintainTimer)
       void watch.stop()
       void cache.close()
     })

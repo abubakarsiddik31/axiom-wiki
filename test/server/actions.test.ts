@@ -290,6 +290,24 @@ describe('read-only action API', () => {
     })
     expect(res.status).toBe(403)
   })
+
+  it('plans maintenance but refuses to apply it', async () => {
+    const plan = await fetch(`${base}/api/v1/actions/maintain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ links: false, duplicates: false }),
+    })
+    expect(plan.status).toBe(200)
+    const body = await plan.json()
+    expect(body.counts.pages).toBeGreaterThan(0)
+
+    const apply = await fetch(`${base}/api/v1/actions/maintain/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1' },
+      body: JSON.stringify({}),
+    })
+    expect(apply.status).toBe(403)
+  })
 })
 
 describe('page curation actions', () => {
@@ -511,5 +529,47 @@ describe('page curation actions', () => {
   it('rejects malformed page ids', async () => {
     const res = await post('page/save', { id: '../escape', title: 'X', body: '' })
     expect(res.status).toBe(400)
+  })
+
+  it('plans deterministic maintenance', async () => {
+    const res = await post('maintain', { links: false, duplicates: false })
+    expect(res.status).toBe(200)
+    const plan = await res.json()
+
+    expect(plan.counts.pages).toBeGreaterThan(0)
+    const ghost = plan.deadLinks.find((link: { to: string }) => link.to === 'concepts/missing')
+    expect(ghost).toBeTruthy()
+    expect(ghost.creatable).toBe(true)
+  })
+
+  it('applies maintenance and creates stubs only when asked', async () => {
+    const dry = await post('maintain/apply', {
+      summaries: false,
+      links: false,
+      duplicates: false,
+      createStubs: false,
+    })
+    expect(dry.status).toBe(200)
+    expect((await dry.json()).applied.stubs).toBe(0)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/missing.md'))).toBe(false)
+
+    const res = await post('maintain/apply', {
+      summaries: false,
+      links: false,
+      duplicates: false,
+      createStubs: true,
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.applied.created).toContain('concepts/missing')
+    expect(body.applied.stubs).toBe(body.applied.created.length)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/missing.md'))).toBe(true)
+
+    const page = await (await fetch(`${base}/api/v1/pages/concepts/missing`)).json()
+    expect(page.frontmatter.category).toBe('concepts')
+    expect(page.frontmatter.tags).toContain('stub')
+
+    const log = fs.readFileSync(path.join(wikiDir, 'wiki/log.md'), 'utf-8')
+    expect(log).toContain('maintain')
   })
 })

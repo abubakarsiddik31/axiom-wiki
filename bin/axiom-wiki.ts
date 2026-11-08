@@ -98,7 +98,8 @@ program
   .option('--host <host>', 'host to bind (use 0.0.0.0 to expose on the LAN)', '127.0.0.1')
   .option('--open', 'open the browser after starting')
   .option('--allow-write', 'enable ingest, source management, query, and reindex actions (loopback only)')
-  .action(async (opts: { port: string; host: string; open?: boolean; allowWrite?: boolean }) => {
+  .option('--maintain-interval <minutes>', 'run a maintenance pass every N minutes (requires --allow-write)')
+  .action(async (opts: { port: string; host: string; open?: boolean; allowWrite?: boolean; maintainInterval?: string }) => {
     requireConfig()
     const config = getConfig()
     if (!config) return
@@ -109,6 +110,9 @@ program
         host: opts.host,
         open: opts.open,
         allowWrite: opts.allowWrite,
+        maintainIntervalMinutes: opts.maintainInterval
+          ? Number(opts.maintainInterval)
+          : undefined,
       })
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
@@ -155,6 +159,89 @@ program
       console.log(result.text)
     } catch (err: unknown) {
       console.error('Lint failed:', err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('maintain')
+  .description('Plan or apply deterministic maintenance (summaries, orphan links, duplicates)')
+  .option('--apply', 'write the safe fixes instead of printing the plan')
+  .option('--json', 'print the plan or run result as JSON')
+  .option('--limit <n>', 'maximum fixes per category', '25')
+  .option('--no-summaries', 'skip summary backfill')
+  .option('--no-links', 'skip orphan adoption')
+  .option('--no-duplicates', 'skip duplicate proposals')
+  .option('--no-dead-links', 'skip dead-link reporting')
+  .option('--no-tags', 'skip untagged-page reporting')
+  .option('--stubs', 'create stub pages for safe dead links (apply only)')
+  .option('--refresh-stale', 'rewrite summaries with no overlap with the body (apply only)')
+  .action(async (opts: {
+    apply?: boolean
+    json?: boolean
+    limit?: string
+    summaries?: boolean
+    links?: boolean
+    duplicates?: boolean
+    deadLinks?: boolean
+    tags?: boolean
+    stubs?: boolean
+    refreshStale?: boolean
+  }) => {
+    requireConfig()
+    const config = getConfig()!
+    const { runMaintenance, formatMaintenancePlan } = await import('../src/core/maintenance.js')
+    const limit = Number.parseInt(opts.limit ?? '25', 10)
+    try {
+      const result = await runMaintenance(config, {
+        apply: Boolean(opts.apply),
+        limit: Number.isFinite(limit) ? limit : 25,
+        summaries: opts.summaries,
+        links: opts.links,
+        duplicates: opts.duplicates,
+        deadLinks: opts.deadLinks,
+        tags: opts.tags,
+        createStubs: Boolean(opts.stubs),
+        refreshStale: Boolean(opts.refreshStale),
+        obsidianCompat: Boolean(config.obsidianCompat),
+      })
+
+      if (result.status === 'busy') {
+        console.error(
+          `Another operation is running${result.pid ? ` (pid ${result.pid})` : ''}. Try again when it finishes.`,
+        )
+        process.exit(1)
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2))
+        return
+      }
+
+      console.log(formatMaintenancePlan(result.plan))
+      if (!opts.apply) {
+        console.log('')
+        console.log('Run with --apply to write the safe fixes.')
+        return
+      }
+
+      const applied = result.applied
+      const changed = applied
+        ? applied.summaries + applied.staleSummaries + applied.links + applied.stubs
+        : 0
+      console.log('')
+      if (changed === 0) {
+        console.log('Nothing to do — the wiki is already tidy.')
+        return
+      }
+      console.log(
+        `Applied: ${applied?.summaries ?? 0} summaries, ` +
+          `${applied?.staleSummaries ?? 0} stale refreshes, ` +
+          `${applied?.links ?? 0} links, ${applied?.stubs ?? 0} stubs.`,
+      )
+      console.log(result.committed ? 'Changes committed.' : 'Changes written (not committed).')
+    } catch (err: unknown) {
+      console.error('Maintenance failed:', err instanceof Error ? err.message : String(err))
       process.exit(1)
     }
   })

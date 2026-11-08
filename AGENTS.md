@@ -29,13 +29,13 @@ npx tsx bin/axiom-wiki.ts <command>   # e.g., status, query, ingest
 Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: the CLI package lives at the root, the web frontend in `apps/web` (see `pnpm-workspace.yaml`). The system has these main layers:
 
 ### Entry & Routing
-- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
+- **`bin/axiom-wiki.ts`** — Commander.js CLI entry point defining the commands (`init`, `ingest`, `query`, `model`, `status`, `graph`, `serve`, `maintain`, `lint`, `watch`, `clip`, `sources`, `review`, `autowiki`, `sync`, `start`, `mcp`, `setup-agent`, `embed`, `auth`). Defaults to the home screen if no command is given.
 - **`src/cli/index.tsx`** — Maps command types to Ink screen components (exhaustive type-checked dispatch).
 
 ### Web UI Layer (`src/server/` + `apps/web/`)
-- **`src/server/index.ts`** — Bare `node:http` server behind `axiom-wiki serve` (`--port`, `--host`, `--open`, `--allow-write`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). Read-only by default; `--allow-write` is loopback-only and gates mutation routes.
+- **`src/server/index.ts`** — Bare `node:http` server behind `axiom-wiki serve` (`--port`, `--host`, `--open`, `--allow-write`, `--maintain-interval`). Wires `/healthz`, the JSON API, static SPA serving, and the legacy SSR fallback (used only when `dist/web` is absent, e.g. a source checkout). Read-only by default; `--allow-write` is loopback-only and gates mutation routes. `--maintain-interval <minutes>` runs `runMaintenance` on a timer inside the server (requires write mode).
 - **`src/server/api.ts`** — JSON API under `/api/v1`: read routes (`overview`, paginated `pages`, page payload, `search`, bounded `graph`, `sources`, `integrity`, `config`), SSE (`events`, job streams), and `POST /actions/*` / `DELETE /jobs/:id`. Read actions stay available in read-only mode; write actions require `--allow-write` plus `X-Axiom-Write: 1`.
-- **`src/server/actions.ts`** — Action router. Validates bodies, restricts web ingest paths to `raw/`, acquires the compilation lock for mutations, and delegates to the same core functions as the CLI (`ingest`, `clipUrl`, `reindexWiki`, `removeSource`, `markForReingest`, citation verification). Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `preview`.
+- **`src/server/actions.ts`** — Action router. Validates bodies, restricts web ingest paths to `raw/`, acquires the compilation lock for mutations, and delegates to the same core functions as the CLI (`ingest`, `clipUrl`, `reindexWiki`, `removeSource`, `markForReingest`, citation verification). Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `preview`.
 - **`src/server/watch.ts`** — `WatchController` wraps the CLI's chokidar watcher for `serve`: each dropped file becomes a job, and server shutdown stops the watcher.
 - **`src/server/jobs.ts`** — Process-local job registry for long-running actions (`queued/running/succeeded/failed/cancelled`), bounded log lines, cancellation via `AbortController`, and per-job SSE subscribers. Jobs are intentionally non-durable.
 - **`src/server/cache.ts`** — `WikiReadCache`: one snapshot per process, invalidated by a debounced chokidar watcher on `wiki/`. Reads are O(1) after the first request; watcher bursts rebuild once and notify `onChange` listeners (SSE).
@@ -61,6 +61,7 @@ Axiom Wiki is an AI-powered CLI wiki tool. The repository is a pnpm workspace: t
 - **`links.ts`** — Link intelligence computed on demand from the corpus: `buildLinkIndex`, `findUnlinkedMentions` (mentions that never link), `findRelatedPages` (shared tags/links/co-citations), `rewriteLinksForRename`, and `linkFirstMentionInBody`.
 - **`history.ts`** — Per-page git log, historical content, and unified diffs. Uses `execFileSync` with validated revs; follows renames so pre-rename commits still resolve.
 - **`context.ts`** — Graph-aware retrieval for queries: hybrid search seeds, one-hop expansion through outbound links and backlinks, a character-budgeted citable evidence block, and the source list the Ask UI renders.
+- **`maintenance.ts`** — Deterministic, LLM-free maintenance: `planMaintenance` finds missing summaries, adoptable orphans, duplicate candidates, dead links, and untagged pages; `applyMaintenance` writes the safe fixes (summary backfill, mention/Related links, opt-in stubs); `runMaintenance` adds the lock, derived-artifact refresh, semantic indexing, and scoped git commit. Shared by `axiom-wiki maintain`, `POST /actions/maintain[/apply]`, and the `serve --maintain-interval` timer.
 - **`inbox.ts`** — Quick capture: `capture` writes a note into the `inbox` category with a derived title, and `promoteInbox` moves it into a real category while dropping the inbox tag. Triage reuses `renamePage`/`mergePages`, so links follow.
 - **`git.ts`** — `isGitRepo`, `autoCommit`, and `commitPaths` (scoped commits so a browser edit does not sweep unrelated changes).
 - **`state.ts`** — Compilation state management. Tracks per-source SHA-256 hashes in `{wikiDir}/state.json` for incremental compilation. Key functions: `loadState`, `saveState`, `computeHash`, `detectChanges`, `recordIngest`, `migrateFromLog`.
@@ -155,6 +156,7 @@ Any code change that creates, modifies, or removes wiki content must keep these 
 | `clip` (with ingest) | yes | yes | yes | yes | yes | yes |
 | `sources` → delete | yes | no | no | no | yes (remove) | no |
 | `sources` → reingest | yes | yes | no | no | yes (clear hash) | no |
+| `maintain` (apply) | yes | yes | yes | yes | no | no |
 | `query` | no | yes | no | no | no | yes |
 | `autowiki` / `sync` | no | yes | yes | yes | no (own state) | yes |
 

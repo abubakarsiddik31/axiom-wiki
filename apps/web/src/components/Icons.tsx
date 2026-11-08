@@ -279,3 +279,14 @@ export function InboxIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function ScoutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 4v3M12 17v3M4 12h3M17 12h3" opacity={0.5} />
+      <path d="M15.5 8.5l-2.4 4.2" />
+    </Icon>
+  )
+}

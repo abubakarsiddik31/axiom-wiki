@@ -19,6 +19,16 @@ import { renderMarkdown } from './render.js'
 import type { PageFrontmatter } from './render.js'
 import { BadRequestError, actionRequiresWrite, handleAction, readJsonBody } from './actions.js'
 import { describeRerankConfig } from '../core/rerank.js'
+import {
+  SCOUT_DROP_DIR,
+  SCOUT_MENTION,
+  SCOUT_NAME,
+  liveScoutWorker,
+  loadScoutItems,
+  publicScoutItem,
+  scoutSummary,
+  scoutToken,
+} from '../core/scout.js'
 import { jobs as defaultJobs, type JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
 
@@ -462,7 +472,32 @@ export async function handleApi(
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, 10)
       const inboxCount = snap.pages.filter((page) => page.category === 'inbox').length
-      sendJson(res, 200, { status, recent, inboxCount }, headOnly)
+      sendJson(res, 200, { status, recent, inboxCount, scoutPending: scoutSummary(config.wikiDir).pending }, headOnly)
+      return true
+    }
+
+    if (route === '/scout') {
+      const worker = liveScoutWorker(config.wikiDir)
+      const items = loadScoutItems(config.wikiDir)
+        .slice(-60)
+        .reverse()
+        .map(publicScoutItem)
+      sendJson(
+        res,
+        200,
+        {
+          name: SCOUT_NAME,
+          mention: SCOUT_MENTION,
+          summary: scoutSummary(config.wikiDir),
+          worker,
+          dropDir: SCOUT_DROP_DIR,
+          shareUrl: worker ? `http://${worker.host === '0.0.0.0' ? '127.0.0.1' : worker.host}:${worker.port}/share` : null,
+          queueUrl: worker ? `http://${worker.host === '0.0.0.0' ? '127.0.0.1' : worker.host}:${worker.port}` : null,
+          ...(options.allowWrite ? { token: scoutToken(config.wikiDir) } : {}),
+          items,
+        },
+        headOnly,
+      )
       return true
     }
 

@@ -324,6 +324,13 @@ describe('read-only action API', () => {
       body: JSON.stringify({}),
     })
     expect(setup.status).toBe(403)
+
+    const scout = await fetch(`${base}/api/v1/actions/scout/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1' },
+      body: JSON.stringify({ text: 'not allowed' }),
+    })
+    expect(scout.status).toBe(403)
   })
 
   it('exposes the reranker settings in the config payload', async () => {
@@ -606,6 +613,44 @@ describe('page curation actions', () => {
 
     const log = fs.readFileSync(path.join(wikiDir, 'wiki/log.md'), 'utf-8')
     expect(log).toContain('maintain')
+  })
+
+  it('queues a share for Scout and drains it into the inbox', async () => {
+    const share = await post('scout/share', { text: '@scout a shared thread #read-later' })
+    expect(share.status).toBe(200)
+    const shared = await share.json()
+    expect(shared.added).toHaveLength(1)
+    expect(shared.parsed.mentioned).toBe(true)
+    expect(shared.parsed.tags).toEqual(['read-later'])
+
+    const before = await (await fetch(`${base}/api/v1/scout`)).json()
+    expect(before.summary.pending).toBe(1)
+    expect(before.mention).toBe('@scout')
+    expect(before.items[0].preview).toContain('shared thread')
+    expect(typeof before.token).toBe('string')
+
+    const drain = await post('scout/drain', { ingest: false })
+    expect(drain.status).toBe(202)
+    const { job } = await drain.json()
+
+    let current: { job: { status: string; result?: { processed?: unknown[] } } } | null = null
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      current = await (await fetch(`${base}/api/v1/jobs/${job.id}`)).json()
+      if (current?.job.status === 'succeeded' || current?.job.status === 'failed') break
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(current?.job.status).toBe('succeeded')
+    expect(current?.job.result?.processed).toHaveLength(1)
+
+    const after = await (await fetch(`${base}/api/v1/scout`)).json()
+    expect(after.summary.pending).toBe(0)
+    expect(after.summary.done).toBe(1)
+    const inbox = fs.readdirSync(path.join(wikiDir, 'wiki/pages/inbox'))
+    expect(inbox.length).toBeGreaterThan(0)
+
+    const cleared = await post('scout/clear', {})
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json()).removed).toBeGreaterThanOrEqual(1)
   })
 
   it('saves reranker settings without exposing the key', async () => {

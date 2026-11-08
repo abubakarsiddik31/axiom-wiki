@@ -44,6 +44,16 @@ import {
   resolveRerankConfig,
   setupLocalReranker,
 } from '../core/rerank.js'
+import {
+  clearFinishedScoutItems,
+  drainScout,
+  publicScoutItem,
+  queueShare,
+  removeScoutItem,
+  requeueScoutItem,
+  scanScoutDrop,
+  scoutSummary,
+} from '../core/scout.js'
 import { commitPaths } from '../core/git.js'
 import type { JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
@@ -94,6 +104,12 @@ const WRITE_ACTIONS = new Set([
   'maintain/apply',
   'settings/save',
   'rerank/setup',
+  'scout/share',
+  'scout/drain',
+  'scout/retry',
+  'scout/remove',
+  'scout/clear',
+  'scout/scan',
 ])
 
 export function actionRequiresWrite(action: string): boolean {
@@ -1038,6 +1054,85 @@ export async function handleAction(
           title: candidate.title,
           score: candidate.score,
         })),
+      },
+    }
+  }
+
+  if (action === 'scout/share') {
+    const input = {
+      url: stringField(body, 'url'),
+      text: stringField(body, 'text'),
+      tags: stringArrayField(body, 'tags'),
+      note: stringField(body, 'note'),
+      source: stringField(body, 'source') ?? 'api',
+    }
+    try {
+      const outcome = queueShare(config.wikiDir, input)
+      deps.invalidate?.()
+      return {
+        status: 200,
+        body: {
+          added: outcome.added.map(publicScoutItem),
+          duplicates: outcome.duplicates.map(publicScoutItem),
+          parsed: outcome.parsed,
+          summary: scoutSummary(config.wikiDir),
+        },
+      }
+    } catch (err) {
+      throw new BadRequestError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  if (action === 'scout/drain') {
+    const ingest = boolField(body, 'ingest') ?? true
+    const limit = numberField(body, 'limit')
+    const job = manager.create('scout')
+    manager.start(job.id, ({ log, signal }) =>
+      drainScout(config, {
+        ingest,
+        limit: limit != null ? Math.min(Math.max(Math.trunc(limit), 1), 25) : 5,
+        onStatus: log,
+        signal,
+        invalidate: deps.invalidate,
+      }),
+    )
+    return { status: 202, body: { job } }
+  }
+
+  if (action === 'scout/retry') {
+    const id = stringField(body, 'id')
+    if (!id) throw new BadRequestError('“id” is required.')
+    const item = requeueScoutItem(config.wikiDir, id)
+    if (!item) return { status: 404, body: { error: `No Scout item “${id}”.` } }
+    deps.invalidate?.()
+    return { status: 200, body: { item: publicScoutItem(item) } }
+  }
+
+  if (action === 'scout/remove') {
+    const id = stringField(body, 'id')
+    if (!id) throw new BadRequestError('“id” is required.')
+    if (!removeScoutItem(config.wikiDir, id)) {
+      return { status: 404, body: { error: `No Scout item “${id}”.` } }
+    }
+    deps.invalidate?.()
+    return { status: 200, body: { removed: id, summary: scoutSummary(config.wikiDir) } }
+  }
+
+  if (action === 'scout/clear') {
+    const removed = clearFinishedScoutItems(config.wikiDir)
+    deps.invalidate?.()
+    return { status: 200, body: { removed, summary: scoutSummary(config.wikiDir) } }
+  }
+
+  if (action === 'scout/scan') {
+    const shares = scanScoutDrop(config.wikiDir)
+    deps.invalidate?.()
+    return {
+      status: 200,
+      body: {
+        found: shares.length,
+        added: shares.flatMap((share) => share.added.map(publicScoutItem)),
+        summary: scoutSummary(config.wikiDir),
       },
     }
   }

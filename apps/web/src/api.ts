@@ -19,6 +19,9 @@ import type {
   RerankSettings,
   RerankTestResult,
   SavePageResult,
+  ScoutItem,
+  ScoutPayload,
+  ScoutShareResult,
   SearchResult,
   SourcesPayload,
   WatchPayload,
@@ -181,6 +184,29 @@ export const api = {
   stopWatch: () => runAction<WatchPayload>('watch/stop', {}),
 
   config: (signal?: AbortSignal) => request<ConfigPayload>('/api/v1/config', signal),
+
+  scout: (signal?: AbortSignal) => request<ScoutPayload>('/api/v1/scout', signal),
+
+  scoutShare: (input: {
+    url?: string
+    text?: string
+    tags?: string[]
+    note?: string
+  }) => runAction<ScoutShareResult>('scout/share', input),
+
+  drainScout: (options: { ingest?: boolean; limit?: number } = {}) =>
+    runAction<JobPayload>('scout/drain', options),
+
+  retryScout: (id: string) => runAction<{ item: ScoutItem }>('scout/retry', { id }),
+
+  removeScout: (id: string) =>
+    runAction<{ removed: string; summary: ScoutPayload['summary'] }>('scout/remove', { id }),
+
+  clearScout: () =>
+    runAction<{ removed: number; summary: ScoutPayload['summary'] }>('scout/clear', {}),
+
+  scanScoutDrop: () =>
+    runAction<{ found: number; added: ScoutItem[]; summary: ScoutPayload['summary'] }>('scout/scan', {}),
 
   integrity: (signal?: AbortSignal) => request<IntegrityPayload>('/api/v1/integrity', signal),
 

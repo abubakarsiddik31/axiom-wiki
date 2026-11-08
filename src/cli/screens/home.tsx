@@ -213,6 +213,13 @@ export function HomeScreen() {
         return
       }
 
+      if (parsed.command === 'scout') {
+        addLog({ text: '  Run: axiom-wiki scout --status', color: 'gray' })
+        addLog({ text: '  Share: axiom-wiki scout --share <url> --tags read-later', color: 'gray' })
+        addLog({ text: '  Drains: axiom-wiki scout --once', color: 'gray' })
+        return
+      }
+
       return
     }
 

@@ -167,11 +167,84 @@ export interface PagesPayload {
   facets: { categories: Record<string, number>; tags: Record<string, number> }
 }
 
+export type ScoutKind = 'url' | 'text' | 'file'
+export type ScoutStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped'
+
+export interface ScoutItem {
+  id: string
+  key: string
+  kind: ScoutKind
+  url?: string
+  text?: string
+  file?: string
+  tags: string[]
+  note?: string
+  source: string
+  addedAt: string
+  status: ScoutStatus
+  attempts: number
+  startedAt?: string
+  finishedAt?: string
+  lastError?: string
+  result?: {
+    pages?: string[]
+    inbox?: string
+    filename?: string
+    reused?: boolean
+    tags?: string[]
+    message?: string
+  }
+  preview: string
+}
+
+export interface ScoutSummary {
+  name: string
+  mention: string
+  pending: number
+  running: number
+  done: number
+  failed: number
+  total: number
+  lastAddedAt: string | null
+}
+
+export interface ScoutWorker {
+  pid: number
+  host: string
+  port: number
+  startedAt: string
+  heartbeatAt: string
+  /** LAN-reachable base URL when the listener is bound to 0.0.0.0/::. */
+  lanUrl?: string
+}
+
+export interface ScoutPayload {
+  name: string
+  mention: string
+  summary: ScoutSummary
+  worker: ScoutWorker | null
+  dropDir: string
+  shareUrl: string | null
+  queueUrl: string | null
+  /** Only present when the server is in write mode. */
+  token?: string
+  items: ScoutItem[]
+}
+
+export interface ScoutShareResult {
+  added: ScoutItem[]
+  duplicates: ScoutItem[]
+  parsed: { urls: string[]; tags: string[]; text: string; mentioned: boolean }
+  summary: ScoutSummary
+}
+
 export interface OverviewPayload {
   status: WikiStatus
   recent: PageMeta[]
   /** Notes waiting in the inbox category. */
   inboxCount: number
+  /** Shares waiting for Scout. */
+  scoutPending?: number
 }
 
 export interface CaptureResult {

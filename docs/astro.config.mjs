@@ -52,6 +52,7 @@ export default defineConfig({
             { label: 'sync', slug: 'commands/sync' },
             { label: 'watch', slug: 'commands/watch' },
             { label: 'clip', slug: 'commands/clip' },
+            { label: 'scout', slug: 'commands/scout' },
             { label: 'sources', slug: 'commands/sources' },
             { label: 'review', slug: 'commands/review' },
             { label: 'graph', slug: 'commands/graph' },

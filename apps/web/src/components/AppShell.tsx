@@ -15,6 +15,7 @@ import {
   OverviewIcon,
   PagesIcon,
   SearchIcon,
+  ScoutIcon,
   ShieldIcon,
   SlidersIcon,
 } from './Icons'
@@ -24,6 +25,7 @@ const NAV = [
   { to: '/', label: 'Overview', icon: OverviewIcon, end: true },
   { to: '/pages', label: 'Pages', icon: PagesIcon, end: false },
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, end: false },
+  { to: '/scout', label: 'Scout', icon: ScoutIcon, end: false },
   { to: '/ask', label: 'Ask', icon: AskIcon, end: false },
   { to: '/sources', label: 'Sources', icon: DatabaseIcon, end: false },
   { to: '/graph', label: 'Graph', icon: GraphIcon, end: false },
@@ -163,6 +165,7 @@ export function AppShell() {
 
   const status = data?.status
   const inboxCount = data?.inboxCount ?? 0
+  const scoutPending = data?.scoutPending ?? 0
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[236px_minmax(0,1fr)]">
@@ -178,6 +181,11 @@ export function AppShell() {
               {to === '/inbox' && inboxCount > 0 ? (
                 <span className="ml-auto border border-amber/40 bg-amber/10 px-1.5 py-0.5 font-mono text-[0.56rem] text-amber">
                   {inboxCount}
+                </span>
+              ) : null}
+              {to === '/scout' && scoutPending > 0 ? (
+                <span className="ml-auto border border-cyan/40 bg-cyan/10 px-1.5 py-0.5 font-mono text-[0.56rem] text-cyan">
+                  {scoutPending}
                 </span>
               ) : null}
             </NavLink>
@@ -235,6 +243,11 @@ export function AppShell() {
                   {to === '/inbox' && inboxCount > 0 ? (
                     <span className="ml-auto border border-amber/40 bg-amber/10 px-1.5 py-0.5 font-mono text-[0.56rem] text-amber">
                       {inboxCount}
+                    </span>
+                  ) : null}
+                  {to === '/scout' && scoutPending > 0 ? (
+                    <span className="ml-auto border border-cyan/40 bg-cyan/10 px-1.5 py-0.5 font-mono text-[0.56rem] text-cyan">
+                      {scoutPending}
                     </span>
                   ) : null}
                 </NavLink>

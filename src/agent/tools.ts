@@ -15,6 +15,12 @@ import { applyTier1Updates, type FileChange } from '../core/wiki-sync-lite.js'
 import { applyTier2Updates } from '../core/incremental-sync.js'
 import { indexWikiPage, persistOrama } from '../core/indexing.js'
 import { acquireLock, releaseLock } from '../core/lock.js'
+import {
+  loadScoutItems,
+  publicScoutItem,
+  queueShare,
+  scoutSummary,
+} from '../core/scout.js'
 
 function normalizePageId(pageId: string): string {
   return pageId.replace(/^wiki\/pages\//, '').replace(/\.md$/, '')
@@ -503,6 +509,36 @@ _Append-only record of key decisions made during development._
     },
   })
 
+  const scout_share = createTool({
+    id: 'scout_share',
+    description:
+      'Hand a link, file, or note to Scout, the wiki\'s always-on intake agent. Use when the user shares a YouTube link or article, pastes a thread, or says to ingest something later. Tags become page tags.',
+    inputSchema: z.object({
+      url: z.string().optional().describe('Link to clip and compile into the wiki'),
+      text: z.string().optional().describe('A note or pasted thread to file in the inbox'),
+      tags: z.array(z.string()).optional().describe('Tags to apply, e.g. ["read-later"]'),
+      note: z.string().optional().describe('Context for the ingest — why this matters'),
+    }),
+    execute: async (input) => {
+      const outcome = queueShare(wikiDir, { ...input, source: 'agent' })
+      return {
+        added: outcome.added.map(publicScoutItem),
+        duplicates: outcome.duplicates.map(publicScoutItem),
+        summary: scoutSummary(wikiDir),
+      }
+    },
+  })
+
+  const scout_queue = createTool({
+    id: 'scout_queue',
+    description: 'Show what Scout has queued, what it finished, and any failures.',
+    inputSchema: z.object({}),
+    execute: async () => ({
+      summary: scoutSummary(wikiDir),
+      items: loadScoutItems(wikiDir).slice(-20).reverse().map(publicScoutItem),
+    }),
+  })
+
   return {
     read_page,
     write_page,
@@ -525,6 +561,8 @@ _Append-only record of key decisions made during development._
     notify_code_change,
     report_task_complete,
     log_decision,
+    scout_share,
+    scout_queue,
   }
 }
 

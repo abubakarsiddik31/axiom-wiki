@@ -101,7 +101,17 @@ program
   .option('--open', 'open the browser after starting')
   .option('--allow-write', 'enable ingest, source management, query, and reindex actions (loopback only)')
   .option('--maintain-interval <minutes>', 'run a maintenance pass every N minutes (requires --allow-write)')
-  .action(async (opts: { port: string; host: string; open?: boolean; allowWrite?: boolean; maintainInterval?: string }) => {
+  .option('--scout', 'also run the always-on Scout intake listener (@scout)')
+  .option('--scout-port <port>', 'port for the Scout listener', '1719')
+  .action(async (opts: {
+    port: string
+    host: string
+    open?: boolean
+    allowWrite?: boolean
+    maintainInterval?: string
+    scout?: boolean
+    scoutPort?: string
+  }) => {
     requireConfig()
     const config = getConfig()
     if (!config) return
@@ -115,7 +125,176 @@ program
         maintainIntervalMinutes: opts.maintainInterval
           ? Number(opts.maintainInterval)
           : undefined,
+        scout: opts.scout,
+        scoutPort: opts.scoutPort ? Number(opts.scoutPort) : undefined,
       })
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('scout')
+  .description('Always-on intake: hand the wiki a link or note, tag it @scout')
+  .option('--status', 'show the queue, the worker, and recent items')
+  .option('--share <value>', 'queue a URL or a note and exit')
+  .option('--text <text>', 'extra text for --share, or a note on its own')
+  .option('--file <path>', 'queue a file to ingest')
+  .option('--tags <tags>', 'comma-separated tags to apply')
+  .option('--once', 'drain the queue once and exit')
+  .option('--no-ingest', 'clip links into raw/ but do not compile them')
+  .option('--port <port>', 'listener port', '1719')
+  .option('--host <host>', 'listener host (0.0.0.0 to accept LAN shares)', '127.0.0.1')
+  .option('--limit <n>', 'maximum items per drain', '5')
+  .option('--json', 'print JSON')
+  .action(async (opts: {
+    status?: boolean
+    share?: string
+    text?: string
+    file?: string
+    tags?: string
+    once?: boolean
+    ingest?: boolean
+    port: string
+    host: string
+    limit: string
+    json?: boolean
+  }) => {
+    requireConfig()
+    const config = getConfig()
+    if (!config) return
+    const {
+      DEFAULT_SCOUT_PORT,
+      SCOUT_DROP_DIR,
+      SCOUT_MENTION,
+      drainScout,
+      liveScoutWorker,
+      loadScoutItems,
+      publicScoutItem,
+      queueShare,
+      scanScoutDrop,
+      scoutSummary,
+      scoutToken,
+    } = await import('../src/core/scout.js')
+
+    const tags = opts.tags
+      ? opts.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+      : undefined
+    const wantsShare = Boolean(opts.share || opts.text || opts.file)
+
+    if (wantsShare) {
+      const value = opts.share?.trim() ?? ''
+      const isUrl = /^(https?:\/\/|www\.)/i.test(value)
+      const outcome = queueShare(config.wikiDir, {
+        ...(isUrl ? { url: value } : value ? { text: value } : {}),
+        ...(opts.text ? { text: opts.text } : {}),
+        ...(opts.file ? { file: opts.file } : {}),
+        tags,
+        source: 'cli',
+      })
+
+      if (opts.json) {
+        console.log(JSON.stringify(outcome, null, 2))
+      } else {
+        for (const item of outcome.added) {
+          console.log(`Queued ${item.kind}: ${item.url ?? item.file ?? (item.text ?? '').slice(0, 80)}`)
+        }
+        for (const item of outcome.duplicates) {
+          console.log(`Already queued or ingested: ${item.url ?? item.id}`)
+        }
+        if (outcome.added.length > 0) {
+          console.log(
+            opts.once
+              ? 'Draining now…'
+              : 'Run `axiom-wiki scout --once` to process it, or keep the listener running.',
+          )
+        }
+        if (outcome.parsed.tags.length > 0) console.log(`Tags: ${outcome.parsed.tags.join(', ')}`)
+      }
+      if (!opts.once) return
+    }
+
+    if (opts.status) {
+      const summary = scoutSummary(config.wikiDir)
+      const worker = liveScoutWorker(config.wikiDir)
+      const items = loadScoutItems(config.wikiDir).slice(-25).reverse()
+      if (opts.json) {
+        console.log(JSON.stringify({ summary, worker, items: items.map(publicScoutItem) }, null, 2))
+        return
+      }
+      console.log(`${summary.name} (${summary.mention})`)
+      console.log(
+        `  queued ${summary.pending} · running ${summary.running} · done ${summary.done} · failed ${summary.failed}`,
+      )
+      console.log(
+        worker
+          ? `  listening: http://${worker.host}:${worker.port} (pid ${worker.pid}, heartbeat ${worker.heartbeatAt})`
+          : '  listener: not running',
+      )
+      if (items.length === 0) console.log('  queue is empty')
+      for (const item of items) {
+        const label = item.url ?? item.file ?? (item.text ?? '').replace(/\s+/g, ' ').slice(0, 70)
+        const itemTags = item.tags.length > 0 ? ` #${item.tags.join(' #')}` : ''
+        console.log(`  [${item.status}] ${label}${itemTags}${item.lastError ? ` — ${item.lastError}` : ''}`)
+      }
+      return
+    }
+
+    if (opts.once) {
+      const dropped = scanScoutDrop(config.wikiDir)
+      const result = await drainScout(config, {
+        ingest: opts.ingest !== false,
+        limit: Number(opts.limit) || 5,
+        onStatus: opts.json ? undefined : (line) => console.log(line),
+      })
+      if (opts.json) {
+        console.log(JSON.stringify({ dropped: dropped.length, ...result }, null, 2))
+      } else {
+        if (result.busy) console.log(result.reason ?? 'Another drain is running.')
+        console.log(
+          `Processed ${result.processed.length}, failed ${result.failed}, ${result.remaining} left.`,
+        )
+      }
+      return
+    }
+
+    const { ScoutRunner } = await import('../src/core/scout-runner.js')
+    const runner = new ScoutRunner(config, {
+      port: Number(opts.port) || DEFAULT_SCOUT_PORT,
+      host: opts.host,
+      ingest: opts.ingest !== false,
+      onStatus: (line) => {
+        if (!opts.json) console.log(`[scout] ${line}`)
+      },
+    })
+
+    try {
+      const info = await runner.start()
+      const token = scoutToken(config.wikiDir)
+      if (opts.json) {
+        console.log(JSON.stringify({ ...info, token, dropDir: SCOUT_DROP_DIR }, null, 2))
+      } else {
+        console.log(`Scout is listening on ${info.url}`)
+        if (info.lanUrl) console.log(`  lan:    ${info.lanUrl}  (share from your phone)`)
+        console.log(`  share:  POST ${info.url}/share   {"url":"https://…","tags":["read-later"]}`)
+        console.log(`  text:   POST ${info.url}/text    {"text":"a thread #tag ${SCOUT_MENTION}"}`)
+        console.log(`  queue:  GET  ${info.url}/queue?token=…`)
+        console.log(`  token:  ${token}`)
+        console.log(`  drop:   ${config.wikiDir}/${SCOUT_DROP_DIR}/`)
+        console.log('')
+        console.log(`curl -X POST ${info.url}/share \\`)
+        console.log(`  -H "X-Scout-Token: ${token}" -H 'Content-Type: application/json' \\`)
+        console.log(`  -d '{"url":"https://youtu.be/dQw4w9WgXcQ","tags":["read-later"]}'`)
+        console.log('')
+        console.log('Ctrl+C to stop. The queue survives restarts; `axiom-wiki scout --once` drains it.')
+      }
+
+      const shutdown = () => {
+        void runner.stop().then(() => process.exit(0))
+      }
+      process.once('SIGINT', shutdown)
+      process.once('SIGTERM', shutdown)
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)

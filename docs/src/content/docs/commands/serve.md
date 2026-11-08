@@ -8,6 +8,7 @@ axiom-wiki serve
 axiom-wiki serve --port 3000 --open
 axiom-wiki serve --host 0.0.0.0   # expose on your LAN
 axiom-wiki serve --allow-write --maintain-interval 1440   # nightly maintenance in-process
+axiom-wiki serve --allow-write --scout --scout-port 1719  # also run Scout intake
 ```
 
 Starts a local web server (default `http://127.0.0.1:1717`) that serves the **Axiom web app** from `dist/web` plus a read-only JSON API under `/api/v1`.
@@ -24,6 +25,7 @@ The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ship
 - **Search** — the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled), with section badges and highlighted snippets.
 - **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
 - **Inbox** — one-line capture with an optional title and tags, then triage: **Promote** into a real category (a rename that rewrites links) or **Merge** into an existing page. A nav badge shows what is waiting.
+- **Scout** — the always-on intake queue: paste a link, a thread, or a note; watch the queue drain; retry failures; copy the share endpoint and token; or check the drop folder. A nav badge shows what is queued. See [`scout`](/commands/scout).
 - **Ask** — retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence; optionally in forensic mode, then file the answer as an analysis page. Press **what will it read?** to preview the exact pages and token estimate before asking.
 - **Sources** — list compiled sources, clip a URL, ingest a file from `raw/`, re-ingest, delete, or start a watcher that auto-ingests dropped files.
 - **Integrity** — dead links, orphans, metadata gaps, unresolved contradictions, citation audit, and agent lint. Its **Maintenance** panel previews and applies the same deterministic pass as `axiom-wiki maintain`: backfill missing summaries, adopt orphans, propose duplicates, and optionally create stubs for dead links.
@@ -39,7 +41,7 @@ The UI is a client of the same API, which you can call directly:
 
 | Route | Returns |
 |---|---|
-| `GET /api/v1/overview` | `{ status, recent, inboxCount }` |
+| `GET /api/v1/overview` | `{ status, recent, inboxCount, scoutPending }` |
 | `GET /api/v1/pages` | `{ pages, total, nextCursor, facets }` (optional `cat`, `tag`, `q`, `sort`, `cursor`, `limit`) |
 | `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, body, html, backlinks }` |
 | `GET /api/v1/pages/:category/:slug/links` | `{ id, title, unlinked, related }` |
@@ -51,6 +53,7 @@ The UI is a client of the same API, which you can call directly:
 | `GET /api/v1/watch` | `{ running, startedAt, lastEvent }` |
 | `GET /api/v1/integrity` | dead links, orphans, metadata gaps, contradictions |
 | `GET /api/v1/config` | provider, model, embeddings status, reranker settings, write mode (no credentials) |
+| `GET /api/v1/scout` | Scout queue, listener heartbeat, share URL, and (write mode only) the token |
 | `GET /api/v1/events` | SSE `wiki-changed` events |
 | `GET /api/v1/jobs` | `{ jobs }` |
 | `GET /api/v1/jobs/:id` | `{ job }` |
@@ -58,9 +61,11 @@ The UI is a client of the same API, which you can call directly:
 | `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
 | `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
 
-Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `settings/save`, `rerank/setup`, `rerank/test`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
+Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `settings/save`, `rerank/setup`, `rerank/test`, `scout/share`, `scout/drain`, `scout/retry`, `scout/remove`, `scout/clear`, `scout/scan`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files, scout drains) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
 
 `settings/save` persists reranker changes to the active config (write mode). `rerank/setup` downloads and caches a local model as a job. `rerank/test` scores a few pages with the current settings without writing.
+
+`scout/share` takes `{ url?, text?, tags?, note? }` and queues the hand-off (it does not wait for compilation). `scout/drain` runs the queue as a job. `scout/retry`, `scout/remove`, and `scout/clear` manage items; `scout/scan` picks up files from the drop folder. `--scout` starts the standalone listener inside the serve process on `--scout-port` (default `1719`).
 
 `maintain` returns the deterministic maintenance plan (missing summaries, orphan links, duplicate candidates, dead links, untagged pages) and stays available in read-only mode. `maintain/apply` writes the safe fixes, rebuilds the index and MOC, appends to the log, and commits; it requires write mode. Pass `createStubs: true` to materialise stub pages for dead links and `refreshStale: true` to refresh summaries that no longer share any content words with the body.
 

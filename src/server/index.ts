@@ -24,6 +24,7 @@ import { resolveWebDir, serveStatic } from './static.js'
 import { WikiReadCache } from './cache.js'
 import { JobManager } from './jobs.js'
 import { WatchController } from './watch.js'
+import { ScoutRunner } from '../core/scout-runner.js'
 
 export { parseFrontmatter } from './api.js'
 
@@ -46,6 +47,10 @@ export interface ServeOptions {
    * Requires `allowWrite`; the first pass starts shortly after boot.
    */
   maintainIntervalMinutes?: number
+  /** Also run Scout (the always-on intake listener) inside this process. */
+  scout?: boolean
+  /** Scout listener port. Default 1719. */
+  scoutPort?: number
   /** Persist settings changes (tests can inject a no-op/spy). */
   saveConfig?: (cfg: Partial<AxiomConfig>) => void
 }
@@ -250,9 +255,33 @@ export function startServer(options: ServeOptions): Promise<http.Server> {
     server.on('close', () => {
       stopped = true
       if (maintainTimer) clearTimeout(maintainTimer)
+      if (scout) void scout.stop()
       void watch.stop()
       void cache.close()
     })
+
+    let scout: ScoutRunner | null = null
+    if (options.scout) {
+      scout = new ScoutRunner(config, {
+        port: options.scoutPort ?? 1719,
+        host: '127.0.0.1',
+        onStatus: quiet ? undefined : (line) => console.log(`[scout] ${line}`),
+      })
+      void scout
+        .start()
+        .then((info) => {
+          if (!quiet) console.log(`[scout] share endpoint ${info.url}/share`)
+        })
+        .catch((err: unknown) => {
+          if (!quiet) {
+            console.error(
+              `[scout] listener unavailable (${err instanceof Error ? err.message : String(err)}); ` +
+                'the queue and web UI still work.',
+            )
+          }
+          scout = null
+        })
+    }
 
     server.listen(port, host, () => {
       const addr = server.address()

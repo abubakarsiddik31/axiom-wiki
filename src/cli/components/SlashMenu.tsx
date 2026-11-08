@@ -23,6 +23,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'maintain',                     desc: 'Plan or apply deterministic maintenance' },
   { name: 'rerank',                       desc: 'Configure or test candidate reranking' },
   { name: 'export',                       desc: 'Export a static HTML site' },
+  { name: 'scout',                        desc: 'Always-on intake queue (@scout)' },
   { name: 'help',                         desc: 'Show all commands' },
 ]
 

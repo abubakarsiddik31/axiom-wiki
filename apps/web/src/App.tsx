@@ -11,6 +11,7 @@ import { Query } from './pages/Query'
 import { Integrity } from './pages/Integrity'
 import { Settings } from './pages/Settings'
 import { Inbox } from './pages/Inbox'
+import { Scout } from './pages/Scout'
 import { PageEditor } from './pages/PageEditor'
 import { PageHistory } from './pages/PageHistory'
 import { NotFound } from './pages/NotFound'
@@ -22,6 +23,7 @@ export function App() {
         <Route index element={<Overview />} />
         <Route path="pages" element={<Pages />} />
         <Route path="inbox" element={<Inbox />} />
+        <Route path="scout" element={<Scout />} />
         <Route path="new" element={<PageEditor />} />
         <Route path="edit/*" element={<PageEditor />} />
         <Route path="history/*" element={<PageHistory />} />

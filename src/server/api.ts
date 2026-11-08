@@ -456,7 +456,8 @@ export async function handleApi(
       const recent = [...snap.pages]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, 10)
-      sendJson(res, 200, { status, recent }, headOnly)
+      const inboxCount = snap.pages.filter((page) => page.category === 'inbox').length
+      sendJson(res, 200, { status, recent, inboxCount }, headOnly)
       return true
     }
 

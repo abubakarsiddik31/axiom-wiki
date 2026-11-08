@@ -1,4 +1,5 @@
 import type {
+  CaptureResult,
   CitationAuditReport,
   ConfigPayload,
   ContextPayload,
@@ -137,6 +138,15 @@ export const api = {
 
   linkMention: (sourceId: string, targetId: string) =>
     runAction<{ linked: boolean }>('link/insert', { sourceId, targetId }),
+
+  capture: (input: { text: string; title?: string; tags?: string[]; source?: string }) =>
+    runAction<CaptureResult>('capture', input),
+
+  promoteInbox: (id: string, category: string) =>
+    runAction<{ oldId: string; newId: string; touched: string[] }>('inbox/promote', {
+      id,
+      category,
+    }),
 
   context: (q: string) => runAction<ContextPayload>('context', { q }),
 

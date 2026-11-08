@@ -22,6 +22,7 @@ The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ship
 - **History** — per-page commit log with unified diffs and one-click restore. Every page write is committed, so changes are auditable and reversible.
 - **Search** — the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled), with section badges and highlighted snippets.
 - **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
+- **Inbox** — one-line capture with an optional title and tags, then triage: **Promote** into a real category (a rename that rewrites links) or **Merge** into an existing page. A nav badge shows what is waiting.
 - **Ask** — retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence; optionally in forensic mode, then file the answer as an analysis page. Press **what will it read?** to preview the exact pages and token estimate before asking.
 - **Sources** — list compiled sources, clip a URL, ingest a file from `raw/`, re-ingest, delete, or start a watcher that auto-ingests dropped files.
 - **Integrity** — dead links, orphans, metadata gaps, unresolved contradictions, citation audit, and agent lint.
@@ -37,7 +38,7 @@ The UI is a client of the same API, which you can call directly:
 
 | Route | Returns |
 |---|---|
-| `GET /api/v1/overview` | `{ status, recent }` |
+| `GET /api/v1/overview` | `{ status, recent, inboxCount }` |
 | `GET /api/v1/pages` | `{ pages, total, nextCursor, facets }` (optional `cat`, `tag`, `q`, `sort`, `cursor`, `limit`) |
 | `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, body, html, backlinks }` |
 | `GET /api/v1/pages/:category/:slug/links` | `{ id, title, unlinked, related }` |
@@ -56,7 +57,7 @@ The UI is a client of the same API, which you can call directly:
 | `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
 | `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
 
-Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
+Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
 
 `context` takes `{ q }` and returns the evidence block the agent will see: `{ query, sources, estimatedTokens, truncated, text }`. Each source carries `id`, `title`, `summary`, `excerpt`, `sources`, and an `origin` of `search`, `link`, or `backlink` so you can tell matched pages from graph neighbours.
 

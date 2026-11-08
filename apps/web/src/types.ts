@@ -164,6 +164,15 @@ export interface PagesPayload {
 export interface OverviewPayload {
   status: WikiStatus
   recent: PageMeta[]
+  /** Notes waiting in the inbox category. */
+  inboxCount: number
+}
+
+export interface CaptureResult {
+  id: string
+  path: string
+  title: string
+  created: boolean
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'

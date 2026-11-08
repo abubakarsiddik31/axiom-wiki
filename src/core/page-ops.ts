@@ -14,7 +14,7 @@ import type { CompilationState } from './state.js'
  * index, exactly like the ingest path.
  */
 
-export const PAGE_CATEGORIES = ['entities', 'concepts', 'sources', 'analyses'] as const
+export const PAGE_CATEGORIES = ['entities', 'concepts', 'sources', 'analyses', 'inbox'] as const
 export type PageCategory = (typeof PAGE_CATEGORIES)[number]
 
 export interface PageDraft {

@@ -281,6 +281,15 @@ describe('read-only action API', () => {
     })
     expect(res.status).toBe(403)
   })
+
+  it('refuses capture in read-only mode', async () => {
+    const res = await fetch(`${base}/api/v1/actions/capture`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1' },
+      body: JSON.stringify({ text: 'nope' }),
+    })
+    expect(res.status).toBe(403)
+  })
 })
 
 describe('page curation actions', () => {
@@ -452,6 +461,51 @@ describe('page curation actions', () => {
     const res = await post('page/delete', { id: 'concepts/disposable' })
     expect(res.status).toBe(200)
     expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/disposable.md'))).toBe(false)
+  })
+
+  it('captures a note and surfaces it in the overview count', async () => {
+    const res = await post('capture', {
+      text: 'The halting problem is diagonalisation wearing a hat.',
+      title: 'Halting problem note',
+      tags: ['logic'],
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.id).toBe('inbox/halting-problem-note')
+
+    const file = fs.readFileSync(path.join(wikiDir, body.path), 'utf-8')
+    expect(file).toContain('category: inbox')
+    expect(file).toContain('diagonalisation')
+
+    const overview = await (await fetch(`${base}/api/v1/overview`)).json()
+    expect(overview.inboxCount).toBe(1)
+
+    // Leave the inbox empty for the promotion test that follows.
+    const cleanup = await post('page/delete', { id: body.id })
+    expect(cleanup.status).toBe(200)
+  })
+
+  it('rejects an empty capture', async () => {
+    const res = await post('capture', { text: '   ' })
+    expect(res.status).toBe(400)
+  })
+
+  it('promotes an inbox note into a category', async () => {
+    const created = await post('capture', { text: 'Promote me.', title: 'Promote me' })
+    const { id } = await created.json()
+
+    const res = await post('inbox/promote', { id, category: 'concepts' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.newId).toBe('concepts/promote-me')
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/inbox/promote-me.md'))).toBe(false)
+
+    const page = await (await fetch(`${base}/api/v1/pages/concepts/promote-me`)).json()
+    expect(page.frontmatter.category).toBe('concepts')
+    expect(page.frontmatter.tags).not.toContain('inbox')
+
+    const overview = await (await fetch(`${base}/api/v1/overview`)).json()
+    expect(overview.inboxCount).toBe(0)
   })
 
   it('rejects malformed page ids', async () => {

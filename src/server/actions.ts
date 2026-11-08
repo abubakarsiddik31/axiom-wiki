@@ -33,6 +33,7 @@ import {
   renamePage,
   savePage,
 } from '../core/page-ops.js'
+import { capture, promoteInbox } from '../core/inbox.js'
 import { commitPaths } from '../core/git.js'
 import type { JobManager } from './jobs.js'
 import type { WatchController } from './watch.js'
@@ -76,6 +77,8 @@ const WRITE_ACTIONS = new Set([
   'page/delete',
   'page/restore',
   'link/insert',
+  'capture',
+  'inbox/promote',
 ])
 
 export function actionRequiresWrite(action: string): boolean {
@@ -786,6 +789,56 @@ export async function handleAction(
         await syncPages(config, { index: [sourceId] }, deps.invalidate)
         commitPaths(config.wikiDir, [pagePath], `Link ${sourceId} → ${targetId}`)
         return { status: 200, body: { sourceId, targetId, linked: true } }
+      })
+    } finally {
+      releaseLock(config.wikiDir)
+    }
+  }
+
+  if (action === 'capture') {
+    const text = typeof body['text'] === 'string' ? (body['text'] as string) : ''
+    if (!text.trim()) throw new BadRequestError('“text” is required.')
+    const title = stringField(body, 'title')
+    const source = stringField(body, 'source')
+    const tags = stringArrayField(body, 'tags')
+
+    if (!acquireLock(config.wikiDir)) return lockBusy(config)
+    try {
+      return await pageOp(async () => {
+        const result = capture(config.wikiDir, { text, title, tags, source })
+        await syncPages(config, { index: [result.id] }, deps.invalidate)
+        commitPaths(config.wikiDir, [result.path], `Capture ${result.id}`)
+        return { status: 200, body: result }
+      })
+    } finally {
+      releaseLock(config.wikiDir)
+    }
+  }
+
+  if (action === 'inbox/promote') {
+    const id = assertPageId(stringField(body, 'id'), 'id')
+    const category = stringField(body, 'category')
+    if (!category) throw new BadRequestError('“category” is required.')
+
+    if (!acquireLock(config.wikiDir)) return lockBusy(config)
+    try {
+      return await pageOp(async () => {
+        const state = loadState(config.wikiDir)
+        const result = promoteInbox(
+          config.wikiDir,
+          id,
+          category,
+          state,
+          Boolean(config.obsidianCompat),
+        )
+        saveState(config.wikiDir, state)
+        await syncPages(config, { index: result.touched, removed: [id] }, deps.invalidate)
+        commitPaths(
+          config.wikiDir,
+          ['wiki/pages', 'state.json'],
+          `Promote ${id} → ${result.newId}`,
+        )
+        return { status: 200, body: result }
       })
     } finally {
       releaseLock(config.wikiDir)

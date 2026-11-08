@@ -269,3 +269,13 @@ export function PlusIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function InboxIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 13h5l2 3h2l2-3h5" />
+      <path d="M4 13V6h16v7" />
+      <path d="M4 13v5h16v-5" />
+    </Icon>
+  )
+}

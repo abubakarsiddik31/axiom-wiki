@@ -48,6 +48,7 @@ export default defineConfig({
             { label: 'init', slug: 'commands/init' },
             { label: 'ingest', slug: 'commands/ingest' },
             { label: 'query', slug: 'commands/query' },
+            { label: 'threads', slug: 'commands/threads' },
             { label: 'map', slug: 'commands/map' },
             { label: 'sync', slug: 'commands/sync' },
             { label: 'watch', slug: 'commands/watch' },

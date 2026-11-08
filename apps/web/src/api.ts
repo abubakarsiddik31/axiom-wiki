@@ -24,6 +24,9 @@ import type {
   ScoutShareResult,
   SearchResult,
   SourcesPayload,
+  ThreadAskResult,
+  ThreadListPayload,
+  ThreadPayload,
   WatchPayload,
 } from './types'
 
@@ -156,6 +159,24 @@ export const api = {
     }),
 
   context: (q: string) => runAction<ContextPayload>('context', { q }),
+
+  threads: (signal?: AbortSignal) => request<ThreadListPayload>('/api/v1/threads', signal),
+
+  thread: (id: string, signal?: AbortSignal) =>
+    request<ThreadPayload>(`/api/v1/threads/${encodeURIComponent(id)}`, signal),
+
+  newThread: (title?: string) => runAction<{ thread: ThreadPayload['thread'] }>('thread/new', { title }),
+
+  askThread: (input: { threadId?: string; question: string; forensic?: boolean }) =>
+    runAction<ThreadAskResult & { job: JobPayload['job'] }>('thread/ask', input),
+
+  renameThread: (id: string, title: string) =>
+    runAction<{ thread: ThreadPayload['thread'] }>('thread/rename', { id, title }),
+
+  deleteThread: (id: string) => runAction<{ removed: string }>('thread/delete', { id }),
+
+  saveThread: (id: string, title?: string) =>
+    runAction<{ path: string; slug: string }>('thread/save', { id, title }),
 
   search: (query: string, signal?: AbortSignal) =>
     request<{ query: string; results: SearchResult[] }>(

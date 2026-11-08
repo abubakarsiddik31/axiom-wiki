@@ -19,6 +19,7 @@ import { renderMarkdown } from './render.js'
 import type { PageFrontmatter } from './render.js'
 import { BadRequestError, actionRequiresWrite, handleAction, readJsonBody } from './actions.js'
 import { describeRerankConfig } from '../core/rerank.js'
+import { listThreads, loadThread } from '../core/threads.js'
 import {
   SCOUT_DROP_DIR,
   SCOUT_MENTION,
@@ -362,6 +363,32 @@ export async function handleApi(
         stream.send('wiki-changed', { at: new Date().toISOString() })
       })
       req.on('close', () => unsubscribe?.())
+      return true
+    }
+
+    if (route === '/threads') {
+      sendJson(res, 200, { threads: listThreads(config.wikiDir) }, headOnly)
+      return true
+    }
+
+    if (route.startsWith('/threads/')) {
+      const id = decodeURIComponent(route.slice('/threads/'.length)).trim()
+      const thread = loadThread(config.wikiDir, id)
+      if (!thread) {
+        sendJson(res, 404, { error: `No thread “${id}”.` }, headOnly)
+        return true
+      }
+      // Answers are Markdown; render them with the same pipeline as pages so
+      // `[[wiki-links]]` and headings render instead of showing as literals.
+      const rendered = {
+        ...thread,
+        messages: thread.messages.map((message) =>
+          message.role === 'assistant' && !message.error && message.content.trim()
+            ? { ...message, html: renderMarkdown(message.content) }
+            : message,
+        ),
+      }
+      sendJson(res, 200, { thread: rendered }, headOnly)
       return true
     }
 

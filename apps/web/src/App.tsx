@@ -31,6 +31,7 @@ export function App() {
         <Route path="search" element={<Search />} />
         <Route path="graph" element={<Graph />} />
         <Route path="ask" element={<Query />} />
+        <Route path="ask/:threadId" element={<Query />} />
         <Route path="sources" element={<Sources />} />
         <Route path="integrity" element={<Integrity />} />
         <Route path="settings" element={<Settings />} />

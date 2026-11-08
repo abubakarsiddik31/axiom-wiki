@@ -26,7 +26,7 @@ The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ship
 - **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
 - **Inbox** — one-line capture with an optional title and tags, then triage: **Promote** into a real category (a rename that rewrites links) or **Merge** into an existing page. A nav badge shows what is waiting.
 - **Scout** — the always-on intake queue: paste a link, a thread, or a note; watch the queue drain; retry failures; copy the share endpoint and token; or check the drop folder. A nav badge shows what is queued. See [`scout`](/commands/scout).
-- **Ask** — retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence; optionally in forensic mode, then file the answer as an analysis page. Press **what will it read?** to preview the exact pages and token estimate before asking.
+- **Ask** — a conversation, not a search box. Each turn retrieves the most relevant pages, expands them one hop through the link graph, and answers from that evidence, keeping the thread's context. Follow-ups are rewritten into standalone queries before retrieval, and the rewritten query is shown under the answer. Conversations are saved (`chat/threads/`), listed in the sidebar, resumable at `/ask/<id>`, and can be filed whole into `analyses/` with **save**. Individual answers can be filed too. See [`threads`](/commands/threads).
 - **Sources** — list compiled sources, clip a URL, ingest a file from `raw/`, re-ingest, delete, or start a watcher that auto-ingests dropped files.
 - **Integrity** — dead links, orphans, metadata gaps, unresolved contradictions, citation audit, and agent lint. Its **Maintenance** panel previews and applies the same deterministic pass as `axiom-wiki maintain`: backfill missing summaries, adopt orphans, propose duplicates, and optionally create stubs for dead links.
 - **Settings** — provider/model, embeddings status, `obsidianCompat`, forensic mode, and semantic-index rebuild. The **Reranker** panel configures the provider (`local`, `llm`, `cohere`, `none`), local model, candidate/top-N limits, and the Cohere key, and can download or test a local model.
@@ -53,6 +53,8 @@ The UI is a client of the same API, which you can call directly:
 | `GET /api/v1/watch` | `{ running, startedAt, lastEvent }` |
 | `GET /api/v1/integrity` | dead links, orphans, metadata gaps, contradictions |
 | `GET /api/v1/config` | provider, model, embeddings status, reranker settings, write mode (no credentials) |
+| `GET /api/v1/threads` | saved Ask conversations, newest first |
+| `GET /api/v1/threads/:id` | one conversation, with assistant turns rendered to HTML |
 | `GET /api/v1/scout` | Scout queue, listener heartbeat, share URL, and (write mode only) the token |
 | `GET /api/v1/events` | SSE `wiki-changed` events |
 | `GET /api/v1/jobs` | `{ jobs }` |
@@ -61,7 +63,7 @@ The UI is a client of the same API, which you can call directly:
 | `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
 | `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
 
-Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `settings/save`, `rerank/setup`, `rerank/test`, `scout/share`, `scout/drain`, `scout/retry`, `scout/remove`, `scout/clear`, `scout/scan`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files, scout drains) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
+Actions: `ingest`, `clip`, `query`, `lint`, `context`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `capture`, `inbox/promote`, `maintain`, `maintain/apply`, `settings/save`, `rerank/setup`, `rerank/test`, `thread/new`, `thread/ask`, `thread/rename`, `thread/delete`, `thread/save`, `scout/share`, `scout/drain`, `scout/retry`, `scout/remove`, `scout/clear`, `scout/scan`, `preview`. Long-running actions (ingest, clip, query, thread asks, reindex, agent lint, watched files, scout drains) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and `context` assembles retrieval evidence; both stay available in read-only mode.
 
 `settings/save` persists reranker changes to the active config (write mode). `rerank/setup` downloads and caches a local model as a job. `rerank/test` scores a few pages with the current settings without writing.
 

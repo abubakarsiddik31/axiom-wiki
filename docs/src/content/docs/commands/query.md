@@ -5,9 +5,12 @@ description: Interactive chat against your wiki.
 
 ```bash
 axiom-wiki query
+axiom-wiki query --thread thr_4bb9d23dc2a3   # resume a saved conversation
 ```
 
 Opens an interactive chat where you can ask questions about your wiki content. The agent searches relevant pages, synthesizes an answer, and cites sources.
+
+Every conversation is saved. The first question names the thread, each turn is persisted under `<wikiDir>/chat/threads/`, and the footer prints the resume command. Reopen it with `--thread <id>`, or list what you have with [`axiom-wiki threads`](/commands/threads). The web **Ask** page reads the same threads, so a conversation can start in the terminal and continue in the browser.
 
 You can also type questions directly in the interactive shell without the `/query` prefix:
 

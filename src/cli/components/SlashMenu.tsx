@@ -24,6 +24,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'rerank',                       desc: 'Configure or test candidate reranking' },
   { name: 'export',                       desc: 'Export a static HTML site' },
   { name: 'scout',                        desc: 'Always-on intake queue (@scout)' },
+  { name: 'threads',                      desc: 'List saved Ask conversations' },
   { name: 'help',                         desc: 'Show all commands' },
 ]
 

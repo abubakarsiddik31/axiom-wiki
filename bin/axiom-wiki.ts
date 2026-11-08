@@ -71,13 +71,83 @@ program
 
 program
   .command('query [question]')
-  .description('Interactive chat against your wiki')
+  .description('Interactive conversation against your wiki (saved as a thread)')
   .option('-f, --forensic', 'Enable strict forensic grounded mode (zero trained knowledge)')
   .option('-g, --grounded', 'Alias for --forensic')
-  .action((question?: string, opts?: { forensic?: boolean; grounded?: boolean }) => {
+  .option('-t, --thread <id>', 'Resume a saved conversation')
+  .action(async (question?: string, opts?: { forensic?: boolean; grounded?: boolean; thread?: string }) => {
     requireConfig()
+    const config = getConfig()
+    if (!config) return
     const forensic = Boolean(opts?.forensic || opts?.grounded)
-    renderApp({ name: 'query', prefill: question, forensic })
+
+    if (opts?.thread) {
+      const { loadThread } = await import('../src/core/threads.js')
+      if (!loadThread(config.wikiDir, opts.thread)) {
+        console.error(`No conversation “${opts.thread}”. Run: axiom-wiki threads`)
+        process.exit(1)
+      }
+    }
+
+    renderApp({ name: 'query', prefill: question, forensic, threadId: opts?.thread })
+  })
+
+program
+  .command('threads')
+  .description('List, read, or delete saved conversations')
+  .option('--show <id>', 'print one conversation as Markdown')
+  .option('--delete <id>', 'delete a conversation')
+  .option('--new', 'start a new conversation and print its id')
+  .option('--json', 'print JSON')
+  .action(async (opts: { show?: string; delete?: string; new?: boolean; json?: boolean }) => {
+    requireConfig()
+    const config = getConfig()
+    if (!config) return
+    const { createThread, deleteThread, listThreads, loadThread, threadMarkdown } = await import(
+      '../src/core/threads.js'
+    )
+
+    if (opts.new) {
+      const thread = createThread(config.wikiDir)
+      console.log(opts.json ? JSON.stringify(thread, null, 2) : thread.id)
+      return
+    }
+
+    if (opts.delete) {
+      if (!deleteThread(config.wikiDir, opts.delete)) {
+        console.error(`No conversation “${opts.delete}”.`)
+        process.exit(1)
+      }
+      console.log(`Deleted ${opts.delete}.`)
+      return
+    }
+
+    if (opts.show) {
+      const thread = loadThread(config.wikiDir, opts.show)
+      if (!thread) {
+        console.error(`No conversation “${opts.show}”.`)
+        process.exit(1)
+      }
+      console.log(threadMarkdown(thread))
+      return
+    }
+
+    const threads = listThreads(config.wikiDir)
+    if (opts.json) {
+      console.log(JSON.stringify({ threads }, null, 2))
+      return
+    }
+    if (threads.length === 0) {
+      console.log('No saved conversations. Start one with: axiom-wiki query')
+      return
+    }
+    for (const thread of threads) {
+      console.log(
+        `${thread.id}  ${thread.title}  (${thread.messageCount} msgs, ${thread.updatedAt.slice(0, 10)})`,
+      )
+    }
+    console.log('')
+    console.log('Resume with: axiom-wiki query --thread <id>')
   })
 
 program

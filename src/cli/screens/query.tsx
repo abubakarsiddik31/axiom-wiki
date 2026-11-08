@@ -7,7 +7,15 @@ import { getConfig } from '../../config/index.js'
 import { createAxiomAgent } from '../../agent/index.js'
 import { withRetry } from '../../core/retry.js'
 import { writePage, appendLog, listPages } from '../../core/wiki.js'
-import { assembleContext } from '../../core/context.js'
+import { assembleContext, type ContextSource } from '../../core/context.js'
+import {
+  appendMessage,
+  createThread,
+  loadThread,
+  newMessage,
+  titleFromQuestion,
+  type ThreadRerank,
+} from '../../core/threads.js'
 
 type QueryState = 'idle' | 'thinking' | 'answering' | 'filing_prompt' | 'filing_title' | 'filing'
 
@@ -29,9 +37,11 @@ interface Props {
   onExit?: () => void
   prefill?: string
   forensic?: boolean
+  /** Resume a saved conversation. */
+  threadId?: string
 }
 
-export function QueryScreen({ onExit, prefill, forensic }: Props) {
+export function QueryScreen({ onExit, prefill, forensic, threadId }: Props) {
   const { exit } = useApp()
   const doExit = onExit ?? exit
   const config = getConfig()
@@ -46,6 +56,8 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
   const [filingTitle, setFilingTitle] = useState('')
   const [statusLine, setStatusLine] = useState('')
   const [wikiEmpty, setWikiEmpty] = useState(false)
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(threadId ?? null)
+  const [threadTitle, setThreadTitle] = useState<string | null>(null)
 
   // Check if wiki is empty on mount
   useEffect(() => {
@@ -54,6 +66,30 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
       if (pages.length === 0) setWikiEmpty(true)
     })
   }, [])
+
+  // Resume a saved conversation: rebuild the visible history from its turns.
+  // Depend on the directory string, not the config object, so a re-render does
+  // not reset a conversation in progress.
+  const threadWikiDir = config?.wikiDir ?? null
+  useEffect(() => {
+    if (!threadWikiDir || !threadId) return
+    const thread = loadThread(threadWikiDir, threadId)
+    if (!thread) return
+    setThreadTitle(thread.title)
+    const pairs: QAPair[] = []
+    let pending: string | null = null
+    for (const message of thread.messages) {
+      if (message.role === 'user') {
+        pending = message.content
+      } else if (pending && !message.error) {
+        pairs.push({ question: pending, answer: message.content })
+        pending = null
+      } else {
+        pending = null
+      }
+    }
+    setHistory(pairs.slice(-10))
+  }, [threadWikiDir, threadId])
 
   // Handle y/n at filing prompt + global escape + mode toggle
   useInput((char, key) => {
@@ -108,7 +144,20 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
     setStreamText('')
     setState('thinking')
 
+    // Every question is durable before the model runs, and the first one
+    // names the conversation.
+    let thread = activeThreadId
+    if (!thread) {
+      const startingTitle = titleFromQuestion(q)
+      thread = createThread(config.wikiDir, { title: startingTitle }).id
+      setActiveThreadId(thread)
+      setThreadTitle(startingTitle)
+    }
+    appendMessage(config.wikiDir, thread, newMessage('user', q, {}))
+
     const agent = createAxiomAgent(config, { forensic: isForensic })
+    let sources: ContextSource[] = []
+    let rerankInfo: ThreadRerank | null = null
 
     // Build context messages from history (max last 10 exchanges)
     const contextMessages: Array<{ role: 'user' | 'assistant'; content: string }> = []
@@ -126,6 +175,8 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
           onStatus: (message) => setStatusLine(message),
           rerank: { allowDownload: false },
         })
+        sources = evidence.sources
+        rerankInfo = evidence.rerank ?? null
         if (evidence.sources.length > 0) {
           prompt = `${evidence.text}\n\n## Question\n\n${q}`
           const rerankLabel = evidence.rerank
@@ -154,16 +205,22 @@ export function QueryScreen({ onExit, prefill, forensic }: Props) {
         setState('answering')
       }
 
+      appendMessage(
+        config.wikiDir,
+        thread,
+        newMessage('assistant', fullAnswer, { sources, rerank: rerankInfo }),
+      )
       await appendLog(config.wikiDir, q, 'query')
       setCurrentA(fullAnswer)
       setState('filing_prompt')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
+      appendMessage(config.wikiDir, thread, newMessage('assistant', '', { error: msg }))
       setCurrentA(`Error: ${msg}`)
       commitQA(q, `Error: ${msg}`)
       setState('idle')
     }
-  }, [config, history, doExit])
+  }, [config, history, doExit, activeThreadId, isForensic])
 
   const submitFiling = useCallback(async (title: string) => {
     if (!config) return
@@ -233,6 +290,12 @@ ${currentA}
         )}
       </Box>
       <Text color="gray">{divider}</Text>
+      {activeThreadId ? (
+        <Text color="gray">
+          thread: {activeThreadId}
+          {threadTitle ? ` · ${threadTitle}` : ''}
+        </Text>
+      ) : null}
 
       {/* Chat history (last 5) */}
       {history.slice(-5).map((pair, i) => (
@@ -316,6 +379,13 @@ ${currentA}
           <Box marginTop={1}>
             <Text color="gray" dimColor>Ctrl+C or type 'exit' to quit</Text>
           </Box>
+          {activeThreadId ? (
+            <Box marginTop={1}>
+              <Text color="gray" dimColor>
+                Saved · resume with: axiom-wiki query --thread {activeThreadId}
+              </Text>
+            </Box>
+          ) : null}
         </Box>
       )}
     </Box>

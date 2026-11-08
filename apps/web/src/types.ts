@@ -135,6 +135,68 @@ export interface ContextPayload {
   } | null
 }
 
+export interface ThreadSource {
+  id: string
+  title: string
+  category: string
+  summary: string
+  score: number
+  origin: ContextOrigin
+}
+
+export interface ThreadRerank {
+  provider: 'none' | 'local' | 'llm' | 'cohere'
+  model: string
+  used: boolean
+  reason?: string
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  at: string
+  /** Server-rendered Markdown for assistant turns. */
+  html?: string
+  sources?: ThreadSource[]
+  rerank?: ThreadRerank | null
+  /** Retrieval query, when a follow-up was rewritten to stand alone. */
+  searched?: string
+  error?: string
+  jobId?: string
+}
+
+export interface ChatThread {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  messages: ChatMessage[]
+}
+
+export interface ThreadSummary {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+  preview: string
+  lastRole: 'user' | 'assistant' | null
+}
+
+export interface ThreadListPayload {
+  threads: ThreadSummary[]
+}
+
+export interface ThreadPayload {
+  thread: ChatThread
+}
+
+export interface ThreadAskResult {
+  threadId: string
+  created: boolean
+}
+
 export interface GraphNode {
   path: string
   id: string

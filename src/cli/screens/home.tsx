@@ -220,6 +220,12 @@ export function HomeScreen() {
         return
       }
 
+      if (parsed.command === 'threads') {
+        addLog({ text: '  Run: axiom-wiki threads', color: 'gray' })
+        addLog({ text: '  Resume: axiom-wiki query --thread <id>', color: 'gray' })
+        return
+      }
+
       return
     }
 

@@ -25,6 +25,19 @@ import {
 } from '../core/links.js'
 import { getPageVersionAt } from '../core/history.js'
 import { assembleContext } from '../core/context.js'
+import { rewriteFollowUp } from '../core/condense.js'
+import {
+  appendMessage,
+  createThread,
+  deleteThread,
+  historyFor,
+  loadThread,
+  newMessage,
+  renameThread,
+  threadMarkdown,
+  titleFromQuestion,
+  type ThreadSource,
+} from '../core/threads.js'
 import {
   PageOpError,
   deletePage,
@@ -104,6 +117,11 @@ const WRITE_ACTIONS = new Set([
   'maintain/apply',
   'settings/save',
   'rerank/setup',
+  'thread/new',
+  'thread/ask',
+  'thread/rename',
+  'thread/delete',
+  'thread/save',
   'scout/share',
   'scout/drain',
   'scout/retry',
@@ -645,6 +663,174 @@ export async function handleAction(
       await updateIndex(config.wikiDir)
       await updateMOC(config.wikiDir)
       deps.invalidate?.()
+      return { status: 200, body: { path: pagePath, slug } }
+    } finally {
+      releaseLock(config.wikiDir)
+    }
+  }
+
+  if (action === 'thread/new') {
+    const thread = createThread(config.wikiDir, { title: stringField(body, 'title') })
+    deps.invalidate?.()
+    return { status: 201, body: { thread } }
+  }
+
+  if (action === 'thread/ask') {
+    const question = stringField(body, 'question')
+    if (!question) throw new BadRequestError('“question” is required.')
+    const forensic = boolField(body, 'forensic') ?? false
+    const useContext = boolField(body, 'context') ?? true
+
+    let threadId = stringField(body, 'threadId')
+    let created = false
+    if (threadId) {
+      if (!loadThread(config.wikiDir, threadId)) {
+        return { status: 404, body: { error: `No thread “${threadId}”.` } }
+      }
+    } else {
+      threadId = createThread(config.wikiDir, { title: titleFromQuestion(question) }).id
+      created = true
+    }
+
+    const job = manager.create('query')
+    // The question is durable before the model runs: a crash leaves an
+    // unanswered turn instead of losing what you asked.
+    appendMessage(config.wikiDir, threadId, newMessage('user', question, { jobId: job.id }))
+    deps.invalidate?.()
+
+    const id = threadId
+    manager.start(job.id, async ({ delta, log, signal }) => {
+      let answer = ''
+      let evidenceSources: ThreadSource[] = []
+      let rerankInfo: Awaited<ReturnType<typeof assembleContext>>['rerank'] | null = null
+      let searched: string | undefined
+
+      const settle = (error?: string) => {
+        try {
+          appendMessage(
+            config.wikiDir,
+            id,
+            newMessage(
+              'assistant',
+              answer.trim(),
+              {
+                sources: evidenceSources,
+                rerank: rerankInfo ?? null,
+                ...(searched ? { searched } : {}),
+                ...(error ? { error } : {}),
+                jobId: job.id,
+              },
+            ),
+          )
+          deps.invalidate?.()
+        } catch {
+          // The thread was deleted mid-turn; nothing left to write to.
+        }
+      }
+
+      try {
+        const thread = loadThread(config.wikiDir, id)
+        const messages = thread?.messages ?? []
+        const last = messages.at(-1)
+        const prior =
+          last?.role === 'user' && last.content === question ? messages.slice(0, -1) : messages
+        const history = historyFor(prior)
+
+        let prompt = question
+        if (useContext) {
+          log('Retrieving wiki context…')
+          const rewrite = await rewriteFollowUp(config, history, question)
+          searched = rewrite.rewritten ? rewrite.query : undefined
+          if (searched) log(`Follow-up → “${searched}”`)
+
+          const evidence = await assembleContext(config, rewrite.query, {
+            index: deps.linkIndex?.(),
+            onStatus: log,
+            rerank: { allowDownload: false },
+          })
+          rerankInfo = evidence.rerank ?? null
+          evidenceSources = evidence.sources as ThreadSource[]
+          if (evidence.sources.length > 0) {
+            log(
+              `Context: ${evidence.sources.length} pages (~${evidence.estimatedTokens} tokens${evidence.truncated ? ', truncated' : ''})`,
+            )
+            prompt = `${evidence.text}\n\n## Question\n\n${question}`
+          } else {
+            log('No matching pages — falling back to agent search.')
+          }
+        }
+
+        const agent = createAxiomAgent(config, { forensic })
+        const stream = await withRetry(() =>
+          agent.stream([...history, { role: 'user' as const, content: prompt }]),
+        )
+        for await (const chunk of stream.textStream) {
+          if (signal.aborted) break
+          answer += chunk
+          delta(chunk)
+        }
+
+        if (signal.aborted) {
+          settle('Stopped.')
+          throw new Error('Query cancelled.')
+        }
+
+        settle()
+        await appendLog(config.wikiDir, question, 'query')
+        return {
+          answer,
+          threadId: id,
+          created,
+          sources: evidenceSources,
+          rerank: rerankInfo,
+          searched: searched ?? null,
+        }
+      } catch (err) {
+        if (!signal.aborted) settle(err instanceof Error ? err.message : String(err))
+        throw err
+      }
+    })
+
+    return { status: 202, body: { job, threadId: id, created } }
+  }
+
+  if (action === 'thread/rename') {
+    const id = stringField(body, 'id')
+    const title = stringField(body, 'title')
+    if (!id || !title) throw new BadRequestError('“id” and “title” are required.')
+    const thread = renameThread(config.wikiDir, id, title)
+    if (!thread) return { status: 404, body: { error: `No thread “${id}”.` } }
+    deps.invalidate?.()
+    return { status: 200, body: { thread } }
+  }
+
+  if (action === 'thread/delete') {
+    const id = stringField(body, 'id')
+    if (!id) throw new BadRequestError('“id” is required.')
+    const removed = deleteThread(config.wikiDir, id)
+    if (!removed) return { status: 404, body: { error: `No thread “${id}”.` } }
+    deps.invalidate?.()
+    return { status: 200, body: { removed: id } }
+  }
+
+  if (action === 'thread/save') {
+    const id = stringField(body, 'id')
+    if (!id) throw new BadRequestError('“id” is required.')
+    const thread = loadThread(config.wikiDir, id)
+    if (!thread) return { status: 404, body: { error: `No thread “${id}”.` } }
+    if (thread.messages.length === 0) {
+      throw new BadRequestError('This conversation is empty.')
+    }
+
+    if (!acquireLock(config.wikiDir)) return lockBusy(config)
+    try {
+      const title = stringField(body, 'title') || thread.title
+      const slug = analysisSlug(title)
+      const pagePath = `wiki/pages/analyses/${slug}.md`
+      const today = new Date().toISOString().slice(0, 10)
+      await writePage(config.wikiDir, pagePath, threadMarkdown(thread, { title, date: today }))
+      await syncPages(config, { index: [idFromPagePath(pagePath)] }, deps.invalidate)
+      commitPaths(config.wikiDir, [pagePath, 'wiki/index.md', 'wiki/moc.md'], `Save thread: ${title}`)
       return { status: 200, body: { path: pagePath, slug } }
     } finally {
       releaseLock(config.wikiDir)

@@ -7,8 +7,12 @@ import type {
   JobPayload,
   JobsPayload,
   OverviewPayload,
+  PageDiffPayload,
+  PageHistoryPayload,
+  PageLinksPayload,
   PagePayload,
   PagesPayload,
+  SavePageResult,
   SearchResult,
   SourcesPayload,
   WatchPayload,
@@ -72,6 +76,7 @@ export const api = {
   pages: (
     params: {
       cat?: string
+      tag?: string
       q?: string
       cursor?: string | null
       limit?: number
@@ -81,6 +86,7 @@ export const api = {
   ) => {
     const query = new URLSearchParams()
     if (params.cat) query.set('cat', params.cat)
+    if (params.tag) query.set('tag', params.tag)
     if (params.q) query.set('q', params.q)
     if (params.cursor) query.set('cursor', params.cursor)
     if (params.limit) query.set('limit', String(params.limit))
@@ -91,6 +97,45 @@ export const api = {
 
   page: (id: string, signal?: AbortSignal) =>
     request<PagePayload>(`/api/v1/pages/${pagePath(id)}`, signal),
+
+  pageLinks: (id: string, signal?: AbortSignal) =>
+    request<PageLinksPayload>(`/api/v1/pages/${pagePath(id)}/links`, signal),
+
+  pageHistory: (id: string, signal?: AbortSignal) =>
+    request<PageHistoryPayload>(`/api/v1/pages/${pagePath(id)}/history`, signal),
+
+  pageDiff: (id: string, rev: string, signal?: AbortSignal) =>
+    request<PageDiffPayload>(
+      `/api/v1/pages/${pagePath(id)}/diff?rev=${encodeURIComponent(rev)}`,
+      signal,
+    ),
+
+  savePage: (draft: {
+    id?: string
+    category?: string
+    title: string
+    summary?: string
+    tags?: string[]
+    aliases?: string[]
+    body: string
+  }) => runAction<SavePageResult>('page/save', draft),
+
+  renamePage: (id: string, newId: string) =>
+    runAction<{ oldId: string; newId: string; touched: string[] }>('page/rename', { id, newId }),
+
+  mergePages: (source: string, target: string) =>
+    runAction<{ targetId: string; removedId: string; touched: string[] }>('page/merge', {
+      source,
+      target,
+    }),
+
+  deletePage: (id: string) => runAction<{ id: string; deleted: boolean }>('page/delete', { id }),
+
+  restorePage: (id: string, rev: string) =>
+    runAction<{ id: string; rev: string; restored: boolean }>('page/restore', { id, rev }),
+
+  linkMention: (sourceId: string, targetId: string) =>
+    runAction<{ linked: boolean }>('link/insert', { sourceId, targetId }),
 
   search: (query: string, signal?: AbortSignal) =>
     request<{ query: string; results: SearchResult[] }>(

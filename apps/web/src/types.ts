@@ -52,8 +52,60 @@ export interface PageFrontmatter {
 export interface PagePayload {
   id: string
   frontmatter: PageFrontmatter
+  /** Markdown body without frontmatter, used by the editor. */
+  body: string
   html: string
   backlinks: Backlink[]
+}
+
+export type RelatedReason = 'tag' | 'link' | 'co-citation' | 'mention'
+
+export interface UnlinkedMention {
+  id: string
+  title: string
+  snippet: string
+  mentions: number
+}
+
+export interface RelatedPage {
+  id: string
+  title: string
+  summary: string
+  score: number
+  reasons: RelatedReason[]
+  sharedTags: string[]
+}
+
+export interface PageLinksPayload {
+  id: string
+  title: string
+  unlinked: UnlinkedMention[]
+  related: RelatedPage[]
+}
+
+export interface PageCommit {
+  hash: string
+  shortHash: string
+  date: string
+  author: string
+  subject: string
+}
+
+export interface PageHistoryPayload {
+  available: boolean
+  reason?: string
+  commits: PageCommit[]
+}
+
+export interface PageDiffPayload {
+  rev: string
+  patch: string
+}
+
+export interface SavePageResult {
+  id: string
+  path: string
+  created: boolean
 }
 
 export interface GraphNode {
@@ -85,7 +137,7 @@ export interface PagesPayload {
   pages: PageMeta[]
   total: number
   nextCursor: string | null
-  facets: { categories: Record<string, number> }
+  facets: { categories: Record<string, number>; tags: Record<string, number> }
 }
 
 export interface OverviewPayload {

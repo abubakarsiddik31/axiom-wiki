@@ -10,6 +10,8 @@ import { Sources } from './pages/Sources'
 import { Query } from './pages/Query'
 import { Integrity } from './pages/Integrity'
 import { Settings } from './pages/Settings'
+import { PageEditor } from './pages/PageEditor'
+import { PageHistory } from './pages/PageHistory'
 import { NotFound } from './pages/NotFound'
 
 export function App() {
@@ -18,6 +20,9 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<Overview />} />
         <Route path="pages" element={<Pages />} />
+        <Route path="new" element={<PageEditor />} />
+        <Route path="edit/*" element={<PageEditor />} />
+        <Route path="history/*" element={<PageHistory />} />
         <Route path="page/*" element={<PageView />} />
         <Route path="search" element={<Search />} />
         <Route path="graph" element={<Graph />} />

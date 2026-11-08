@@ -13,6 +13,8 @@ import { listSources } from '../core/sources.js'
 import { loadState } from '../core/state.js'
 import { getLockInfo } from '../core/lock.js'
 import { checkEmbeddingConsistency, loadSearchManifest } from '../core/search/orama-store.js'
+import { analyzeLinks, type PageLinkEntry } from '../core/links.js'
+import { getPageDiff, getPageHistory } from '../core/history.js'
 import { renderMarkdown } from './render.js'
 import type { PageFrontmatter } from './render.js'
 import { BadRequestError, actionRequiresWrite, handleAction, readJsonBody } from './actions.js'
@@ -121,6 +123,7 @@ async function readPagePayload(config: AxiomConfig, id: string, graph?: WikiGrap
   return {
     id,
     frontmatter: data,
+    body,
     html: renderMarkdown(body),
     backlinks: graph ? backlinksFromGraph(graph, id) : [],
   }
@@ -133,6 +136,10 @@ export interface ApiOptions {
   subscribe?: (listener: () => void) => () => void
   jobs?: JobManager
   watch?: WatchController
+  /** Shared corpus link index, cached by the read cache. */
+  linkIndex?: () => Map<string, PageLinkEntry>
+  /** Called after a successful write so cached derivations refresh at once. */
+  onWrite?: () => void
 }
 
 function openSse(req: http.IncomingMessage, res: http.ServerResponse): {
@@ -267,6 +274,7 @@ export async function handleApi(
         jobs: jobManager,
         watch: options.watch,
         allowWrite: options.allowWrite,
+        invalidate: options.onWrite,
       })
       sendJson(res, result.status, result.body, headOnly)
       return true
@@ -458,16 +466,22 @@ export async function handleApi(
       const cursorParam = Number(url.searchParams.get('cursor') ?? 0)
       const offset = Number.isFinite(cursorParam) ? Math.max(0, Math.trunc(cursorParam)) : 0
       const category = url.searchParams.get('cat')?.trim() ?? ''
+      const tagFilter = url.searchParams.get('tag')?.trim().toLowerCase() ?? ''
       const needle = (url.searchParams.get('q') ?? '').trim().toLowerCase()
       const sort = url.searchParams.get('sort') ?? 'category'
 
       const facets: Record<string, number> = {}
+      const tagFacets: Record<string, number> = {}
       for (const page of snap.pages) {
         facets[page.category] = (facets[page.category] ?? 0) + 1
+        for (const tag of page.tags) {
+          tagFacets[tag] = (tagFacets[tag] ?? 0) + 1
+        }
       }
 
       const filtered = snap.pages.filter((page) => {
         if (category && page.category !== category) return false
+        if (tagFilter && !page.tags.some((tag) => tag.toLowerCase() === tagFilter)) return false
         if (!needle) return true
         return (
           page.title.toLowerCase().includes(needle) ||
@@ -492,7 +506,12 @@ export async function handleApi(
           pages: page,
           total: filtered.length,
           nextCursor: next,
-          facets: { categories: facets },
+          facets: {
+            categories: facets,
+            tags: Object.fromEntries(
+              Object.entries(tagFacets).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+            ),
+          },
         },
         headOnly,
       )
@@ -598,6 +617,51 @@ export async function handleApi(
         },
         headOnly,
       )
+      return true
+    }
+
+    const pageSubroute = /^\/pages\/(.+)\/(links|history|diff)$/.exec(route)
+    if (pageSubroute) {
+      const segments = pageSubroute[1].split('/').filter(Boolean)
+      if (segments.length < 2 || segments.some((segment) => !isSafeSegment(segment))) {
+        fail(res, 404, 'Unknown page address.', headOnly)
+        return true
+      }
+      const id = segments.join('/')
+      const view = pageSubroute[2]
+      const abs = path.join(config.wikiDir, 'wiki', 'pages', `${id}.md`)
+
+      if (!fs.existsSync(abs)) {
+        fail(res, 404, `No wiki page at “${id}”.`, headOnly)
+        return true
+      }
+
+      if (view === 'links') {
+        const intelligence = analyzeLinks(config.wikiDir, id, options.linkIndex?.())
+        if (!intelligence) {
+          fail(res, 404, `No wiki page at “${id}”.`, headOnly)
+          return true
+        }
+        sendJson(res, 200, intelligence, headOnly, { cacheControl: 'no-cache' })
+        return true
+      }
+
+      if (view === 'history') {
+        const limitParam = Number(url.searchParams.get('limit') ?? 40)
+        const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 40
+        sendJson(res, 200, getPageHistory(config.wikiDir, id, limit), headOnly, {
+          cacheControl: 'no-cache',
+        })
+        return true
+      }
+
+      const rev = url.searchParams.get('rev') ?? ''
+      const diff = getPageDiff(config.wikiDir, id, rev)
+      if (!diff) {
+        fail(res, 400, 'A valid “rev” commit hash is required.', headOnly)
+        return true
+      }
+      sendJson(res, 200, diff, headOnly, { cacheControl: 'no-cache' })
       return true
     }
 

@@ -148,6 +148,8 @@ Combines lexical **BM25 keyword search** with dense **vector embeddings** using 
 ### 🌐 Local Web App, JSON API & Link Graph (`serve`)
 Run `axiom-wiki serve` to launch the Axiom web app (`http://127.0.0.1:1717`), built with React and shipped pre-compiled with the CLI:
 * **Overview, pages, page view, search, and graph** — a dense, keyboard-friendly browser UI over the same Markdown on disk.
+* **Curation** — create, edit, rename, merge, delete, and restore pages; renaming rewrites every inbound link, and each page keeps a git-backed history with diffs.
+* **Link intelligence** — every page surfaces *mentions that never link* (one click to fix) and *related pages* scored by shared tags, links, and sources.
 * **Ask, Sources, Integrity, and Settings** — stream a query answer, clip or ingest from `raw/`, watch for new files, verify citations, review contradictions, and rebuild the semantic index without leaving the browser.
 * **Interactive link graph** — zoom, pan, and click nodes; orphan pages are dashed and dead links are listed inline.
 * **Live updates** — an SSE stream refreshes the current view when an ingest or agent write lands.

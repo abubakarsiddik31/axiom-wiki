@@ -98,6 +98,8 @@ export function createHandler(
       if (await handleApi(config, url, req, res, snapshot, {
         allowWrite: options.allowWrite,
         subscribe: cache ? (listener) => cache.onChange(listener) : undefined,
+        linkIndex: cache ? () => cache.getLinkIndex() : undefined,
+        onWrite: cache ? () => cache.refresh() : undefined,
         jobs: options.jobs,
         watch: options.watch,
       })) return

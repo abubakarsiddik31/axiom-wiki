@@ -1,6 +1,6 @@
 ---
 title: serve
-description: Browse the wiki in a local read-only web app with a JSON API.
+description: Browse, curate, and query the wiki in a local web app with a JSON API.
 ---
 
 ```bash
@@ -16,8 +16,10 @@ Starts a local web server (default `http://127.0.0.1:1717`) that serves the **Ax
 The frontend lives in `apps/web` (Vite + React + TypeScript + Tailwind) and ships pre-built in the npm package, so `axiom-wiki serve` needs no extra install or second process:
 
 - **Overview** — page and source counts, wiki size, last ingest, semantic index health, pages by category, and the ten most recently updated pages.
-- **Pages** — every page grouped by category, with client-side text and category filters.
-- **Page view** — rendered Markdown with frontmatter (tags, sources, updatedAt), rewritten wiki-links, citation pills, and a **Linked from** panel ("what links here").
+- **Pages** — every page, filterable by category, tag, or text, with paging and a recently-updated sort.
+- **Page view** — rendered Markdown with frontmatter (tags, sources, updatedAt), rewritten wiki-links, citation pills, and three link panels: **Linked from** (what links here), **Mentions, not links** (unlinked mentions with one-click linking), and **Related** (shared tags, links, and sources).
+- **Page authoring** — create and edit pages in the browser with a Markdown editor and server-rendered preview; rename (rewriting every inbound link), merge duplicates, and delete.
+- **History** — per-page commit log with unified diffs and one-click restore. Every page write is committed, so changes are auditable and reversible.
 - **Search** — the same hybrid search the CLI uses (lexical + semantic when embeddings are enabled), with section badges and highlighted snippets.
 - **Graph** — the page link graph with zoom, pan, and clickable nodes; orphan pages are dashed and dead links are listed alongside.
 - **Ask** — run a streaming query against the wiki agent, optionally in forensic mode, and file the answer as an analysis page.
@@ -36,8 +38,11 @@ The UI is a client of the same API, which you can call directly:
 | Route | Returns |
 |---|---|
 | `GET /api/v1/overview` | `{ status, recent }` |
-| `GET /api/v1/pages` | `{ pages, total, nextCursor, facets }` |
-| `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, html, backlinks }` |
+| `GET /api/v1/pages` | `{ pages, total, nextCursor, facets }` (optional `cat`, `tag`, `q`, `sort`, `cursor`, `limit`) |
+| `GET /api/v1/pages/:category/:slug` | `{ id, frontmatter, body, html, backlinks }` |
+| `GET /api/v1/pages/:category/:slug/links` | `{ id, title, unlinked, related }` |
+| `GET /api/v1/pages/:category/:slug/history` | `{ available, reason?, commits }` |
+| `GET /api/v1/pages/:category/:slug/diff?rev=` | `{ rev, patch }` |
 | `GET /api/v1/search?q=…` | `{ query, results }` (optional `limit`, `category`) |
 | `GET /api/v1/graph` | `{ nodes, edges, orphans, deadLinks, totalNodes, totalEdges, orphanCount, deadLinkCount, truncated }` |
 | `GET /api/v1/sources` | `{ sources, rawFiles, lock }` |
@@ -51,7 +56,7 @@ The UI is a client of the same API, which you can call directly:
 | `POST /api/v1/actions/:action` | action-specific result or `202 { job }` |
 | `DELETE /api/v1/jobs/:id` | cancel a queued/running job |
 
-Actions: `ingest`, `clip`, `query`, `lint`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream.
+Actions: `ingest`, `clip`, `query`, `lint`, `sources/delete`, `sources/reingest`, `embeddings/reindex`, `analysis/save`, `contradiction/resolve`, `watch/start`, `watch/stop`, `page/save`, `page/rename`, `page/merge`, `page/delete`, `page/restore`, `link/insert`, `preview`. Long-running actions (ingest, clip, query, reindex, agent lint, watched files) return a job id; poll the job or subscribe to its SSE stream. `preview` renders Markdown and stays available in read-only mode.
 
 Write mode also enables **watch mode**: `POST /api/v1/actions/watch/start` watches `raw/` and compiles each dropped file as a job. This is the browser equivalent of `axiom-wiki watch` and pairs with the Obsidian Web Clipper.
 
@@ -91,12 +96,13 @@ Without `--allow-write`, the server exposes `GET`/`HEAD` routes only. It is safe
 axiom-wiki serve --allow-write
 ```
 
-Write mode enables ingest, clip, source deletion/re-ingest, query, analysis filing, contradiction resolution, and semantic reindexing. It is deliberately narrow:
+Write mode enables ingest, clip, source deletion/re-ingest, query, analysis filing, contradiction resolution, semantic reindexing, and page authoring (create, edit, rename, merge, delete, restore). It is deliberately narrow:
 
 - It only starts on a loopback host (`127.0.0.1`, `localhost`, or `::1`); `--host 0.0.0.0 --allow-write` is refused.
 - Every mutating request needs `X-Axiom-Write: 1`; cross-origin `Origin` headers are rejected (DNS-rebinding guard).
 - Web ingest only reads files inside `raw/`. Use the CLI for arbitrary local paths.
-- Mutations acquire the same compilation lock as the CLI. A busy wiki returns `409` with the holder PID instead of racing.
+- **Mutations acquire the same compilation lock as the CLI.** A busy wiki returns `409` with the holder PID instead of racing.
+- **Page writes keep derived artifacts in sync** — `index.md`, `moc.md`, the semantic index, and `state.json` concept mappings are updated, and the changed paths are committed (scoped to those paths) so history stays clean.
 
 To share a wiki publicly, use [Obsidian-compatible](/guides/obsidian/) publishing or a static export.
 

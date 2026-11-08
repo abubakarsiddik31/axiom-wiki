@@ -258,3 +258,180 @@ describe('read-only action API', () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe('page curation actions', () => {
+  const { wikiDir, config } = scaffold()
+  let server: Server | null = null
+  let base = ''
+
+  beforeAll(async () => {
+    // A git repo makes history and scoped commits real rather than mocked.
+    const { execFileSync } = await import('child_process')
+    const git = (args: string[]) => execFileSync('git', args, { cwd: wikiDir, stdio: 'ignore' })
+    git(['init'])
+    git(['config', 'user.email', 'test@example.com'])
+    git(['config', 'user.name', 'Axiom Test'])
+    git(['add', '.'])
+    git(['commit', '-m', 'seed'])
+
+    server = await startServer({
+      config,
+      port: 0,
+      host: '127.0.0.1',
+      quiet: true,
+      staticDir: false,
+      allowWrite: true,
+    })
+    const addr = server.address()
+    const port = typeof addr === 'object' && addr ? addr.port : 0
+    base = `http://127.0.0.1:${port}`
+  })
+
+  afterAll(() => {
+    releaseLock(wikiDir)
+    server?.close()
+    fs.rmSync(wikiDir, { recursive: true, force: true })
+  })
+
+  function post(action: string, body: unknown, headers: Record<string, string> = {}) {
+    return fetch(`${base}/api/v1/actions/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Axiom-Write': '1', ...headers },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('previews markdown without requiring write mode headers', async () => {
+    const res = await fetch(`${base}/api/v1/actions/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: '# Hello\n\nWorld' }),
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).html).toContain('<h1')
+  })
+
+  it('creates and edits a page, returning its body for the editor', async () => {
+    const created = await post('page/save', {
+      category: 'concepts',
+      title: 'Computability',
+      summary: 'What can be computed',
+      tags: ['logic', 'computing'],
+      body: 'Alan Turing defined computability.',
+    })
+    expect(created.status).toBe(200)
+    const result = await created.json()
+    expect(result.created).toBe(true)
+    expect(result.id).toBe('concepts/computability')
+
+    const page = await (await fetch(`${base}/api/v1/pages/concepts/computability`)).json()
+    expect(page.body).toContain('Alan Turing defined computability.')
+    expect(page.frontmatter.tags).toEqual(['logic', 'computing'])
+
+    const edited = await post('page/save', {
+      id: 'concepts/computability',
+      title: 'Computability',
+      body: 'Edited body.',
+    })
+    expect(edited.status).toBe(200)
+    expect((await edited.json()).created).toBe(false)
+  })
+
+  it('reports unlinked mentions and related pages', async () => {
+    const body = await (await fetch(`${base}/api/v1/pages/entities/thing/links`)).json()
+    expect(body.id).toBe('entities/thing')
+    // "Thing" is mentioned by the related concept page's body? No — assert shape
+    // and that the endpoint is wired, not a specific corpus.
+    expect(Array.isArray(body.unlinked)).toBe(true)
+    expect(Array.isArray(body.related)).toBe(true)
+  })
+
+  it('wraps an unlinked mention into a wiki-link', async () => {
+    await post('page/save', {
+      category: 'analyses',
+      title: 'Survey',
+      body: 'The Thing matters a great deal.',
+    })
+
+    const linked = await post('link/insert', {
+      sourceId: 'analyses/survey',
+      targetId: 'entities/thing',
+    })
+    expect(linked.status).toBe(200)
+    const survey = fs.readFileSync(path.join(wikiDir, 'wiki/pages/analyses/survey.md'), 'utf-8')
+    expect(survey).toContain('[[entities/thing|Thing]]')
+
+    // The shared link index must be invalidated synchronously: reading it right
+    // after the write should not still report the mention as unlinked.
+    const after = await (await fetch(`${base}/api/v1/pages/entities/thing/links`)).json()
+    expect(after.unlinked.map((mention: { id: string }) => mention.id)).not.toContain(
+      'analyses/survey',
+    )
+  })
+
+  it('renames a page and rewrites inbound links', async () => {
+    await post('page/save', {
+      category: 'concepts',
+      title: 'Variance',
+      body: 'Links to [[entities/thing]].',
+    })
+
+    const res = await post('page/rename', { id: 'entities/thing', newId: 'concepts/thing' })
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/entities/thing.md'))).toBe(false)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/thing.md'))).toBe(true)
+
+    const variance = fs.readFileSync(path.join(wikiDir, 'wiki/pages/concepts/variance.md'), 'utf-8')
+    expect(variance).toContain('[[concepts/thing]]')
+  })
+
+  it('serves history and diffs for a page', async () => {
+    const history = await (await fetch(`${base}/api/v1/pages/concepts/variance/history`)).json()
+    expect(history.available).toBe(true)
+    expect(history.commits.length).toBeGreaterThan(0)
+
+    const rev = history.commits[0].hash
+    const diff = await fetch(
+      `${base}/api/v1/pages/concepts/variance/diff?rev=${encodeURIComponent(rev)}`,
+    )
+    expect(diff.status).toBe(200)
+    expect((await diff.json()).patch).toContain('variance')
+  })
+
+  it('restores a previous version', async () => {
+    const first = await (await fetch(`${base}/api/v1/pages/concepts/variance/history`)).json()
+    const oldest = first.commits[first.commits.length - 1].hash
+
+    await post('page/save', { id: 'concepts/variance', title: 'Variance', body: 'Changed.' })
+    const restored = await post('page/restore', { id: 'concepts/variance', rev: oldest })
+    expect(restored.status).toBe(200)
+
+    const page = await (await fetch(`${base}/api/v1/pages/concepts/variance`)).json()
+    expect(page.body).not.toBe('Changed.')
+  })
+
+  it('merges a page into another and deletes the source', async () => {
+    await post('page/save', { category: 'concepts', title: 'Alpha', body: 'alpha body' })
+    await post('page/save', { category: 'concepts', title: 'Beta', body: 'beta body' })
+
+    const res = await post('page/merge', { source: 'concepts/beta', target: 'concepts/alpha' })
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/beta.md'))).toBe(false)
+
+    const alpha = fs.readFileSync(path.join(wikiDir, 'wiki/pages/concepts/alpha.md'), 'utf-8')
+    expect(alpha).toContain('alpha body')
+    expect(alpha).toContain('beta body')
+  })
+
+  it('deletes a page', async () => {
+    await post('page/save', { category: 'concepts', title: 'Disposable', body: 'gone' })
+    const res = await post('page/delete', { id: 'concepts/disposable' })
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(path.join(wikiDir, 'wiki/pages/concepts/disposable.md'))).toBe(false)
+  })
+
+  it('rejects malformed page ids', async () => {
+    const res = await post('page/save', { id: '../escape', title: 'X', body: '' })
+    expect(res.status).toBe(400)
+  })
+})

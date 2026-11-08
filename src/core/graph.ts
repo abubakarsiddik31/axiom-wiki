@@ -41,7 +41,7 @@ export function extractLinks(content: string): string[] {
   return Array.from(links)
 }
 
-function normalizeLinkId(link: string): string {
+export function normalizeLinkId(link: string): string {
   let clean = link.trim().replace(/\\/g, '/')
   // If no category prefix, default to entities/ as per convention
   if (!clean.includes('/')) {

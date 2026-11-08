@@ -2,6 +2,7 @@ import path from 'path'
 import { watch, type FSWatcher } from 'chokidar'
 
 import { buildWikiSnapshot, type WikiSnapshot } from '../core/snapshot.js'
+import { buildLinkIndex, type PageLinkEntry } from '../core/links.js'
 
 /**
  * Process-local read cache for the web server.
@@ -18,6 +19,7 @@ export class WikiReadCache {
   private snapshot: WikiSnapshot | null = null
   private builtAt = 0
   private inflight: Promise<WikiSnapshot> | null = null
+  private linkIndex: Map<string, PageLinkEntry> | null = null
   private watcher: FSWatcher | null = null
   private invalidateTimer: NodeJS.Timeout | null = null
   private readonly changeListeners = new Set<() => void>()
@@ -65,6 +67,7 @@ export class WikiReadCache {
     this.invalidateTimer = setTimeout(() => {
       this.invalidateTimer = null
       this.snapshot = null
+      this.linkIndex = null
       this.builtAt = 0
       this.notifyChange()
     }, this.debounceMs)
@@ -121,12 +124,36 @@ export class WikiReadCache {
     return this.inflight
   }
 
+  /**
+   * Corpus-wide link index, built once per snapshot generation. Link
+   * intelligence is O(pages) in I/O, so serving it from the same invalidation
+   * cycle as the snapshot keeps page views flat instead of re-reading every
+   * page for each request.
+   */
+  getLinkIndex(): Map<string, PageLinkEntry> {
+    if (this.closed) return buildLinkIndex(this.wikiDir)
+    if (!this.linkIndex) this.linkIndex = buildLinkIndex(this.wikiDir)
+    return this.linkIndex
+  }
+
+  /**
+   * Drops cached derivations without emitting an SSE change. Used after a write
+   * that the caller already knows about, so an immediate re-read (for example
+   * the link panel after linking a mention) is not served stale.
+   */
+  refresh(): void {
+    this.snapshot = null
+    this.linkIndex = null
+    this.builtAt = 0
+  }
+
   invalidate(): void {
     if (this.invalidateTimer) {
       clearTimeout(this.invalidateTimer)
       this.invalidateTimer = null
     }
     this.snapshot = null
+    this.linkIndex = null
     this.builtAt = 0
     this.notifyChange()
   }

@@ -5,15 +5,17 @@ import { api, idFromPath } from '../api'
 import { useAsync, useTitle } from '../hooks'
 import { pluralize } from '../format'
 import { PageHeading, ErrorPanel, LoadingPage, EmptyState, SectionLabel } from '../components/ui'
-import { ArrowRightIcon } from '../components/Icons'
+import { ArrowRightIcon, PlusIcon } from '../components/Icons'
 
 const LIMIT = 100
 
 export function Pages() {
   const [params, setParams] = useSearchParams()
   const category = params.get('cat') ?? ''
+  const tag = params.get('tag') ?? ''
   const query = params.get('q') ?? ''
   const cursor = params.get('cursor') ?? ''
+  const sort = (params.get('sort') as 'category' | 'title' | 'updated' | null) ?? 'category'
 
   const [text, setText] = useState(query)
   const committed = useRef(query)
@@ -44,8 +46,8 @@ export function Pages() {
   }, [text])
 
   const { data, error, loading, reload } = useAsync(
-    (signal) => api.pages({ cat: category, q: query, cursor, limit: LIMIT }, signal),
-    [category, query, cursor],
+    (signal) => api.pages({ cat: category, tag, q: query, cursor, limit: LIMIT, sort }, signal),
+    [category, tag, query, cursor, sort],
   )
 
   function update(key: string, value: string) {
@@ -69,6 +71,9 @@ export function Pages() {
 
   const facets = data.facets.categories
   const categories = Object.entries(facets).sort((a, b) => a[0].localeCompare(b[0]))
+  const tagFacets = Object.entries(data.facets.tags ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 14)
   const allCount = Object.values(facets).reduce((sum, count) => sum + count, 0)
   const offset = Number(cursor) || 0
   const from = data.pages.length ? offset + 1 : 0
@@ -79,7 +84,15 @@ export function Pages() {
       <PageHeading
         eyebrow="Library"
         title="All pages"
-        description={`${pluralize(allCount, 'page')} across ${pluralize(categories.length, 'category', 'categories')}. Filter by category or text; results are paged.`}
+        description={`${pluralize(allCount, 'page')} across ${pluralize(categories.length, 'category', 'categories')}. Filter by category, tag, or text; results are paged.`}
+        actions={
+          <Link
+            to="/new"
+            className="inline-flex items-center gap-1.5 border border-cyan/40 bg-cyan/10 px-2.5 py-1 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-cyan hover:bg-cyan/15"
+          >
+            <PlusIcon size={11} /> New page
+          </Link>
+        }
       />
 
       {error && data ? <ErrorPanel message={error} onRetry={reload} /> : null}
@@ -128,11 +141,50 @@ export function Pages() {
         </div>
       </div>
 
+      {tagFacets.length > 0 ? (
+        <div className="mb-5 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-graphite">
+            tags
+          </span>
+          {tag && (
+            <button
+              type="button"
+              onClick={() => update('tag', '')}
+              className="border border-cyan bg-cyan/10 px-2 py-0.5 font-mono text-[0.62rem] text-cyan"
+            >
+              {tag} ×
+            </button>
+          )}
+          {tagFacets
+            .filter(([name]) => name !== tag)
+            .map(([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => update('tag', name)}
+                className="border border-line bg-surface px-2 py-0.5 font-mono text-[0.62rem] text-graphite transition-colors hover:border-cyan hover:text-cyan"
+              >
+                {name} <span className="text-graphite/70">{count}</span>
+              </button>
+            ))}
+        </div>
+      ) : null}
+
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <SectionLabel>
           {data.pages.length ? `${from}–${to} of ${data.total}` : `0 of ${data.total}`} matching pages
         </SectionLabel>
         <div className="flex items-center gap-2">
+          <select
+            value={sort}
+            onChange={(event) => update('sort', event.target.value)}
+            className="field w-auto py-1 font-mono text-[0.62rem] uppercase tracking-[0.08em]"
+            aria-label="Sort pages"
+          >
+            <option value="category">by category</option>
+            <option value="title">by title</option>
+            <option value="updated">recently updated</option>
+          </select>
           {loading ? (
             <span className="font-mono text-[0.62rem] uppercase tracking-[0.1em] text-graphite">
               loading…
@@ -154,7 +206,7 @@ export function Pages() {
           >
             Next <ArrowRightIcon size={11} />
           </button>
-          {query || category || offset > 0 ? (
+          {query || category || tag || offset > 0 ? (
             <button
               type="button"
               onClick={() => setParams({}, { replace: true })}

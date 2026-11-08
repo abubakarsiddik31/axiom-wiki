@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
@@ -30,6 +30,35 @@ export async function autoCommit(wikiDir: string, message: string): Promise<bool
     return true
   } catch (err) {
     process.stderr.write(`[axiom git] Auto-commit failed: ${err}\n`)
+    return false
+  }
+}
+
+/**
+ * Commits only the given paths. Used by page operations so a browser edit does
+ * not sweep unrelated working-tree changes into its commit.
+ */
+export function commitPaths(wikiDir: string, paths: string[], message: string): boolean {
+  if (!isGitRepo(wikiDir) || paths.length === 0) return false
+  try {
+    const status = execFileSync('git', ['status', '--porcelain', '--', ...paths], {
+      cwd: wikiDir,
+      encoding: 'utf-8',
+    })
+    if (!status.trim()) return false
+    // Untracked files must be added before `git commit -- <path>` will accept
+    // them; `-A` also stages deletions for removed pages.
+    execFileSync('git', ['add', '-A', '--', ...paths], {
+      cwd: wikiDir,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    execFileSync('git', ['commit', '--no-verify', '-m', message, '--', ...paths], {
+      cwd: wikiDir,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    return true
+  } catch (err) {
+    process.stderr.write(`[axiom git] Scoped commit failed: ${err}\n`)
     return false
   }
 }
